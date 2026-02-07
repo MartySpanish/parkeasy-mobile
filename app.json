@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "ParkEasy",
+    "slug": "parkeasy-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#020617",
+      "resizeMode": "contain"
+    },
+    "web": {}
+  }
+}
