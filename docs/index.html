@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ParkEasy - Find Parking in Seconds</title>
+  <meta name="description" content="ParkEasy helps you find nearby parking wherever you're going. Car parks, free street spots, hidden gems, and lay-bys. Search, book, and go.">
+  <meta name="theme-color" content="#020617">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🅿️</text></svg>">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+      overflow-x: hidden;
+    }
+
+    /* Hero */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px 24px;
+      position: relative;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 50% 50%, rgba(99,102,241,0.08) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .logo {
+      font-size: 56px;
+      font-weight: 900;
+      letter-spacing: -2px;
+      margin-bottom: 8px;
+      position: relative;
+    }
+
+    .logo span {
+      color: #6366f1;
+    }
+
+    .tagline {
+      font-size: 22px;
+      color: #a5b4fc;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    .subtitle {
+      font-size: 17px;
+      color: #9ca3af;
+      max-width: 520px;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+
+    .pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: 1px solid #1f2937;
+      background: rgba(99,102,241,0.06);
+      font-size: 14px;
+      color: #c7d2fe;
+    }
+
+    .pill-icon {
+      font-size: 16px;
+    }
+
+    .cta-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: 999px;
+      background: #4f46e5;
+      color: #f9fafb;
+      font-weight: 600;
+      font-size: 16px;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(79,70,229,0.3);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: 999px;
+      border: 1px solid #4f46e5;
+      color: #e5e7eb;
+      font-weight: 600;
+      font-size: 16px;
+      text-decoration: none;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .btn-secondary:hover {
+      transform: translateY(-2px);
+      background: rgba(79,70,229,0.1);
+    }
+
+    /* Phone mockup */
+    .phone-mockup {
+      width: 280px;
+      height: 560px;
+      border-radius: 40px;
+      border: 3px solid #1f2937;
+      background: #0f172a;
+      margin: 40px auto;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 25px 80px rgba(0,0,0,0.5);
+    }
+
+    .phone-notch {
+      width: 120px;
+      height: 28px;
+      background: #020617;
+      border-radius: 0 0 16px 16px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 2;
+    }
+
+    .phone-screen {
+      padding: 16px 20px;
+    }
+
+    .phone-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .phone-logo {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .phone-logo span { color: #6366f1; }
+
+    .phone-badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #eab308;
+      background: rgba(234,179,8,0.15);
+      color: #eab308;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .phone-search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid #374151;
+      margin-bottom: 14px;
+      color: #6b7280;
+      font-size: 13px;
+    }
+
+    .phone-card {
+      background: #020617;
+      border: 1px solid #1f2937;
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .phone-card-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .phone-card-addr {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 8px;
+    }
+
+    .phone-card-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 11px;
+    }
+
+    .phone-tag {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .tag-free {
+      background: rgba(34,197,94,0.15);
+      color: #22c55e;
+    }
+
+    .tag-gem {
+      background: rgba(234,179,8,0.15);
+      color: #eab308;
+      border: 1px solid rgba(234,179,8,0.3);
+    }
+
+    .tag-avail {
+      background: rgba(34,197,94,0.15);
+      color: #22c55e;
+    }
+
+    /* Features section */
+    .features {
+      padding: 80px 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .features-title {
+      font-size: 36px;
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .features-subtitle {
+      font-size: 16px;
+      color: #9ca3af;
+      text-align: center;
+      margin-bottom: 48px;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: rgba(15,23,42,0.6);
+      border: 1px solid #1f2937;
+      border-radius: 20px;
+      padding: 28px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: #374151;
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+
+    .fi-purple { background: rgba(99,102,241,0.15); }
+    .fi-green { background: rgba(34,197,94,0.15); }
+    .fi-yellow { background: rgba(234,179,8,0.15); }
+    .fi-pink { background: rgba(244,114,182,0.15); }
+    .fi-blue { background: rgba(96,165,250,0.15); }
+    .fi-orange { background: rgba(251,146,60,0.15); }
+
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+
+    /* How it works */
+    .how-it-works {
+      padding: 80px 24px;
+      background: rgba(15,23,42,0.4);
+    }
+
+    .how-inner {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .how-title {
+      font-size: 36px;
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .step {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      width: 48px;
+      height: 48px;
+      min-width: 48px;
+      border-radius: 50%;
+      background: #4f46e5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .step h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .step p {
+      font-size: 14px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+
+    /* Pricing */
+    .pricing {
+      padding: 80px 24px;
+      max-width: 700px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .pricing-title {
+      font-size: 36px;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+
+    .pricing-subtitle {
+      font-size: 16px;
+      color: #9ca3af;
+      margin-bottom: 40px;
+    }
+
+    .pricing-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 500px) {
+      .pricing-cards { grid-template-columns: 1fr; }
+    }
+
+    .price-card {
+      border: 1px solid #1f2937;
+      border-radius: 20px;
+      padding: 28px;
+      text-align: center;
+      position: relative;
+    }
+
+    .price-card.popular {
+      border-color: #4f46e5;
+      background: rgba(79,70,229,0.06);
+    }
+
+    .popular-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #4f46e5;
+      color: #f9fafb;
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .price-label {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #d1d5db;
+    }
+
+    .price-amount {
+      font-size: 40px;
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+
+    .price-per {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .price-save {
+      color: #22c55e;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .free-tier {
+      margin-top: 20px;
+      padding: 20px;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      text-align: left;
+    }
+
+    .free-tier h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .free-tier ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .free-tier li {
+      font-size: 14px;
+      color: #9ca3af;
+      padding: 4px 0;
+    }
+
+    .free-tier li::before {
+      content: '✓ ';
+      color: #22c55e;
+    }
+
+    /* Footer */
+    footer {
+      padding: 40px 24px;
+      text-align: center;
+      border-top: 1px solid #111827;
+    }
+
+    footer .logo {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    footer p {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    footer a {
+      color: #a5b4fc;
+      text-decoration: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .logo { font-size: 42px; }
+      .tagline { font-size: 18px; }
+      .subtitle { font-size: 15px; }
+      .features-title, .how-title, .pricing-title { font-size: 28px; }
+      .phone-mockup { width: 240px; height: 480px; }
+    }
+
+    /* Animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero > * {
+      animation: fadeUp 0.6s ease-out forwards;
+      opacity: 0;
+    }
+
+    .hero > *:nth-child(1) { animation-delay: 0.1s; }
+    .hero > *:nth-child(2) { animation-delay: 0.2s; }
+    .hero > *:nth-child(3) { animation-delay: 0.3s; }
+    .hero > *:nth-child(4) { animation-delay: 0.4s; }
+    .hero > *:nth-child(5) { animation-delay: 0.5s; }
+    .hero > *:nth-child(6) { animation-delay: 0.6s; }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="logo">Park<span>Easy</span></div>
+    <div class="tagline">Find Parking in Seconds</div>
+    <p class="subtitle">
+      Search for any destination and instantly find nearby parking &mdash;
+      car parks, free street spots, hidden gems, and lay-bys. Book, pay, and go.
+    </p>
+    <div class="pills">
+      <div class="pill"><span class="pill-icon">📍</span> Free spots</div>
+      <div class="pill"><span class="pill-icon">🧭</span> Proximity search</div>
+      <div class="pill"><span class="pill-icon">⭐</span> Hidden gems</div>
+      <div class="pill"><span class="pill-icon">🚗</span> Book &amp; pay</div>
+      <div class="pill"><span class="pill-icon">⚡</span> EV charging</div>
+    </div>
+    <div class="cta-row">
+      <a href="https://github.com/MartySpanish/parkeasy-mobile" class="btn-primary">
+        View on GitHub
+      </a>
+      <a href="#features" class="btn-secondary">
+        Learn More
+      </a>
+    </div>
+
+    <!-- Phone mockup -->
+    <div class="phone-mockup">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <div class="phone-header">
+          <div class="phone-logo">Park<span>Easy</span></div>
+          <div class="phone-badge">Premium</div>
+        </div>
+        <div class="phone-search">🔍 Search "barbers belfast"...</div>
+        <div class="phone-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="phone-card-title">Victoria Square Car Park</div>
+            <span class="phone-tag tag-avail">Available</span>
+          </div>
+          <div class="phone-card-addr">Victoria Square, Belfast BT1 4QG</div>
+          <div class="phone-card-row">
+            <span>⭐ 4.5</span>
+            <span>🚗 89/1000</span>
+            <span style="color:#22c55e;font-weight:600">£2.00/hr</span>
+          </div>
+        </div>
+        <div class="phone-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="phone-card-title">Stranmillis Embankment</div>
+            <span class="phone-tag tag-gem">⭐ Gem</span>
+          </div>
+          <div class="phone-card-addr">Stranmillis Embankment, Belfast BT7</div>
+          <div class="phone-card-row">
+            <span class="phone-tag tag-free">FREE</span>
+            <span>⭐ 4.0</span>
+            <span style="color:#a5b4fc">350m away</span>
+          </div>
+        </div>
+        <div class="phone-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="phone-card-title">Divis Road Lay-by</div>
+            <span class="phone-tag tag-gem">⭐ Gem</span>
+          </div>
+          <div class="phone-card-addr">Upper Divis Road, Belfast BT17</div>
+          <div class="phone-card-row">
+            <span class="phone-tag tag-free">FREE</span>
+            <span>⭐ 4.2</span>
+            <span style="color:#9ca3af">Lay-by</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <h2 class="features-title">Everything You Need to Park</h2>
+    <p class="features-subtitle">From finding a free spot to booking and paying &mdash; all in one app.</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon fi-purple">🧭</div>
+        <h3>Proximity Search</h3>
+        <p>Type where you're going &mdash; a barbers, restaurant, or Black Mountain &mdash; and see the closest parking spots sorted by distance.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon fi-green">📍</div>
+        <h3>Free Spots &amp; Lay-bys</h3>
+        <p>Find free street parking, lay-bys, and unrestricted spots that most apps miss. Save money every time you park.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon fi-yellow">⭐</div>
+        <h3>Hidden Gems</h3>
+        <p>Community-reported secret parking spots. Report your own hidden gem and earn a free month of Premium.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon fi-pink">💳</div>
+        <h3>Book &amp; Pay</h3>
+        <p>Reserve your spot, pay in-app with Stripe, get directions via Google Maps, and keep digital receipts.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon fi-blue">⏱️</div>
+        <h3>Parking Timer</h3>
+        <p>Set a timer when you park. Get a 15-minute warning before your time runs out &mdash; no more fines.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon fi-orange">🌍</div>
+        <h3>30+ Cities</h3>
+        <p>Belfast, Dublin, London, and cities across Europe. Real-time availability data from official parking APIs.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="how-it-works">
+    <div class="how-inner">
+      <h2 class="how-title">How It Works</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div>
+            <h3>Search your destination</h3>
+            <p>Type where you're headed &mdash; "Black Mountain", "barbers Belfast", or any address. ParkEasy finds all parking within walking distance.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div>
+            <h3>Compare &amp; filter</h3>
+            <p>See prices, availability, distance, ratings, and type. Filter for free spots, lay-bys, covered parking, EV charging, and more.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div>
+            <h3>Book &amp; go</h3>
+            <p>Tap to book, get one-tap directions, and set a parking timer. Your receipt is saved automatically.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div>
+            <h3>Share &amp; earn</h3>
+            <p>Found a hidden gem? Report free spots and lay-bys to earn points and free Premium membership.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="pricing" id="pricing">
+    <h2 class="pricing-title">Simple Pricing</h2>
+    <p class="pricing-subtitle">Start free. Upgrade when you need more.</p>
+    <div class="pricing-cards">
+      <div class="price-card">
+        <div class="price-label">Monthly</div>
+        <div class="price-amount">&pound;1.99</div>
+        <div class="price-per">per month</div>
+      </div>
+      <div class="price-card popular">
+        <div class="popular-badge">Best Value</div>
+        <div class="price-label">Annual</div>
+        <div class="price-amount">&pound;14.99</div>
+        <div class="price-per">per year</div>
+        <div class="price-save">Save &pound;8.89</div>
+      </div>
+    </div>
+    <div class="free-tier">
+      <h3>Free Tier Includes</h3>
+      <ul>
+        <li>Search parking in any city</li>
+        <li>View 3 spots per search</li>
+        <li>Filter by price, type, and features</li>
+        <li>Save favourite spots</li>
+        <li>Report spaces for the community</li>
+        <li>7-day free Premium trial</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="logo">Park<span>Easy</span></div>
+    <p>&copy; 2025 ParkEasy. Built in Belfast.</p>
+    <p style="margin-top:8px">
+      <a href="https://github.com/MartySpanish/parkeasy-mobile">GitHub</a>
+    </p>
+  </footer>
+
+</body>
+</html>
