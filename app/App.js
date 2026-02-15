@@ -133,6 +133,30 @@ const BELFAST_PARKING_SPOTS = [
   { id: 'belfast-38', name: 'Clarence Street West NCP', address: 'Clarence Street West, Belfast BT2 7GP', type: 'multi_story_garage', pricing: { free: false, hourlyRate: 1.90, dailyMax: 11 }, available: 48, total: 350, rating: 4.0, evCharging: { available: true, ports: 2, speed: '7kW' }, features: { accessible: true, covered: true, security: true }, distance: 0.6, nearDestinations: ['Grand Central Hotel', 'City Hall'], description: 'Covered NCP near the Linen Quarter', coords: { lat: 54.5940, lng: -5.9400 }, state: 'open', hours: { open: '24hrs', close: '24hrs', note: 'Open 24 hours' } },
   { id: 'belfast-39', name: 'Waterfront Hall Parking', address: '2 Lanyon Place, Belfast BT1 3WH', type: 'underground', pricing: { free: false, hourlyRate: 3.00, dailyMax: 18 }, available: 28, total: 200, rating: 4.5, evCharging: { available: true, ports: 4, speed: '22kW' }, features: { accessible: true, covered: true, security: true }, distance: 0.5, nearDestinations: ['Waterfront Hall', 'Lanyon Place Station'], description: 'Premium underground parking at Belfast Waterfront', coords: { lat: 54.5940, lng: -5.9205 }, state: 'open', hours: { open: '07:00', close: '00:00', note: 'Extended for events' } },
   { id: 'belfast-40', name: 'May Street Car Park', address: 'May Street, Belfast BT1 4NL', type: 'surface_lot', pricing: { free: false, hourlyRate: 1.30, dailyMax: 7 }, available: 18, total: 55, rating: 3.5, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 0.4, nearDestinations: ['City Hall', 'Victoria Square'], description: 'Small surface lot near May Street and the Courts', coords: { lat: 54.5955, lng: -5.9280 }, state: 'open', hours: { open: '08:00', close: '18:00', note: 'Mon-Fri, court hours' } },
+
+  // ===== FREE STREET PARKING & LAY-BYS =====
+  { id: 'belfast-41', name: 'Stranmillis Embankment (Free Street)', address: 'Stranmillis Embankment, Belfast BT7 1QB', type: 'street_parking', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 12, total: 20, rating: 4.0, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 1.9, nearDestinations: ['Botanic Gardens', 'Queens University'], description: 'Free on-street parking along the Lagan towpath. Quiet spot, great for walks.', coords: { lat: 54.5780, lng: -5.9290 }, state: 'open', hours: { open: '24hrs', close: '24hrs', note: 'Unrestricted' }, hiddenGem: true },
+  { id: 'belfast-42', name: 'Ravenhill Road (Free After 6pm)', address: 'Ravenhill Road, Belfast BT6 8GJ', type: 'street_parking', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 20, total: 35, rating: 3.8, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 2.0, nearDestinations: ['Ormeau Park', 'Ravenhill Rugby Grounds'], description: 'Free on-street parking after 6pm and weekends. Handy for Kingspan Stadium.', coords: { lat: 54.5830, lng: -5.9140 }, state: 'open', hours: { open: '18:00', close: '08:00', note: 'Free evenings & weekends' }, hiddenGem: false },
+  { id: 'belfast-43', name: 'Ormeau Embankment (Free)', address: 'Ormeau Embankment, Belfast BT7 3GG', type: 'street_parking', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 18, total: 30, rating: 4.1, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 1.5, nearDestinations: ['Ormeau Park'], description: 'Hidden free parking along the river. Walk across to Ormeau Park.', coords: { lat: 54.5860, lng: -5.9180 }, state: 'open', hours: { open: '24hrs', close: '24hrs', note: 'Unrestricted' }, hiddenGem: true },
+  { id: 'belfast-44', name: 'University Street (Free Evenings)', address: 'University Street, Belfast BT7 1HP', type: 'street_parking', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 10, total: 25, rating: 3.9, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 1.0, nearDestinations: ['Queens University', 'Botanic Gardens'], description: 'Free after 6pm. Walking distance to Botanic Ave restaurants.', coords: { lat: 54.5850, lng: -5.9320 }, state: 'open', hours: { open: '18:00', close: '08:00', note: 'Free evenings & weekends' }, hiddenGem: false },
+  { id: 'belfast-45', name: 'Dee Street (Free)', address: 'Dee Street, Belfast BT4 1FT', type: 'street_parking', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 15, total: 30, rating: 3.5, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 1.8, nearDestinations: ['Titanic Quarter', 'SSE Arena'], description: 'Free residential street parking, 15 min walk to Titanic Quarter.', coords: { lat: 54.6010, lng: -5.9050 }, state: 'open', hours: { open: '24hrs', close: '24hrs', note: 'Unrestricted' }, hiddenGem: true },
+
+  // ===== BLACK MOUNTAIN / DIVIS AREA =====
+  { id: 'belfast-46', name: 'Black Mountain Car Park', address: 'Whiterock Road, Belfast BT12 7PG', type: 'lay_by', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 15, total: 20, rating: 4.5, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 4.5, nearDestinations: ['Black Mountain', 'Divis'], description: 'Free car park at the Black Mountain/Divis trailhead. Popular with hikers. Gets busy weekends.', coords: { lat: 54.6050, lng: -5.9900 }, state: 'open', hours: { open: '24hrs', close: '24hrs', note: 'Open access, no gates' }, hiddenGem: true },
+  { id: 'belfast-47', name: 'Divis Road Lay-by', address: 'Upper Divis Road, Belfast BT17 0NF', type: 'lay_by', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 8, total: 12, rating: 4.2, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 5.0, nearDestinations: ['Black Mountain', 'Divis'], description: 'Small lay-by on the upper Divis road. Shortcut to the summit. Hidden gem for locals.', coords: { lat: 54.6080, lng: -5.9950 }, state: 'open', hours: { open: '24hrs', close: '24hrs', note: 'Roadside lay-by' }, hiddenGem: true },
+  { id: 'belfast-48', name: 'Whiterock Leisure Centre', address: 'Whiterock Road, Belfast BT12 7PG', type: 'surface_lot', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 25, total: 50, rating: 3.9, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: true, covered: false, security: false }, distance: 4.0, nearDestinations: ['Black Mountain', 'Divis'], description: 'Free leisure centre car park. Good alternative when the mountain car park is full.', coords: { lat: 54.6020, lng: -5.9850 }, state: 'open', hours: { open: '07:00', close: '22:00', note: 'Leisure centre hours' }, hiddenGem: false },
+  { id: 'belfast-49', name: 'Hannahstown Hill Lay-by', address: 'Hannahstown Hill, Belfast BT17 0LT', type: 'lay_by', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 6, total: 8, rating: 4.3, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 6.0, nearDestinations: ['Black Mountain', 'Colin Glen'], description: 'Quiet lay-by on the back road to Black Mountain. Amazing views over Belfast.', coords: { lat: 54.5950, lng: -6.0050 }, state: 'open', hours: { open: '24hrs', close: '24hrs', note: 'Roadside lay-by' }, hiddenGem: true },
+
+  // ===== CAVE HILL / NORTH =====
+  { id: 'belfast-50', name: 'Cave Hill Adventurous Playground Car Park', address: 'Belfast Castle Estate, Antrim Road, Belfast BT15 5GR', type: 'surface_lot', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 30, total: 80, rating: 4.4, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: true, covered: false, security: false }, distance: 4.0, nearDestinations: ['Cave Hill', 'Belfast Castle'], description: 'Free car park at Belfast Castle. Trail access to Cave Hill and Napoleon\'s Nose.', coords: { lat: 54.6300, lng: -5.9430 }, state: 'open', hours: { open: '07:30', close: '21:00', note: 'Gates lock at dusk in winter' }, hiddenGem: false },
+  { id: 'belfast-51', name: 'Upper Hightown Road Lay-by', address: 'Upper Hightown Road, Belfast BT36 7QX', type: 'lay_by', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 5, total: 8, rating: 4.1, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: false, covered: false, security: false }, distance: 6.5, nearDestinations: ['Cave Hill'], description: 'Little-known lay-by giving back access to Cave Hill. Avoids the crowds.', coords: { lat: 54.6400, lng: -5.9500 }, state: 'open', hours: { open: '24hrs', close: '24hrs', note: 'Roadside lay-by' }, hiddenGem: true },
+
+  // ===== COLIN GLEN / SOUTH WEST =====
+  { id: 'belfast-52', name: 'Colin Glen Forest Park Car Park', address: 'Stewartstown Road, Belfast BT17 0HW', type: 'surface_lot', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 40, total: 80, rating: 4.3, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: true, covered: false, security: true }, distance: 7.0, nearDestinations: ['Colin Glen'], description: 'Free car park at Colin Glen Forest Park. Gruffalo trail, zipline, and walks.', coords: { lat: 54.5650, lng: -6.0100 }, state: 'open', hours: { open: '08:00', close: '20:00', note: 'Seasonal hours vary' }, hiddenGem: false },
+
+  // ===== LAGAN TOWPATH =====
+  { id: 'belfast-53', name: 'Lockkeeper\'s Inn Car Park', address: 'Lock Keeper\'s Lane, Stranmillis, Belfast BT9 5GN', type: 'surface_lot', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 20, total: 40, rating: 4.2, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: true, covered: false, security: false }, distance: 2.5, nearDestinations: ['Lagan Towpath', 'Botanic Gardens'], description: 'Free car park at the Lockkeeper\'s. Start point for Lagan towpath walks.', coords: { lat: 54.5690, lng: -5.9320 }, state: 'open', hours: { open: '08:00', close: '22:00', note: 'Car park gates' }, hiddenGem: true },
+  { id: 'belfast-54', name: 'Shaw\'s Bridge Car Park', address: 'Shaw\'s Bridge, Malone Road, Belfast BT9 5LE', type: 'surface_lot', pricing: { free: true, hourlyRate: 0, dailyMax: 0 }, available: 25, total: 50, rating: 4.4, evCharging: { available: false, ports: 0, speed: null }, features: { accessible: true, covered: false, security: false }, distance: 4.0, nearDestinations: ['Lagan Towpath', 'Barnett Demesne'], description: 'Free riverside car park. Popular for towpath walks, cycling, and dog walking.', coords: { lat: 54.5560, lng: -5.9440 }, state: 'open', hours: { open: '07:00', close: '21:00', note: 'Gates lock at dusk' }, hiddenGem: false },
 ];
 
 // Fetch parking data — Belfast uses local data, other cities use ParkAPI
@@ -188,6 +212,9 @@ const getDestinationsForCity = (cityId) => {
       { id: 'queens_university', name: "Queen's University", icon: Building2 },
       { id: 'waterfront_hall', name: 'Waterfront Hall', icon: Building2 },
       { id: 'city_airport', name: 'City Airport', icon: Navigation },
+      { id: 'black_mountain', name: 'Black Mountain', icon: Navigation },
+      { id: 'cave_hill', name: 'Cave Hill', icon: Navigation },
+      { id: 'lagan_towpath', name: 'Lagan Towpath', icon: MapPin },
     ],
     Dresden: [
       { id: 'altmarkt', name: 'Altmarkt', icon: ShoppingBag },
@@ -436,13 +463,22 @@ export default function App() {
     };
     setReportedSpaces([...reportedSpaces, report]);
     setShowReportModal(false);
-    Alert.alert(
-      'Thanks!',
-      type === 'leaving'
-        ? 'Other drivers will be notified a space is available nearby.'
-        : 'Thanks for letting the community know!',
-      [{ text: 'OK' }]
-    );
+
+    if (type === 'hidden_gem') {
+      Alert.alert(
+        'Hidden Gem Reported!',
+        'Thanks for sharing! Your spot will be reviewed and added to the map. You\'ll earn 25 points and a free month of Premium when verified!',
+        [{ text: 'Awesome!' }]
+      );
+    } else {
+      Alert.alert(
+        'Thanks!',
+        type === 'leaving'
+          ? 'Other drivers will be notified a space is available nearby.'
+          : 'Thanks for letting the community know!',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   // ---------- Book a Spot ----------
@@ -645,7 +681,59 @@ export default function App() {
     { label: 'Victoria Square', query: 'victoria', icon: ShoppingBag },
     { label: 'Cheap parking', query: 'cheap', icon: PoundSterling },
     { label: 'Covered parking', query: 'covered', icon: Building2 },
+    { label: 'Hidden gems', query: 'hidden gem', icon: Star },
+    { label: 'Lay-bys', query: 'lay-by', icon: Car },
+    { label: 'Street parking', query: 'street', icon: MapPin },
+    { label: 'Black Mountain', query: 'black mountain', icon: Navigation },
+    { label: 'Cave Hill', query: 'cave hill', icon: Navigation },
+    { label: 'Lagan Towpath', query: 'lagan', icon: MapPin },
   ];
+
+  // ---------- Belfast Points of Interest (for proximity search) ----------
+
+  const BELFAST_PLACES = [
+    // Shopping & Services
+    { name: 'Victoria Square', type: 'shopping', coords: { lat: 54.5977, lng: -5.9283 } },
+    { name: 'Castle Court', type: 'shopping', coords: { lat: 54.6005, lng: -5.9319 } },
+    { name: 'City Hall', type: 'landmark', coords: { lat: 54.5966, lng: -5.9300 } },
+    { name: 'Cathedral Quarter', type: 'entertainment', coords: { lat: 54.6017, lng: -5.9271 } },
+    // Health & Beauty
+    { name: 'Barbers (City Centre)', type: 'barbers', coords: { lat: 54.5990, lng: -5.9300 }, keywords: ['barber', 'barbers', 'haircut', 'hair'] },
+    { name: 'Barbers (Lisburn Road)', type: 'barbers', coords: { lat: 54.5820, lng: -5.9470 }, keywords: ['barber', 'barbers', 'haircut', 'hair'] },
+    { name: 'Barbers (Botanic)', type: 'barbers', coords: { lat: 54.5850, lng: -5.9340 }, keywords: ['barber', 'barbers', 'haircut', 'hair'] },
+    { name: 'Barbers (Ormeau Road)', type: 'barbers', coords: { lat: 54.5880, lng: -5.9210 }, keywords: ['barber', 'barbers', 'haircut', 'hair'] },
+    // Outdoors
+    { name: 'Black Mountain', type: 'outdoor', coords: { lat: 54.6050, lng: -5.9900 }, keywords: ['black mountain', 'divis', 'hike', 'walking', 'hill'] },
+    { name: 'Cave Hill', type: 'outdoor', coords: { lat: 54.6350, lng: -5.9430 }, keywords: ['cave hill', 'napoleons nose', 'belfast castle', 'hike'] },
+    { name: 'Colin Glen', type: 'outdoor', coords: { lat: 54.5650, lng: -6.0100 }, keywords: ['colin glen', 'forest', 'gruffalo', 'zipline'] },
+    { name: 'Botanic Gardens', type: 'park', coords: { lat: 54.5834, lng: -5.9310 }, keywords: ['botanic', 'gardens', 'park', 'ulster museum'] },
+    { name: 'Ormeau Park', type: 'park', coords: { lat: 54.5860, lng: -5.9180 }, keywords: ['ormeau', 'park'] },
+    { name: 'Lagan Towpath', type: 'outdoor', coords: { lat: 54.5690, lng: -5.9320 }, keywords: ['lagan', 'towpath', 'river', 'walk', 'cycle'] },
+    { name: 'Shaw\'s Bridge', type: 'outdoor', coords: { lat: 54.5560, lng: -5.9440 }, keywords: ['shaws bridge', 'lagan', 'walk'] },
+    // Restaurants & Entertainment
+    { name: 'Botanic Avenue', type: 'restaurant', coords: { lat: 54.5850, lng: -5.9330 }, keywords: ['restaurant', 'food', 'eating', 'botanic'] },
+    { name: 'Lisburn Road Restaurants', type: 'restaurant', coords: { lat: 54.5820, lng: -5.9470 }, keywords: ['restaurant', 'food', 'lisburn road'] },
+    { name: 'SSE Arena', type: 'entertainment', coords: { lat: 54.6048, lng: -5.9186 }, keywords: ['sse', 'arena', 'concert', 'gig', 'odyssey'] },
+    { name: 'Waterfront Hall', type: 'entertainment', coords: { lat: 54.5940, lng: -5.9205 }, keywords: ['waterfront', 'concert', 'show'] },
+    // Hospitals
+    { name: 'Royal Victoria Hospital', type: 'hospital', coords: { lat: 54.5945, lng: -5.9515 }, keywords: ['royal', 'hospital', 'rvh', 'doctor'] },
+    { name: 'Belfast City Hospital', type: 'hospital', coords: { lat: 54.5850, lng: -5.9370 }, keywords: ['city hospital', 'bch', 'hospital', 'doctor'] },
+    // Transport
+    { name: 'Belfast City Airport', type: 'transport', coords: { lat: 54.6181, lng: -5.8719 }, keywords: ['airport', 'city airport', 'george best', 'flight'] },
+    { name: 'Lanyon Place Station', type: 'transport', coords: { lat: 54.5953, lng: -5.9210 }, keywords: ['train', 'station', 'lanyon', 'central'] },
+    // Universities
+    { name: 'Queens University', type: 'education', coords: { lat: 54.5844, lng: -5.9342 }, keywords: ['queens', 'university', 'qub', 'college'] },
+    { name: 'Ulster University Belfast', type: 'education', coords: { lat: 54.6010, lng: -5.9290 }, keywords: ['ulster', 'university', 'uu', 'college'] },
+  ];
+
+  const findNearbyParking = useCallback((searchTerm) => {
+    const q = searchTerm.toLowerCase().trim();
+    const matchedPlace = BELFAST_PLACES.find(place =>
+      place.name.toLowerCase().includes(q) ||
+      (place.keywords && place.keywords.some(kw => q.includes(kw) || kw.includes(q)))
+    );
+    return matchedPlace || null;
+  }, []);
 
   const searchSuggestions = useMemo(() => {
     if (!searchQuery || searchQuery.length < 1) return SEARCH_KEYWORDS.slice(0, 6);
@@ -660,22 +748,47 @@ export default function App() {
   const typeColor = (type) => {
     if (type === 'multi_story_garage') return { backgroundColor: '#dbeafe' };
     if (type === 'surface_lot') return { backgroundColor: '#fef3c7' };
+    if (type === 'street_parking') return { backgroundColor: '#d1fae5' };
+    if (type === 'lay_by') return { backgroundColor: '#ede9fe' };
+    if (type === 'underground') return { backgroundColor: '#e0e7ff' };
     return { backgroundColor: '#e5e7eb' };
   };
 
   // ---------- Filtering logic ----------
+
+  const proximityMatch = useMemo(() => {
+    if (!searchQuery || searchQuery.length < 2) return null;
+    return findNearbyParking(searchQuery);
+  }, [searchQuery, findNearbyParking]);
+
+  const getDistanceFromPlace = useCallback((spot, place) => {
+    if (!spot.coords || !place.coords) return Infinity;
+    return calculateDistance(spot.coords.lat, spot.coords.lng, place.coords.lat, place.coords.lng);
+  }, []);
 
   const filteredSpots = useMemo(() => {
     // Free users get limited results
     const spots = isPremium ? parkingSpots : parkingSpots.slice(0, 3);
     const q = searchQuery.toLowerCase().trim();
 
-    return spots
+    let results = spots
       .filter((spot) => {
-        if (selectedDestination && !spot.nearDestinations.includes(selectedDestination.id)) {
-          return false;
+        if (selectedDestination) {
+          const destId = selectedDestination.id.toLowerCase();
+          const destName = selectedDestination.name.toLowerCase();
+          const matchesDest = spot.nearDestinations?.some(d => {
+            const dl = d.toLowerCase();
+            return dl === destId || dl === destName || destId.includes(dl.replace(/\s+/g, '_')) || dl.includes(destId.replace(/_/g, ' '));
+          });
+          if (!matchesDest) return false;
         }
         if (q) {
+          // Proximity match — if user searched for a place (e.g. "barbers"), show parking near it
+          if (proximityMatch) {
+            const distToPlace = getDistanceFromPlace(spot, proximityMatch);
+            if (distToPlace <= 2.0) return true; // within 2km
+          }
+
           // Keyword-based smart matching
           const matchesName = spot.name.toLowerCase().includes(q);
           const matchesAddress = spot.address.toLowerCase().includes(q);
@@ -686,9 +799,13 @@ export default function App() {
           const matchesCovered = (q === 'covered' || q === 'indoor') && spot.features.covered;
           const matchesMulti = (q === 'multi' || q === 'multi-storey' || q === 'garage') && spot.type === 'multi_story_garage';
           const matchesNear = spot.nearDestinations?.some(d => d.toLowerCase().includes(q));
+          const matchesHiddenGem = (q === 'hidden gem' || q === 'hidden gems' || q === 'gem') && spot.hiddenGem;
+          const matchesLayBy = (q === 'lay-by' || q === 'lay by' || q === 'layby') && spot.type === 'lay_by';
+          const matchesStreet = (q === 'street' || q === 'street parking' || q === 'on-street') && spot.type === 'street_parking';
 
           if (!matchesName && !matchesAddress && !matchesDesc && !matchesFree &&
-              !matchesCheap && !matchesEv && !matchesCovered && !matchesMulti && !matchesNear) {
+              !matchesCheap && !matchesEv && !matchesCovered && !matchesMulti && !matchesNear &&
+              !matchesHiddenGem && !matchesLayBy && !matchesStreet) {
             return false;
           }
         }
@@ -701,11 +818,19 @@ export default function App() {
         return true;
       })
       .sort((a, b) => {
+        // If proximity search, sort by distance to the searched place
+        if (proximityMatch) {
+          const distA = getDistanceFromPlace(a, proximityMatch);
+          const distB = getDistanceFromPlace(b, proximityMatch);
+          return distA - distB;
+        }
         if (filters.sortBy === 'rating') return b.rating - a.rating;
         if (filters.sortBy === 'price') return a.pricing.hourlyRate - b.pricing.hourlyRate;
         return a.distance - b.distance;
       });
-  }, [filters, searchQuery, selectedDestination, parkingSpots, isPremium]);
+
+    return results;
+  }, [filters, searchQuery, selectedDestination, parkingSpots, isPremium, proximityMatch, getDistanceFromPlace]);
 
   const destinations = selectedCity ? getDestinationsForCity(selectedCity.id) : [];
 
@@ -1042,6 +1167,16 @@ export default function App() {
                 active={filters.type === 'surface_lot'}
                 onPress={() => setFilters({ ...filters, type: 'surface_lot' })}
               />
+              <FilterChip
+                label="Street"
+                active={filters.type === 'street_parking'}
+                onPress={() => setFilters({ ...filters, type: 'street_parking' })}
+              />
+              <FilterChip
+                label="Lay-by"
+                active={filters.type === 'lay_by'}
+                onPress={() => setFilters({ ...filters, type: 'lay_by' })}
+              />
             </View>
 
             <View style={styles.toggleRow}>
@@ -1097,6 +1232,16 @@ export default function App() {
             </View>
 
             <View style={{ gap: 10, marginBottom: 40 }}>
+              {/* Proximity search indicator */}
+              {proximityMatch && searchQuery.length > 0 && (
+                <View style={styles.proximityTip}>
+                  <Navigation size={14} color="#a5b4fc" />
+                  <Text style={styles.proximityTipText}>
+                    Showing parking near <Text style={{ fontWeight: '700', color: '#e5e7eb' }}>{proximityMatch.name}</Text>
+                  </Text>
+                </View>
+              )}
+
               {/* Cheapest nearby tip */}
               {getCheapestNearby && !filters.free && (
                 <View style={styles.cheapestTip}>
@@ -1161,6 +1306,12 @@ export default function App() {
                           {spot.type.replace(/_/g, ' ')}
                         </Text>
                       </View>
+                      {spot.hiddenGem && (
+                        <View style={styles.hiddenGemBadge}>
+                          <Star size={10} color="#eab308" fill="#eab308" />
+                          <Text style={styles.hiddenGemText}>Gem</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -1185,6 +1336,14 @@ export default function App() {
                       <View style={styles.walkBadge}>
                         <Clock size={10} color="#9ca3af" />
                         <Text style={styles.walkText}>{spot.hours.open === '24hrs' ? '24hrs' : `${spot.hours.open}-${spot.hours.close}`}</Text>
+                      </View>
+                    )}
+                    {proximityMatch && (
+                      <View style={styles.walkBadge}>
+                        <MapPin size={10} color="#a5b4fc" />
+                        <Text style={[styles.walkText, { color: '#a5b4fc' }]}>
+                          {(getDistanceFromPlace(spot, proximityMatch) * 1000).toFixed(0)}m away
+                        </Text>
                       </View>
                     )}
                   </View>
@@ -1560,18 +1719,20 @@ export default function App() {
 
   // ---------- Root switch ----------
 
-  let Screen = LandingPage;
-  if (showOnboarding && currentView === 'landing') Screen = OnboardingScreen;
-  else if (currentView === 'login') Screen = LoginPage;
-  else if (currentView === 'signup') Screen = SignupPage;
-  else if (currentView === 'search') Screen = SearchPage;
-  else if (currentView === 'submissions') Screen = SubmissionsPage;
-  else if (currentView === 'saved') Screen = SavedSpotsPage;
-  else if (currentView === 'history') Screen = HistoryPage;
+  const renderScreen = () => {
+    if (showOnboarding && currentView === 'landing') return OnboardingScreen();
+    if (currentView === 'login') return LoginPage();
+    if (currentView === 'signup') return SignupPage();
+    if (currentView === 'search') return SearchPage();
+    if (currentView === 'submissions') return SubmissionsPage();
+    if (currentView === 'saved') return SavedSpotsPage();
+    if (currentView === 'history') return HistoryPage();
+    return LandingPage();
+  };
 
   return (
     <SafeAreaView style={styles.appRoot}>
-      <Screen />
+      {renderScreen()}
 
       {/* Report a Space Modal */}
       <Modal visible={showReportModal} animationType="fade" transparent>
@@ -1602,6 +1763,13 @@ export default function App() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.reportOptionTitle}>Car park is full</Text>
                   <Text style={styles.reportOptionDesc}>Warn drivers that this location is full</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.reportOption, { borderColor: '#eab308' }]} onPress={() => { setShowReportModal(false); setShowSubmitForm(true); }}>
+                <Star size={24} color="#eab308" fill="#eab308" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reportOptionTitle}>Report a hidden gem</Text>
+                  <Text style={styles.reportOptionDesc}>Know a secret free spot or lay-by? Share it and earn a free month of Premium!</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -3014,6 +3182,38 @@ const styles = StyleSheet.create({
     color: '#86efac',
     fontSize: 12,
     flex: 1,
+  },
+  proximityTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(165,180,252,0.08)',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(165,180,252,0.2)',
+  },
+  proximityTipText: {
+    color: '#c7d2fe',
+    fontSize: 12,
+    flex: 1,
+  },
+  hiddenGemBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(234,179,8,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(234,179,8,0.3)',
+  },
+  hiddenGemText: {
+    color: '#eab308',
+    fontSize: 10,
+    fontWeight: '600',
   },
   // --- Timer Banner ---
   timerBanner: {
