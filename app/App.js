@@ -841,19 +841,21 @@ export default function App() {
       <Text style={styles.landingTitle}>
         Park<Text style={styles.logoAccent}>Easy</Text>
       </Text>
-      <Text style={styles.landingSubtitle}>Smart Parking Finder - Global</Text>
+      <Text style={styles.landingSubtitle}>Find Parking in Seconds</Text>
       <Text style={styles.landingDescription}>
-        Find parking in cities worldwide with real-time availability,
-        EV charging locations, and community reviews.
+        Search for any destination and instantly find nearby parking —
+        car parks, free street spots, hidden gems, and lay-bys.
+        Book, pay, and go.
       </Text>
       <View style={styles.landingButtonsRow}>
         <PrimaryButton label="Get Started" onPress={() => setCurrentView('login')} />
         <SecondaryButton label="Sign Up Free" onPress={() => setCurrentView('signup')} />
       </View>
       <View style={styles.landingFeatureRow}>
-        <FeaturePill icon={Globe} label="30+ cities" />
-        <FeaturePill icon={Zap} label="Real-time data" />
-        <FeaturePill icon={Star} label="Community driven" />
+        <FeaturePill icon={MapPin} label="Free spots" />
+        <FeaturePill icon={Navigation} label="Proximity search" />
+        <FeaturePill icon={Star} label="Hidden gems" />
+        <FeaturePill icon={Car} label="Book & pay" />
       </View>
     </View>
   );
@@ -1683,10 +1685,10 @@ export default function App() {
 
   const OnboardingScreen = () => {
     const steps = [
-      { title: 'Welcome to ParkEasy', desc: 'Find parking across Belfast and beyond in seconds. Real-time availability, EV charging, and community reviews.', icon: Car },
-      { title: 'Search & Filter', desc: 'Search by name, location, or keyword. Filter by price, type, EV charging, and more. Sort by nearest, cheapest, or top-rated.', icon: Search },
-      { title: 'Save & Share', desc: 'Save your favourite spots with a tap. Share parking finds with friends. Report free spaces for the community.', icon: Heart },
-      { title: 'Book & Go', desc: 'Book spots, get directions via Google Maps, and keep receipts of all your bookings. Upgrade to Premium for unlimited access.', icon: Navigation },
+      { title: 'Welcome to ParkEasy', desc: 'Find parking anywhere in seconds. Search for a destination — a barbers, restaurant, or Black Mountain — and we\'ll show you the closest parking spots, including free ones.', icon: Car },
+      { title: 'Search Any Destination', desc: 'Type where you\'re going and find nearby car parks, free street parking, lay-bys, and hidden gems. Filter by price, distance, type, and more.', icon: Search },
+      { title: 'Hidden Gems & Free Spots', desc: 'Discover free parking that locals know about — lay-bys, quiet streets, and community-reported hidden gems. Report your own and earn free Premium!', icon: Star },
+      { title: 'Book, Pay & Go', desc: 'Book spots, get directions via Google Maps, set parking timers, and keep receipts. Upgrade to Premium for unlimited access across 30+ cities.', icon: Navigation },
     ];
     const step = steps[onboardingStep];
     const StepIcon = step.icon;
@@ -1856,13 +1858,13 @@ const PremiumModal = ({ visible, onClose, onUpgrade, onStartTrial, trialActive }
           )}
 
           <View style={styles.premiumFeatures}>
-            <PremiumFeature icon={CheckCircle} text="Unlimited parking searches (40 spots!)" />
-            <PremiumFeature icon={Zap} text="Real-time availability updates" />
-            <PremiumFeature icon={Heart} text="Save favourite locations" />
-            <PremiumFeature icon={Navigation} text="Google Maps directions" />
-            <PremiumFeature icon={Car} text="Book parking spots" />
-            <PremiumFeature icon={Star} text="Ad-free experience" />
-            <PremiumFeature icon={Globe} text="Access to all 30+ cities" />
+            <PremiumFeature icon={CheckCircle} text="Unlimited parking searches (50+ spots!)" />
+            <PremiumFeature icon={MapPin} text="All free spots, lay-bys & hidden gems" />
+            <PremiumFeature icon={Navigation} text="Proximity search — find parking near any destination" />
+            <PremiumFeature icon={Car} text="Book & pay for parking in-app" />
+            <PremiumFeature icon={Heart} text="Save favourite spots for quick access" />
+            <PremiumFeature icon={Star} text="Community hidden gems & reports" />
+            <PremiumFeature icon={Globe} text="Access to all 30+ cities worldwide" />
           </View>
 
           <View style={styles.pricingCards}>
