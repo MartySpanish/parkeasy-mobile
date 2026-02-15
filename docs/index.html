@@ -579,12 +579,299 @@
     .hero > *:nth-child(4) { animation-delay: 0.4s; }
     .hero > *:nth-child(5) { animation-delay: 0.5s; }
     .hero > *:nth-child(6) { animation-delay: 0.6s; }
+
+    /* Navbar */
+    .navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: rgba(2,6,23,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #111827;
+    }
+
+    .nav-logo {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -1px;
+    }
+
+    .nav-logo span { color: #6366f1; }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .nav-link {
+      color: #9ca3af;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-link:hover { color: #e5e7eb; }
+
+    .nav-btn {
+      padding: 8px 20px;
+      border-radius: 999px;
+      background: #4f46e5;
+      color: #f9fafb;
+      font-weight: 600;
+      font-size: 14px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .nav-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(79,70,229,0.3);
+    }
+
+    .nav-btn-outline {
+      padding: 8px 20px;
+      border-radius: 999px;
+      background: transparent;
+      border: 1px solid #374151;
+      color: #e5e7eb;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .nav-btn-outline:hover { border-color: #6366f1; }
+
+    /* Modal overlay */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal-card {
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      border-radius: 24px;
+      padding: 36px;
+      width: 100%;
+      max-width: 400px;
+      margin: 24px;
+      position: relative;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      color: #6b7280;
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .modal-close:hover { color: #e5e7eb; }
+
+    .modal-title {
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+
+    .modal-subtitle {
+      font-size: 14px;
+      color: #6b7280;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 15px;
+      margin-bottom: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+    }
+
+    .form-input:focus { border-color: #6366f1; }
+
+    .form-input::placeholder { color: #6b7280; }
+
+    .form-btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 999px;
+      background: #4f46e5;
+      color: #f9fafb;
+      font-weight: 700;
+      font-size: 16px;
+      border: none;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .form-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(79,70,229,0.3);
+    }
+
+    .form-switch {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .form-switch a {
+      color: #a5b4fc;
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .form-switch a:hover { text-decoration: underline; }
+
+    .form-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 0;
+      color: #4b5563;
+      font-size: 12px;
+    }
+
+    .form-divider::before,
+    .form-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #1f2937;
+    }
+
+    .social-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+
+    .social-btn:hover { border-color: #6366f1; }
+
+    @media (max-width: 600px) {
+      .nav-link { display: none; }
+      .modal-card { padding: 28px 20px; }
+    }
   </style>
 </head>
 <body>
 
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="nav-logo">Park<span>Easy</span></div>
+    <div class="nav-links">
+      <a href="#features" class="nav-link">Features</a>
+      <a href="#pricing" class="nav-link">Pricing</a>
+      <button class="nav-btn-outline" onclick="openModal('login')">Log In</button>
+      <button class="nav-btn" onclick="openModal('signup')">Sign Up Free</button>
+    </div>
+  </nav>
+
+  <!-- Login Modal -->
+  <div class="modal-overlay" id="loginModal">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModals()">&times;</button>
+      <div class="modal-title">Welcome back</div>
+      <div class="modal-subtitle">Sign in to your ParkEasy account</div>
+      <form onsubmit="handleLogin(event)">
+        <input type="email" class="form-input" placeholder="Email address" required id="loginEmail">
+        <input type="password" class="form-input" placeholder="Password" required id="loginPassword">
+        <button type="submit" class="form-btn">Sign In</button>
+      </form>
+      <div class="form-divider">or</div>
+      <button class="social-btn" onclick="handleLogin(event)">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Continue with Google
+      </button>
+      <button class="social-btn" onclick="handleLogin(event)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.18 0-.36-.02-.53-.06-.17-.04-.28-.06-.39-.06 0-.18.06-.39.12-.59.56-1.29 1.99-2.49 2.99-2.93.5-.22 1.24-.53 1.97-.53v.52zm3.98 14.93c-.1.28-.58 1.18-1.06 1.86-.63.91-1.29 1.82-2.33 1.84-1 .02-1.31-.65-2.73-.65s-1.78.63-2.83.67c-1 .04-1.77-.99-2.4-1.9-1.29-1.86-2.27-5.27-0.95-7.57.66-1.14 1.83-1.86 3.1-1.88 .96-.02 1.87.65 2.46.65s1.68-.8 2.84-.68c.48.02 1.84.2 2.71 1.47-.07.04-1.62.95-1.6 2.82.02 2.24 1.96 2.98 1.98 2.99-.02.04-.31 1.07-.79 2.14l-.4.24z"/></svg>
+        Continue with Apple
+      </button>
+      <div class="form-switch">
+        Don't have an account? <a onclick="switchModal('signup')">Sign up free</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signup Modal -->
+  <div class="modal-overlay" id="signupModal">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModals()">&times;</button>
+      <div class="modal-title">Join Park<span style="color:#6366f1">Easy</span></div>
+      <div class="modal-subtitle">Create your free account</div>
+      <form onsubmit="handleSignup(event)">
+        <input type="text" class="form-input" placeholder="Full name" required id="signupName">
+        <input type="email" class="form-input" placeholder="Email address" required id="signupEmail">
+        <input type="password" class="form-input" placeholder="Create password" required id="signupPassword">
+        <button type="submit" class="form-btn">Create Account</button>
+      </form>
+      <div class="form-divider">or</div>
+      <button class="social-btn" onclick="handleSignup(event)">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Sign up with Google
+      </button>
+      <button class="social-btn" onclick="handleSignup(event)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.18 0-.36-.02-.53-.06-.17-.04-.28-.06-.39-.06 0-.18.06-.39.12-.59.56-1.29 1.99-2.49 2.99-2.93.5-.22 1.24-.53 1.97-.53v.52zm3.98 14.93c-.1.28-.58 1.18-1.06 1.86-.63.91-1.29 1.82-2.33 1.84-1 .02-1.31-.65-2.73-.65s-1.78.63-2.83.67c-1 .04-1.77-.99-2.4-1.9-1.29-1.86-2.27-5.27-0.95-7.57.66-1.14 1.83-1.86 3.1-1.88 .96-.02 1.87.65 2.46.65s1.68-.8 2.84-.68c.48.02 1.84.2 2.71 1.47-.07.04-1.62.95-1.6 2.82.02 2.24 1.96 2.98 1.98 2.99-.02.04-.31 1.07-.79 2.14l-.4.24z"/></svg>
+        Sign up with Apple
+      </button>
+      <div class="form-switch">
+        Already have an account? <a onclick="switchModal('login')">Sign in</a>
+      </div>
+    </div>
+  </div>
+
   <!-- Hero -->
-  <section class="hero">
+  <section class="hero" style="padding-top:80px">
     <div class="logo">Park<span>Easy</span></div>
     <div class="tagline">Find Parking in Seconds</div>
     <p class="subtitle">
@@ -806,5 +1093,48 @@
     </p>
   </footer>
 
+  <script>
+    function openModal(type) {
+      closeModals();
+      document.getElementById(type + 'Modal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModals() {
+      document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+      document.body.style.overflow = '';
+    }
+
+    function switchModal(type) {
+      closeModals();
+      setTimeout(() => openModal(type), 100);
+    }
+
+    // Close modal on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModals();
+      });
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModals();
+    });
+
+    function handleLogin(e) {
+      e.preventDefault();
+      // Placeholder — will connect to real auth later
+      closeModals();
+      alert('Login coming soon! Download the app to sign in.');
+    }
+
+    function handleSignup(e) {
+      e.preventDefault();
+      // Placeholder — will connect to real auth later
+      closeModals();
+      alert('Sign up coming soon! Download the app to create an account.');
+    }
+  </script>
 </body>
 </html>
