@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx expo:*)",
+      "Bash(curl:*)",
+      "Bash(kill:*)",
+      "Bash(start:*)",
+      "Bash(npm ls:*)",
+      "Bash(ipconfig:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e:*)",
+      "Bash(gh auth:*)",
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
