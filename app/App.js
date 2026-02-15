@@ -249,6 +249,8 @@ export default function App() {
   const [currentView, setCurrentView] = useState('landing');
   const [user, setUser] = useState(null);
   const [isPremium, setIsPremium] = useState(false); // Premium subscription status
+  const [monthlySearches, setMonthlySearches] = useState(0); // Free tier: 10 searches/month
+  const FREE_SEARCH_LIMIT = 10;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedDestination, setSelectedDestination] = useState(null);
@@ -353,6 +355,25 @@ export default function App() {
     setShowCitySelector(false);
   };
 
+  // ---------- Search Limit (Free Tier) ----------
+
+  const trackSearch = useCallback(() => {
+    if (isPremium) return true;
+    if (monthlySearches >= FREE_SEARCH_LIMIT) {
+      Alert.alert(
+        'Search Limit Reached',
+        `You've used all ${FREE_SEARCH_LIMIT} free searches this month. Upgrade to Premium for unlimited searches!`,
+        [
+          { text: 'Maybe Later', style: 'cancel' },
+          { text: 'Upgrade Now', onPress: () => setShowPremiumModal(true) },
+        ]
+      );
+      return false;
+    }
+    setMonthlySearches(prev => prev + 1);
+    return true;
+  }, [isPremium, monthlySearches]);
+
   // ---------- Premium Feature Check ----------
 
   const checkPremiumFeature = (featureName) => {
@@ -431,6 +452,17 @@ export default function App() {
       const exists = prev.find((s) => s.id === spot.id);
       if (exists) {
         return prev.filter((s) => s.id !== spot.id);
+      }
+      if (!isPremium && prev.length >= 5) {
+        Alert.alert(
+          'Save Limit Reached',
+          'Free users can save up to 5 spots. Upgrade to Premium for unlimited saves!',
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Upgrade', onPress: () => setShowPremiumModal(true) },
+          ]
+        );
+        return prev;
       }
       return [...prev, spot];
     });
@@ -1137,6 +1169,7 @@ export default function App() {
                     key={item.label}
                     style={styles.suggestionChip}
                     onPress={() => {
+                      if (!trackSearch()) return;
                       setSearchQuery(item.query);
                       setShowSuggestions(false);
                     }}
@@ -1229,6 +1262,11 @@ export default function App() {
               {!isPremium && parkingSpots.length > 3 && (
                 <Text style={styles.limitText}>
                   Showing 3 of {parkingSpots.length} • Upgrade for all
+                </Text>
+              )}
+              {!isPremium && (
+                <Text style={styles.limitText}>
+                  {FREE_SEARCH_LIMIT - monthlySearches} searches left this month
                 </Text>
               )}
             </View>
