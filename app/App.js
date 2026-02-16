@@ -267,7 +267,7 @@ export default function App() {
   const [userLocation, setUserLocation] = useState(null);
   const [savedSpots, setSavedSpots] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [bookingHistory, setBookingHistory] = useState([]);
   const [reportedSpaces, setReportedSpaces] = useState([]);
@@ -394,12 +394,25 @@ export default function App() {
   // ---------- Handlers ----------
 
   const handleLogin = (email, password) => {
+    if (!email) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
     setUser({ id: 1, name: email.split('@')[0], email });
     setCurrentView('search');
   };
 
   const handleSignup = (name, email, password) => {
-    setUser({ id: 1, name, email });
+    if (!email) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+    setUser({ id: 1, name: name || email.split('@')[0], email });
+    setCurrentView('search');
+  };
+
+  const handleGuestMode = () => {
+    setUser({ id: 0, name: 'Guest', email: 'guest@parkeasy.app' });
     setCurrentView('search');
   };
 
@@ -883,6 +896,9 @@ export default function App() {
         <PrimaryButton label="Get Started" onPress={() => setCurrentView('login')} />
         <SecondaryButton label="Sign Up Free" onPress={() => setCurrentView('signup')} />
       </View>
+      <TouchableOpacity style={{ marginTop: 12 }} onPress={handleGuestMode}>
+        <Text style={{ color: '#6b7280', fontSize: 14 }}>Continue as guest</Text>
+      </TouchableOpacity>
       <View style={styles.landingFeatureRow}>
         <FeaturePill icon={MapPin} label="Free spots" />
         <FeaturePill icon={Navigation} label="Proximity search" />
@@ -917,6 +933,9 @@ export default function App() {
             secureTextEntry
           />
           <PrimaryButton label="Sign in" onPress={() => handleLogin(email, password)} />
+          <TouchableOpacity style={{ marginTop: 12, alignSelf: 'center' }} onPress={handleGuestMode}>
+            <Text style={{ color: '#6b7280', fontSize: 14 }}>Continue as guest</Text>
+          </TouchableOpacity>
           <Text style={styles.authSwitchText}>
             Don't have an account?{' '}
             <Text style={styles.authSwitchLink} onPress={() => setCurrentView('signup')}>
@@ -961,6 +980,9 @@ export default function App() {
             secureTextEntry
           />
           <PrimaryButton label="Create account" onPress={() => handleSignup(name, email, password)} />
+          <TouchableOpacity style={{ marginTop: 12, alignSelf: 'center' }} onPress={handleGuestMode}>
+            <Text style={{ color: '#6b7280', fontSize: 14 }}>Continue as guest</Text>
+          </TouchableOpacity>
           <Text style={styles.authSwitchText}>
             Already have an account?{' '}
             <Text style={styles.authSwitchLink} onPress={() => setCurrentView('login')}>
