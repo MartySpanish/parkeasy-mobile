@@ -812,8 +812,7 @@
     <div class="nav-links">
       <a href="#features" class="nav-link">Features</a>
       <a href="#pricing" class="nav-link">Pricing</a>
-      <a href="#try-app" class="nav-link">Try App</a>
-      <a href="https://github.com/MartySpanish/parkeasy-mobile" class="nav-btn-outline" target="_blank" rel="noopener">GitHub</a>
+      <button class="nav-btn-outline" onclick="openModal('login')">Log In</button>
       <button class="nav-btn" onclick="openModal('signup')">Sign Up Free</button>
     </div>
   </nav>
@@ -823,7 +822,7 @@
     <div class="modal-card">
       <button class="modal-close" onclick="closeModals()">&times;</button>
       <div class="modal-title">Welcome back</div>
-      <div class="modal-subtitle">Sign in is available in the ParkEasy app &mdash; try it via Expo Go below</div>
+      <div class="modal-subtitle">Sign in to your ParkEasy account</div>
       <form onsubmit="handleLogin(event)">
         <input type="email" class="form-input" placeholder="Email address" required id="loginEmail">
         <input type="password" class="form-input" placeholder="Password" required id="loginPassword">
@@ -849,7 +848,7 @@
     <div class="modal-card">
       <button class="modal-close" onclick="closeModals()">&times;</button>
       <div class="modal-title">Join Park<span style="color:#6366f1">Easy</span></div>
-      <div class="modal-subtitle">Account creation is available in the app &mdash; try it via Expo Go below</div>
+      <div class="modal-subtitle">Create your free account</div>
       <form onsubmit="handleSignup(event)">
         <input type="text" class="form-input" placeholder="Full name" required id="signupName">
         <input type="email" class="form-input" placeholder="Email address" required id="signupEmail">
@@ -887,15 +886,22 @@
       <div class="pill"><span class="pill-icon">⚡</span> EV charging</div>
     </div>
     <div class="cta-row">
-      <a href="https://github.com/MartySpanish/parkeasy-mobile" class="btn-primary" target="_blank" rel="noopener">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-        View on GitHub
+      <a href="#" class="btn-store" onclick="event.preventDefault()">
+        <svg width="20" height="24" viewBox="0 0 20 24" fill="currentColor"><path d="M15.77 12.63c-.03-2.82 2.3-4.17 2.4-4.24-1.31-1.91-3.34-2.17-4.07-2.2-1.73-.18-3.38 1.02-4.26 1.02-.88 0-2.24-1-3.68-.97-1.89.03-3.64 1.1-4.61 2.79-1.97 3.42-.5 8.48 1.42 11.25.94 1.36 2.06 2.89 3.53 2.83 1.42-.06 1.95-.92 3.66-.92 1.71 0 2.2.92 3.68.89 1.52-.03 2.49-1.39 3.42-2.75 1.08-1.58 1.52-3.11 1.55-3.19-.03-.01-2.97-1.14-3-4.51zM13 3.54C13.78 2.6 14.31 1.3 14.17 0c-1.13.05-2.5.75-3.31 1.7-.73.84-1.37 2.18-1.2 3.47 1.26.1 2.54-.64 3.34-1.63z"/></svg>
+        <div>
+          <div style="font-size:10px;opacity:0.8">Download on the</div>
+          <div style="font-size:16px;font-weight:700">App Store</div>
+        </div>
       </a>
-      <a href="#try-app" class="btn-secondary">
-        📱 Try the App
+      <a href="#" class="btn-store" onclick="event.preventDefault()">
+        <svg width="20" height="22" viewBox="0 0 20 22" fill="currentColor"><path d="M1.22 0L11.02 10.5 1.22 21c-.14-.16-.22-.42-.22-.74V.74C1 .42 1.08.16 1.22 0zm.96-.54L13.04 9.64l-2.6 2.86L2.18-.54zm11.9 11.58l-2.6-2.86L13.04 9.64 19.22 6.1c.52-.3.78-.7.78-1.1s-.26-.8-.78-1.1l-6.14-3.5zm-2.6 1.14L2.18 21.54l8.26-8.22 2.6-2.86z"/></svg>
+        <div>
+          <div style="font-size:10px;opacity:0.8">Get it on</div>
+          <div style="font-size:16px;font-weight:700">Google Play</div>
+        </div>
       </a>
     </div>
-    <p class="coming-soon-text">Available now via Expo Go &bull; App Store &amp; Google Play coming soon</p>
+    <p class="coming-soon-text">Coming soon to App Store &amp; Google Play</p>
 
     <!-- Phone mockup -->
     <div class="phone-mockup">
@@ -1078,36 +1084,6 @@
     <p style="color:#6b7280;font-size:13px;margin-top:24px">7-day free Premium trial included. No payment required to start.</p>
   </section>
 
-  <!-- Try the App -->
-  <section id="try-app" style="padding:80px 24px;text-align:center;background:rgba(15,23,42,0.4)">
-    <div style="max-width:600px;margin:0 auto">
-      <h2 style="font-size:36px;font-weight:800;margin-bottom:12px">Try It Now</h2>
-      <p style="font-size:16px;color:#9ca3af;margin-bottom:32px">ParkEasy is available today via Expo Go &mdash; no App Store needed. Scan the QR code or open the link on your phone.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;align-items:center">
-        <a href="https://github.com/MartySpanish/parkeasy-mobile" target="_blank" rel="noopener" class="btn-primary" style="gap:10px">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-          View Source on GitHub
-        </a>
-        <div style="background:#111827;border:1px solid #374151;border-radius:16px;padding:20px 28px;display:inline-block">
-          <div style="font-size:13px;color:#9ca3af;margin-bottom:8px">Install via Expo Go</div>
-          <div style="font-size:15px;font-weight:700;color:#a5b4fc;font-family:monospace">expo start --tunnel</div>
-          <div style="font-size:12px;color:#6b7280;margin-top:8px">Then scan QR in the Expo Go app</div>
-        </div>
-      </div>
-      <div style="margin-top:32px;display:flex;flex-wrap:wrap;gap:12px;justify-content:center">
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:999px;border:1px solid #1f2937;background:rgba(99,102,241,0.06);font-size:13px;color:#c7d2fe">
-          <span>📱</span> iOS &amp; Android
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:999px;border:1px solid #1f2937;background:rgba(99,102,241,0.06);font-size:13px;color:#c7d2fe">
-          <span>🆓</span> Free to try
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:999px;border:1px solid #1f2937;background:rgba(99,102,241,0.06);font-size:13px;color:#c7d2fe">
-          <span>🔓</span> Open source
-        </div>
-      </div>
-    </div>
-  </section>
-
   <!-- Footer -->
   <footer>
     <div class="logo">Park<span>Easy</span></div>
@@ -1148,14 +1124,16 @@
 
     function handleLogin(e) {
       e.preventDefault();
+      // Placeholder — will connect to real auth later
       closeModals();
-      document.getElementById('try-app').scrollIntoView({ behavior: 'smooth' });
+      alert('Login coming soon! Download the app to sign in.');
     }
 
     function handleSignup(e) {
       e.preventDefault();
+      // Placeholder — will connect to real auth later
       closeModals();
-      document.getElementById('try-app').scrollIntoView({ behavior: 'smooth' });
+      alert('Sign up coming soon! Download the app to create an account.');
     }
   </script>
 </body>
