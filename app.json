@@ -14,7 +14,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.parkeasy.mobile"
+      "bundleIdentifier": "com.parkeasy.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ParkEasy uses your location to find nearby parking spots.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ParkEasy uses your location to find nearby parking spots."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,14 +27,24 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png",
         "backgroundColor": "#020617"
       },
-      "package": "com.parkeasy.mobile"
+      "package": "com.parkeasy.mobile",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ParkEasy uses your location to find nearby parking spots."
+        }
+      ]
     ]
   }
 }
