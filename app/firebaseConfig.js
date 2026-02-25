@@ -14,12 +14,12 @@ import { getApps, initializeApp } from 'firebase/app';
 import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT_ID.appspot.com',
-  messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-  appId: 'YOUR_APP_ID',
+  apiKey: 'AIzaSyBdSdpL0-uMYBGfXpDRRd3h5qjTmCkLbck',
+  authDomain: 'park-easy-659ad.firebaseapp.com',
+  projectId: 'park-easy-659ad',
+  storageBucket: 'park-easy-659ad.firebasestorage.app',
+  messagingSenderId: '516582303587',
+  appId: '1:516582303587:web:7b36b656b51dc37c2fd556',
 };
 
 // Guard against hot-reload double-initialisation in Expo Go
