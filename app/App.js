@@ -54,6 +54,14 @@ import {
   View,
 } from 'react-native';
 import { initiatePremiumUpgrade } from './stripeConfig';
+import { auth } from './firebaseConfig';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from 'firebase/auth';
 
 // ---------- API Integration ----------
 
@@ -243,11 +251,21 @@ const getDestinationsForCity = (cityId) => {
   ];
 };
 
+// ---------- Firebase Auth Helper ----------
+
+// Maps a Firebase User object to the app's internal user shape.
+const mapFirebaseUser = (firebaseUser) => ({
+  id: firebaseUser.uid,
+  name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+  email: firebaseUser.email,
+});
+
 // ---------- Main App ----------
 
 export default function App() {
   const [currentView, setCurrentView] = useState('landing');
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true); // true until Firebase resolves auth on startup
   const [isPremium, setIsPremium] = useState(false); // Premium subscription status
   const [monthlySearches, setMonthlySearches] = useState(0); // Free tier: 10 searches/month
   const FREE_SEARCH_LIMIT = 10;
@@ -290,6 +308,24 @@ export default function App() {
     free: false,
     sortBy: 'distance',
   });
+
+  // ---------- Firebase Auth State Listener ----------
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(mapFirebaseUser(firebaseUser));
+        setCurrentView((prev) =>
+          ['landing', 'login', 'signup'].includes(prev) ? 'search' : prev
+        );
+      } else {
+        // If in guest mode (id === 0), preserve it; otherwise clear user
+        setUser((prev) => (prev?.id === 0 ? prev : null));
+      }
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // ---------- Location & Initial Setup ----------
 
@@ -391,24 +427,76 @@ export default function App() {
     return true;
   };
 
-  // ---------- Handlers ----------
+  // ---------- Firebase Auth Error Messages ----------
 
-  const handleLogin = (email, password) => {
-    if (!email) {
-      Alert.alert('Error', 'Please enter your email address');
-      return;
+  const getAuthErrorMessage = (errorCode) => {
+    switch (errorCode) {
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
+      case 'auth/invalid-credential':
+        return 'Incorrect email or password. Please try again.';
+      case 'auth/email-already-in-use':
+        return 'An account with this email already exists. Please sign in instead.';
+      case 'auth/weak-password':
+        return 'Password is too weak. Use at least 6 characters.';
+      case 'auth/invalid-email':
+        return 'Please enter a valid email address.';
+      case 'auth/user-disabled':
+        return 'This account has been disabled. Please contact support.';
+      case 'auth/too-many-requests':
+        return 'Too many attempts. Please wait a few minutes and try again.';
+      case 'auth/network-request-failed':
+        return 'Network error. Please check your connection and try again.';
+      case 'auth/operation-not-allowed':
+        return 'Email/password sign-in is not enabled. Please contact support.';
+      default:
+        return 'Something went wrong. Please try again.';
     }
-    setUser({ id: 1, name: email.split('@')[0], email });
-    setCurrentView('search');
   };
 
-  const handleSignup = (name, email, password) => {
+  // ---------- Handlers ----------
+
+  const handleLogin = async (email, password) => {
     if (!email) {
       Alert.alert('Error', 'Please enter your email address');
       return;
     }
-    setUser({ id: 1, name: name || email.split('@')[0], email });
-    setCurrentView('search');
+    if (!password) {
+      Alert.alert('Error', 'Please enter your password');
+      return;
+    }
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged handles setUser and navigation automatically
+    } catch (error) {
+      Alert.alert('Sign In Failed', getAuthErrorMessage(error.code));
+    }
+  };
+
+  const handleSignup = async (name, email, password) => {
+    if (!email) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+    if (!password || password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      if (name) {
+        await updateProfile(credential.user, { displayName: name });
+      }
+      // Set user immediately with the correct name so it shows right away
+      setUser({
+        id: credential.user.uid,
+        name: name || email.split('@')[0],
+        email: credential.user.email,
+      });
+      setCurrentView('search');
+    } catch (error) {
+      Alert.alert('Sign Up Failed', getAuthErrorMessage(error.code));
+    }
   };
 
   const handleGuestMode = () => {
@@ -416,10 +504,14 @@ export default function App() {
     setCurrentView('search');
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    setCurrentView('landing');
-    setMenuOpen(false);
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setCurrentView('landing');
+      setMenuOpen(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
   };
 
   const handleDestinationSelect = (dest) => {
@@ -1782,6 +1874,18 @@ export default function App() {
   // ---------- Root switch ----------
 
   const renderScreen = () => {
+    // Show a brief splash while Firebase restores auth state on startup.
+    // Prevents logged-in users from briefly seeing the landing page.
+    if (authLoading) {
+      return (
+        <View style={styles.fullScreenCenter}>
+          <Text style={styles.landingTitle}>
+            Park<Text style={styles.logoAccent}>Easy</Text>
+          </Text>
+          <Text style={{ color: '#6b7280', marginTop: 16, fontSize: 15 }}>Loading...</Text>
+        </View>
+      );
+    }
     if (showOnboarding && currentView === 'landing') return OnboardingScreen();
     if (currentView === 'login') return LoginPage();
     if (currentView === 'signup') return SignupPage();
