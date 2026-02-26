@@ -302,6 +302,94 @@ const saveField = async (uid, field, value) => {
   }
 };
 
+// ---------- Auth Screen Components (defined outside App to avoid hooks-order errors) ----------
+
+const LoginPageComponent = ({ onLogin, onGuest, onSwitchToSignup }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  return (
+    <View style={styles.authScreen}>
+      <Text style={styles.authTitle}>Welcome back</Text>
+      <View style={styles.authCard}>
+        <TextInput
+          style={styles.authInput}
+          placeholder="Email address"
+          placeholderTextColor="#6b7280"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={styles.authInput}
+          placeholder="Password"
+          placeholderTextColor="#6b7280"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <PrimaryButton label="Sign in" onPress={() => onLogin(email, password)} />
+        <TouchableOpacity style={{ marginTop: 12, alignSelf: 'center' }} onPress={onGuest}>
+          <Text style={{ color: '#6b7280', fontSize: 14 }}>Continue as guest</Text>
+        </TouchableOpacity>
+        <Text style={styles.authSwitchText}>
+          Don't have an account?{' '}
+          <Text style={styles.authSwitchLink} onPress={onSwitchToSignup}>
+            Sign up
+          </Text>
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+const SignupPageComponent = ({ onSignup, onGuest, onSwitchToLogin }) => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  return (
+    <View style={styles.authScreen}>
+      <Text style={styles.authTitle}>Join ParkEasy</Text>
+      <View style={styles.authCard}>
+        <TextInput
+          style={styles.authInput}
+          placeholder="Full name"
+          placeholderTextColor="#6b7280"
+          value={name}
+          onChangeText={setName}
+        />
+        <TextInput
+          style={styles.authInput}
+          placeholder="Email address"
+          placeholderTextColor="#6b7280"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={styles.authInput}
+          placeholder="Create password"
+          placeholderTextColor="#6b7280"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <PrimaryButton label="Create account" onPress={() => onSignup(name, email, password)} />
+        <TouchableOpacity style={{ marginTop: 12, alignSelf: 'center' }} onPress={onGuest}>
+          <Text style={{ color: '#6b7280', fontSize: 14 }}>Continue as guest</Text>
+        </TouchableOpacity>
+        <Text style={styles.authSwitchText}>
+          Already have an account?{' '}
+          <Text style={styles.authSwitchLink} onPress={onSwitchToLogin}>
+            Sign in
+          </Text>
+        </Text>
+      </View>
+    </View>
+  );
+};
+
 // ---------- Main App ----------
 
 export default function App() {
@@ -1075,91 +1163,21 @@ export default function App() {
     </View>
   );
 
-  const LoginPage = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    return (
-      <View style={styles.authScreen}>
-        <Text style={styles.authTitle}>Welcome back</Text>
-        <View style={styles.authCard}>
-          <TextInput
-            style={styles.authInput}
-            placeholder="Email address"
-            placeholderTextColor="#6b7280"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.authInput}
-            placeholder="Password"
-            placeholderTextColor="#6b7280"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-          <PrimaryButton label="Sign in" onPress={() => handleLogin(email, password)} />
-          <TouchableOpacity style={{ marginTop: 12, alignSelf: 'center' }} onPress={handleGuestMode}>
-            <Text style={{ color: '#6b7280', fontSize: 14 }}>Continue as guest</Text>
-          </TouchableOpacity>
-          <Text style={styles.authSwitchText}>
-            Don't have an account?{' '}
-            <Text style={styles.authSwitchLink} onPress={() => setCurrentView('signup')}>
-              Sign up
-            </Text>
-          </Text>
-        </View>
-      </View>
-    );
-  };
+  const LoginPage = () => (
+    <LoginPageComponent
+      onLogin={handleLogin}
+      onGuest={handleGuestMode}
+      onSwitchToSignup={() => setCurrentView('signup')}
+    />
+  );
 
-  const SignupPage = () => {
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    return (
-      <View style={styles.authScreen}>
-        <Text style={styles.authTitle}>Join ParkEasy</Text>
-        <View style={styles.authCard}>
-          <TextInput
-            style={styles.authInput}
-            placeholder="Full name"
-            placeholderTextColor="#6b7280"
-            value={name}
-            onChangeText={setName}
-          />
-          <TextInput
-            style={styles.authInput}
-            placeholder="Email address"
-            placeholderTextColor="#6b7280"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.authInput}
-            placeholder="Create password"
-            placeholderTextColor="#6b7280"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-          <PrimaryButton label="Create account" onPress={() => handleSignup(name, email, password)} />
-          <TouchableOpacity style={{ marginTop: 12, alignSelf: 'center' }} onPress={handleGuestMode}>
-            <Text style={{ color: '#6b7280', fontSize: 14 }}>Continue as guest</Text>
-          </TouchableOpacity>
-          <Text style={styles.authSwitchText}>
-            Already have an account?{' '}
-            <Text style={styles.authSwitchLink} onPress={() => setCurrentView('login')}>
-              Sign in
-            </Text>
-          </Text>
-        </View>
-      </View>
-    );
-  };
+  const SignupPage = () => (
+    <SignupPageComponent
+      onSignup={handleSignup}
+      onGuest={handleGuestMode}
+      onSwitchToLogin={() => setCurrentView('login')}
+    />
+  );
 
   const SearchPage = () => (
     <View style={{ flex: 1 }}>
