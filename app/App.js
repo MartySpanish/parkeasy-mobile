@@ -354,21 +354,25 @@ export default function App() {
   // ---------- Firebase Auth State Listener + Firestore Load ----------
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser(mapFirebaseUser(firebaseUser));
         setCurrentView((prev) =>
           ['landing', 'login', 'signup'].includes(prev) ? 'search' : prev
         );
-        // Load persisted user data from Firestore
-        const data = await loadUserDoc(firebaseUser.uid);
-        if (data) {
-          if (data.savedSpots) setSavedSpots(data.savedSpots);
-          if (data.bookingHistory) setBookingHistory(data.bookingHistory);
-          if (data.userSubmissions) setUserSubmissions(data.userSubmissions);
-          if (typeof data.isPremium === 'boolean') setIsPremium(data.isPremium);
-          if (typeof data.monthlySearches === 'number') setMonthlySearches(data.monthlySearches);
-        }
+        // Load persisted user data from Firestore (inner async function avoids async callback)
+        const loadData = async () => {
+          const data = await loadUserDoc(firebaseUser.uid);
+          if (data) {
+            if (data.savedSpots) setSavedSpots(data.savedSpots);
+            if (data.bookingHistory) setBookingHistory(data.bookingHistory);
+            if (data.userSubmissions) setUserSubmissions(data.userSubmissions);
+            if (typeof data.isPremium === 'boolean') setIsPremium(data.isPremium);
+            if (typeof data.monthlySearches === 'number') setMonthlySearches(data.monthlySearches);
+          }
+          setAuthLoading(false);
+        };
+        loadData();
       } else {
         // If in guest mode (id === 0), preserve it; otherwise clear user and data
         setUser((prev) => (prev?.id === 0 ? prev : null));
@@ -378,8 +382,8 @@ export default function App() {
         setUserSubmissions([]);
         setIsPremium(false);
         setMonthlySearches(0);
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
