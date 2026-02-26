@@ -54,7 +54,7 @@ import {
   View,
 } from 'react-native';
 import { initiatePremiumUpgrade } from './stripeConfig';
-import { auth } from './firebaseConfig';
+import { auth, db } from './firebaseConfig';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -62,6 +62,13 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth';
+import {
+  doc,
+  getDoc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
 
 // ---------- API Integration ----------
 
@@ -260,6 +267,41 @@ const mapFirebaseUser = (firebaseUser) => ({
   email: firebaseUser.email,
 });
 
+// ---------- Firestore Helpers ----------
+
+// Reference to a user's document: users/{uid}
+const userDocRef = (uid) => doc(db, 'users', uid);
+
+// Create user document on first sign-up with default values
+const createUserDoc = async (uid, name, email) => {
+  await setDoc(userDocRef(uid), {
+    name,
+    email,
+    isPremium: false,
+    monthlySearches: 0,
+    savedSpots: [],
+    bookingHistory: [],
+    userSubmissions: [],
+    createdAt: new Date().toISOString(),
+  });
+};
+
+// Load a user's data from Firestore once
+const loadUserDoc = async (uid) => {
+  const snap = await getDoc(userDocRef(uid));
+  return snap.exists() ? snap.data() : null;
+};
+
+// Persist a single field to Firestore
+const saveField = async (uid, field, value) => {
+  try {
+    await updateDoc(userDocRef(uid), { [field]: value });
+  } catch {
+    // Document may not exist yet (e.g. guest converting) — create it
+    await setDoc(userDocRef(uid), { [field]: value }, { merge: true });
+  }
+};
+
 // ---------- Main App ----------
 
 export default function App() {
@@ -309,18 +351,33 @@ export default function App() {
     sortBy: 'distance',
   });
 
-  // ---------- Firebase Auth State Listener ----------
+  // ---------- Firebase Auth State Listener + Firestore Load ----------
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(mapFirebaseUser(firebaseUser));
         setCurrentView((prev) =>
           ['landing', 'login', 'signup'].includes(prev) ? 'search' : prev
         );
+        // Load persisted user data from Firestore
+        const data = await loadUserDoc(firebaseUser.uid);
+        if (data) {
+          if (data.savedSpots) setSavedSpots(data.savedSpots);
+          if (data.bookingHistory) setBookingHistory(data.bookingHistory);
+          if (data.userSubmissions) setUserSubmissions(data.userSubmissions);
+          if (typeof data.isPremium === 'boolean') setIsPremium(data.isPremium);
+          if (typeof data.monthlySearches === 'number') setMonthlySearches(data.monthlySearches);
+        }
       } else {
-        // If in guest mode (id === 0), preserve it; otherwise clear user
+        // If in guest mode (id === 0), preserve it; otherwise clear user and data
         setUser((prev) => (prev?.id === 0 ? prev : null));
+        // Clear all persisted state on logout
+        setSavedSpots([]);
+        setBookingHistory([]);
+        setUserSubmissions([]);
+        setIsPremium(false);
+        setMonthlySearches(0);
       }
       setAuthLoading(false);
     });
@@ -406,9 +463,11 @@ export default function App() {
       );
       return false;
     }
-    setMonthlySearches(prev => prev + 1);
+    const newCount = monthlySearches + 1;
+    setMonthlySearches(newCount);
+    if (user?.id && user.id !== 0) saveField(user.id, 'monthlySearches', newCount);
     return true;
-  }, [isPremium, monthlySearches]);
+  }, [isPremium, monthlySearches, user]);
 
   // ---------- Premium Feature Check ----------
 
@@ -487,10 +546,13 @@ export default function App() {
       if (name) {
         await updateProfile(credential.user, { displayName: name });
       }
+      // Create Firestore document for this new user
+      const displayName = name || email.split('@')[0];
+      await createUserDoc(credential.user.uid, displayName, credential.user.email);
       // Set user immediately with the correct name so it shows right away
       setUser({
         id: credential.user.uid,
-        name: name || email.split('@')[0],
+        name: displayName,
         email: credential.user.email,
       });
       setCurrentView('search');
@@ -529,10 +591,12 @@ export default function App() {
       id: Date.now(),
       ...spotData,
       status: 'pending',
-      submittedDate: new Date(),
+      submittedDate: new Date().toISOString(),
       pointsEarned: 10,
     };
-    setUserSubmissions([...userSubmissions, newSubmission]);
+    const updated = [...userSubmissions, newSubmission];
+    setUserSubmissions(updated);
+    if (user?.id && user.id !== 0) saveField(user.id, 'userSubmissions', updated);
     setShowSubmitForm(false);
   };
 
@@ -556,7 +620,9 @@ export default function App() {
     setSavedSpots((prev) => {
       const exists = prev.find((s) => s.id === spot.id);
       if (exists) {
-        return prev.filter((s) => s.id !== spot.id);
+        const updated = prev.filter((s) => s.id !== spot.id);
+        if (user?.id && user.id !== 0) saveField(user.id, 'savedSpots', updated);
+        return updated;
       }
       if (!isPremium && prev.length >= 5) {
         Alert.alert(
@@ -569,7 +635,9 @@ export default function App() {
         );
         return prev;
       }
-      return [...prev, spot];
+      const updated = [...prev, spot];
+      if (user?.id && user.id !== 0) saveField(user.id, 'savedSpots', updated);
+      return updated;
     });
   };
 
@@ -642,14 +710,16 @@ export default function App() {
       spotName: spot.name,
       address: spot.address,
       price: spot.pricing.free ? 'FREE' : `\u00a3${spot.pricing.hourlyRate}/hr`,
-      date: new Date(),
+      date: new Date().toISOString(),
       duration: '2 hours',
       total: spot.pricing.free ? '\u00a30.00' : `\u00a3${(spot.pricing.hourlyRate * 2).toFixed(2)}`,
       status: 'confirmed',
       ref: `PE-${Date.now().toString().slice(-6)}`,
       numberPlate: plate || 'Not provided',
     };
-    setBookingHistory([booking, ...bookingHistory]);
+    const updatedHistory = [booking, ...bookingHistory];
+    setBookingHistory(updatedHistory);
+    if (user?.id && user.id !== 0) saveField(user.id, 'bookingHistory', updatedHistory);
     setSelectedSpot(null);
     Alert.alert(
       'Booking Confirmed!',
@@ -668,6 +738,7 @@ export default function App() {
     setTrialActive(true);
     setTrialDaysLeft(7);
     setIsPremium(true);
+    if (user?.id && user.id !== 0) saveField(user.id, 'isPremium', true);
     setShowPremiumModal(false);
     Alert.alert(
       'Trial Started!',
