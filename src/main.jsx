@@ -8,3 +8,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>,
 )
+
+// Register service worker for PWA / offline support (skip inside Capacitor native app)
+if ('serviceWorker' in navigator && !window.Capacitor) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/parkeasy-mobile/sw.js')
+      .catch(() => {})
+  })
+}
