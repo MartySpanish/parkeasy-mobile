@@ -81,8 +81,8 @@ const BUSINESSES = [
 ];
 
 const SUGGESTIONS = [
-  'Gransha Grill','Black Mountain walk','Glen Road barber',
-  'Falls Road','Cave Hill','Balmoral Show','City Centre',
+  'City Centre','Victoria Square','Cathedral Quarter',
+  'Titanic Quarter','Botanic Gardens','Castle Court','St George\'s Market',
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
