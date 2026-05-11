@@ -1,5 +1,5 @@
 const CACHE = 'parkeasy-v1';
-const BASE = '/Parking-finder-/';
+const BASE = '/parkeasy-mobile/';
 
 const CORE = [
   BASE,
