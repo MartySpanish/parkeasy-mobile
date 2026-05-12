@@ -63,26 +63,43 @@ const SPOTS = [
   { id:13, name:'Innisfayle Park overflow',           near:'Cave Hill',        tags:['cave hill','innisfayle','antrim road'],              badge:'hidden_gem', dist:0.19, walk:'~7 min',         restriction:'Residential — be respectful', notes:'When the castle car park is rammed, locals use this quiet road. Always space. Short walk up.', lat:54.6350, lng:-5.9580, by:'AntrimRoadAndy',     votes:51, photo:null,                                                                                          price:null,      spaces:null },
   { id:14, name:'Boucher Road area streets',          near:'Balmoral Show',    tags:['balmoral show','boucher road','kings hall'],         badge:'free',       dist:0.35, walk:'~8 min',         restriction:'Show days — community use',    notes:'Community park in surrounding streets and walk. Saves a fortune vs official show parking.', lat:54.5710, lng:-5.9420, by:'ShowGoer',           votes:66, photo:'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?w=600&h=400&fit=crop', price:null,      spaces:null },
   { id:15, name:'Tates Avenue',                       near:'Balmoral Show',    tags:['balmoral show','tates avenue'],                     badge:'free',       dist:0.90, walk:'~15 min',        restriction:'No restrictions',              notes:'15 min walk saves the show parking charges entirely. Well used on show days.', lat:54.5720, lng:-5.9370, by:'BalmoralBargain',     votes:44, photo:null,                                                                                          price:null,      spaces:null },
-  { id:16, name:'NCP Victoria Square',                near:'City Centre',      tags:['city centre','victoria square','ncp','belfast city centre'], badge:'official', dist:0.10, walk:'2 min', restriction:'Open 24/7',                    notes:'NCP multi-storey. 1,000 spaces. Close to Victoria Square mall and Waterfront.', lat:54.5973, lng:-5.9260, by:'NCP Belfast',         votes:0,  photo:'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&h=400&fit=crop', price:'£2.00/hr', spaces:1000 },
-  { id:17, name:'NCP Dunbar Link',                    near:'City Centre',      tags:['city centre','dunbar link','ncp'],                   badge:'official',   dist:0.20, walk:'4 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey. Great for Cathedral Quarter and Titanic Quarter access.', lat:54.5998, lng:-5.9270, by:'NCP Belfast',         votes:0,  photo:null,                                                                                          price:'£1.80/hr', spaces:600  },
-  { id:18, name:'Q-Park Obel',                        near:'City Centre',      tags:['city centre','obel','qpark','donegall quay'],        badge:'official',   dist:0.15, walk:'3 min',          restriction:'Open 24/7',                    notes:'Q-Park at the Obel tower. Modern facility, handy for Titanic Quarter.', lat:54.6008, lng:-5.9245, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.50/hr', spaces:500  },
-  { id:19, name:'Q-Park Victoria Square',             near:'City Centre',      tags:['city centre','victoria square','qpark'],             badge:'official',   dist:0.05, walk:'1 min',          restriction:'Open 24/7',                    notes:'Q-Park inside Victoria Square. Validated parking available in some stores.', lat:54.5975, lng:-5.9255, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.20/hr', spaces:700  },
+  { id:16, name:'NCP Victoria Square',                near:'Victoria Square',  tags:['city centre','victoria square','ncp','belfast city centre'], badge:'official', dist:0.10, walk:'2 min', restriction:'Open 24/7',             notes:'NCP multi-storey. 1,000 spaces. Right beside Victoria Square mall.', lat:54.5973, lng:-5.9260, by:'NCP Belfast',         votes:0,  photo:'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&h=400&fit=crop', price:'£2.00/hr', spaces:1000 },
+  { id:17, name:'NCP Dunbar Link',                    near:'Cathedral Quarter',tags:['cathedral quarter','dunbar link','ncp','city centre'],badge:'official',   dist:0.20, walk:'4 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey. Great for Cathedral Quarter bars and restaurants.', lat:54.5998, lng:-5.9270, by:'NCP Belfast',         votes:0,  photo:null,                                                                                          price:'£1.80/hr', spaces:600  },
+  { id:18, name:'Q-Park Obel',                        near:'Titanic Quarter',  tags:['titanic quarter','obel','qpark','donegall quay','titanic'], badge:'official', dist:0.15, walk:'3 min',    restriction:'Open 24/7',                    notes:'Q-Park at the Obel tower. Best option for Titanic Quarter visits.', lat:54.6008, lng:-5.9245, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.50/hr', spaces:500  },
+  { id:19, name:'Q-Park Victoria Square',             near:'Victoria Square',  tags:['victoria square','qpark','city centre'],             badge:'official',   dist:0.05, walk:'1 min',          restriction:'Open 24/7',                    notes:'Q-Park inside Victoria Square. Validated parking available with some stores.', lat:54.5975, lng:-5.9255, by:'Q-Park Belfast', votes:0, photo:null,                                                                                          price:'£2.20/hr', spaces:700  },
   { id:20, name:'BCC Bankmore Square',                near:'City Centre',      tags:['city centre','bankmore','belfast city council'],     badge:'official',   dist:0.30, walk:'6 min',          restriction:'Mon–Sat 8am–6pm',              notes:'Belfast City Council operated. Good rates. Short walk to City Hall.', lat:54.5940, lng:-5.9300, by:'Belfast City Council', votes:0,  photo:null,                                                                                          price:'£1.50/hr', spaces:400  },
-  { id:21, name:'BCC Castle Street',                  near:'City Centre',      tags:['city centre','castle street','belfast city council'],badge:'official',   dist:0.10, walk:'2 min',          restriction:'Mon–Sat 8am–6pm',              notes:'Central city council car park. Good for Royal Avenue shopping.', lat:54.5985, lng:-5.9335, by:'Belfast City Council', votes:0,  photo:null,                                                                                          price:'£1.60/hr', spaces:300  },
-  { id:22, name:'BCC Tomb Street',                    near:'City Centre',      tags:['city centre','tomb street','belfast city council'],  badge:'official',   dist:0.20, walk:'4 min',          restriction:'Mon–Sat 8am–6pm',              notes:'Good for Cathedral Quarter and Custom House Square area.', lat:54.6002, lng:-5.9280, by:'Belfast City Council', votes:0,  photo:null,                                                                                          price:'£1.40/hr', spaces:350  },
+  { id:21, name:'BCC Castle Street',                  near:'Castle Court',     tags:['castle court','castle street','belfast city council','royal avenue'], badge:'official', dist:0.10, walk:'2 min', restriction:'Mon–Sat 8am–6pm',     notes:'City council car park. Perfect for Castle Court and Royal Avenue shopping.', lat:54.5985, lng:-5.9335, by:'Belfast City Council', votes:0, photo:null,                                                                                          price:'£1.60/hr', spaces:300  },
+  { id:22, name:'BCC Tomb Street',                    near:"St George's Market",tags:['city centre','tomb street','belfast city council',"st george's market",'markets'], badge:'official', dist:0.20, walk:'4 min', restriction:'Mon–Sat 8am–6pm', notes:'Good for St George\'s Market and Cathedral Quarter. Free after 6pm weekdays.', lat:54.6002, lng:-5.9280, by:'Belfast City Council', votes:0, photo:null,                                                                                          price:'£1.40/hr', spaces:350  },
+  { id:23, name:'Exchange Street on-street',          near:'Cathedral Quarter',tags:['cathedral quarter','exchange street','custom house square'], badge:'timed', dist:0.05, walk:'2 min',       restriction:'Mon–Sat 8am–6pm',              notes:'On-street right in the Cathedral Quarter. Free evenings and Sundays — ideal for a night out.', lat:54.6012, lng:-5.9268, by:'CQ_Regular', votes:42, photo:null, price:null, spaces:null },
+  { id:24, name:'Waring Street hidden lay-by',        near:'Cathedral Quarter',tags:['cathedral quarter','waring street','custom house square'], badge:'hidden_gem', dist:0.08, walk:'3 min',    restriction:'Evenings & weekends free',     notes:'Small lay-by most people miss — tucked just off Waring Street. Cathedral Quarter regulars swear by it.', lat:54.6010, lng:-5.9275, by:'CQ_Insider', votes:38, photo:null, price:null, spaces:4 },
+  { id:25, name:'Queens Road on-street',              near:'Titanic Quarter',  tags:['titanic quarter','titanic belfast','queens road','titanic','ss nomadic'], badge:'free', dist:0.10, walk:'3 min', restriction:'Free all day',           notes:'Long stretch of free on-street parking on Queens Road. Easy walk to Titanic Belfast and SS Nomadic.', lat:54.6077, lng:-5.9100, by:'TitanicVisitor', votes:67, photo:null, price:null, spaces:null },
+  { id:26, name:'University Road on-street',          near:'Botanic Gardens',  tags:['botanic gardens','botanic','queens university','university road','botanic avenue'], badge:'timed', dist:0.10, walk:'3 min', restriction:'Mon–Sat 8am–6pm', notes:'On-street along University Road. Free after 6pm and all day Sundays — best for Botanic Gardens.', lat:54.5840, lng:-5.9330, by:'QUB_Student', votes:53, photo:null, price:null, spaces:null },
+  { id:27, name:'Botanic Avenue side streets',        near:'Botanic Gardens',  tags:['botanic gardens','botanic avenue','botanic','queens university'], badge:'hidden_gem', dist:0.15, walk:'4 min', restriction:'Evenings & weekends free', notes:'Quiet residential streets off Botanic Avenue. Locals park here instead of paying nearby car parks.', lat:54.5835, lng:-5.9345, by:'BotanicLocal', votes:44, photo:null, price:null, spaces:null },
+  { id:28, name:'Millfield on-street',                near:'Castle Court',     tags:['castle court','millfield','royal avenue','castle court belfast'], badge:'free', dist:0.20, walk:'5 min',     restriction:'Free evenings & weekends',     notes:'Free on-street just north of Castle Court. Walk down through Royal Avenue to the shops.', lat:54.6002, lng:-5.9362, by:'ShopperLocal', votes:35, photo:null, price:null, spaces:null },
+  { id:29, name:'East Bridge Street on-street',       near:"St George's Market",tags:["st george's market","east bridge street","george's market","markets"], badge:'timed', dist:0.10, walk:'3 min', restriction:'Mon–Sat 8am–6pm',          notes:'Handy for the Friday and Saturday market. Free Sunday mornings — perfect timing for a market visit.', lat:54.5950, lng:-5.9215, by:'MarketGoer', votes:41, photo:null, price:null, spaces:null },
+  { id:30, name:'May Street on-street',               near:"St George's Market",tags:["st george's market","may street","george's market","markets"], badge:'hidden_gem', dist:0.12, walk:'3 min', restriction:'Free Sunday mornings',         notes:'Great for Sunday market visits — usually spaces even on busy market days. 3 min flat walk to the entrance.', lat:54.5945, lng:-5.9230, by:'SundayMarket', votes:29, photo:null, price:null, spaces:null },
+  { id:31, name:'Ann Street on-street',               near:'Victoria Square',  tags:['victoria square','ann street','victoria square belfast','city centre'], badge:'timed', dist:0.08, walk:'2 min', restriction:'Mon–Sat 8am–6pm',          notes:'On-street right beside Victoria Square. Free after 6pm — perfect for evening shopping or dinner.', lat:54.5968, lng:-5.9248, by:'VicSquareLocal', votes:38, photo:null, price:null, spaces:null },
 ];
 
 const BUSINESSES = [
-  { id:1, name:"Tommy's Barber",       area:'Glen Road',     addr:'245 Glen Road, West Belfast BT11', cat:'Barber',      icon:'✂️', key:'glen road barber', lat:54.5935, lng:-6.0012 },
-  { id:2, name:'Gransha Grill',        area:'Hannahstown',   addr:'Gransha Road, BT17',               cat:'Restaurant',  icon:'🍽️', key:'gransha grill',    lat:54.5825, lng:-5.9758 },
-  { id:3, name:'West Belfast Fitness', area:'Falls Road',    addr:'Falls Road, West Belfast BT12',    cat:'Gym',         icon:'💪', key:'falls road',       lat:54.5965, lng:-5.9720 },
-  { id:4, name:'The Felons Club',      area:'Andersonstown', addr:'Andersonstown Road, BT11',         cat:'Social Club', icon:'🍺', key:'falls road',       lat:54.5870, lng:-5.9870 },
-  { id:5, name:"Roma's Pizza",         area:'Andersonstown', addr:'Andersonstown Road, BT11',         cat:'Restaurant',  icon:'🍕', key:'falls road',       lat:54.5875, lng:-5.9875 },
+  { id:1,  name:"Tommy's Barber",       area:'Glen Road',          addr:'245 Glen Road, West Belfast BT11',       cat:'Barber',         icon:'✂️',  key:'glen road barber',    lat:54.5935, lng:-6.0012 },
+  { id:2,  name:'Gransha Grill',        area:'Hannahstown',        addr:'Gransha Road, BT17',                     cat:'Restaurant',     icon:'🍽️',  key:'gransha grill',       lat:54.5825, lng:-5.9758 },
+  { id:3,  name:'West Belfast Fitness', area:'Falls Road',         addr:'Falls Road, West Belfast BT12',          cat:'Gym',            icon:'💪',  key:'falls road',          lat:54.5965, lng:-5.9720 },
+  { id:4,  name:'The Felons Club',      area:'Andersonstown',      addr:'Andersonstown Road, BT11',               cat:'Social Club',    icon:'🍺',  key:'falls road',          lat:54.5870, lng:-5.9870 },
+  { id:5,  name:"Roma's Pizza",         area:'Andersonstown',      addr:'Andersonstown Road, BT11',               cat:'Restaurant',     icon:'🍕',  key:'falls road',          lat:54.5875, lng:-5.9875 },
+  { id:6,  name:'Victoria Square',      area:'City Centre',        addr:'Victoria Square, Belfast BT1 4QG',       cat:'Shopping Centre',icon:'🛍️',  key:'victoria square',     lat:54.5973, lng:-5.9255 },
+  { id:7,  name:'Titanic Belfast',      area:'Titanic Quarter',    addr:"Queen's Road, Belfast BT3 9EP",          cat:'Museum',         icon:'🚢',  key:'titanic quarter',     lat:54.6085, lng:-5.9095 },
+  { id:8,  name:'The Crown Bar',        area:'City Centre',        addr:'46 Great Victoria Street, BT2 7BA',      cat:'Bar',            icon:'🍻',  key:'city centre',         lat:54.5955, lng:-5.9337 },
+  { id:9,  name:"St George's Market",   area:'City Centre',        addr:'12-20 East Bridge Street, BT1 3NQ',      cat:'Market',         icon:'🛒',  key:"st george's market",  lat:54.5948, lng:-5.9220 },
+  { id:10, name:'The Merchant Hotel',   area:'Cathedral Quarter',  addr:'16 Skipper Street, Belfast BT1 2DZ',     cat:'Hotel & Bar',    icon:'🏨',  key:'cathedral quarter',   lat:54.6012, lng:-5.9268 },
+  { id:11, name:'W5 Science Centre',    area:'Titanic Quarter',    addr:"2 Queen's Road, Belfast BT3 9QQ",        cat:'Attraction',     icon:'🔬',  key:'titanic quarter',     lat:54.6080, lng:-5.9105 },
+  { id:12, name:'Castle Court',         area:'City Centre',        addr:'Royal Avenue, Belfast BT1 1DD',          cat:'Shopping Centre',icon:'🏬',  key:'castle court',        lat:54.5995, lng:-5.9348 },
+  { id:13, name:'Botanic Gardens',      area:'South Belfast',      addr:'Stranmillis Road, Belfast BT9 5AB',      cat:'Park',           icon:'🌿',  key:'botanic gardens',     lat:54.5840, lng:-5.9330 },
 ];
 
 const SUGGESTIONS = [
   'City Centre','Victoria Square','Cathedral Quarter',
-  'Titanic Quarter','Botanic Gardens','Castle Court','St George\'s Market',
+  'Titanic Quarter','Botanic Gardens','Castle Court',"St George's Market",
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -146,7 +163,6 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-[200] flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-        {/* Header strip */}
         <div style={{ background:'#1a2332' }} className="p-6 text-center">
           <div className="w-14 h-14 bg-[#4a9eff] rounded-2xl flex items-center justify-center mx-auto mb-3">
             <MapPin size={28} className="text-white" />
@@ -156,7 +172,6 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
         </div>
 
         <div className="p-6 space-y-4">
-          {/* Features */}
           <div className="space-y-2">
             {[
               ['🟢','Find free spots locals actually use'],
@@ -540,7 +555,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch })
         <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
         <input ref={inputRef} value={query} onChange={e=>handleInput(e.target.value)}
           onKeyDown={e=>{ if(e.key==='Enter'){doSearch(query);onSearch(query);setShowSugg(false);} }}
-          placeholder="Try 'Gransha Grill' or 'Cave Hill'…"
+          placeholder="Try 'Victoria Square' or 'Cathedral Quarter'…"
           className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]"
         />
         {query && (
@@ -877,13 +892,13 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">What's near this spot? *</label>
           <input required value={form.near} onChange={e=>set('near',e.target.value)}
-            placeholder="e.g. Gransha Grill, Cave Hill, Felons Club"
+            placeholder="e.g. Victoria Square, Cathedral Quarter, Titanic Belfast"
             className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]"/>
         </div>
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">Street or area *</label>
           <input required value={form.street} onChange={e=>set('street',e.target.value)}
-            placeholder="e.g. Nansen Street, off Glen Road"
+            placeholder="e.g. Ann Street, off Victoria Square"
             className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]"/>
         </div>
         <div>
@@ -1025,81 +1040,73 @@ export default function App() {
 
       {/* Header */}
       <header style={{background:'#1a2332'}} className="sticky top-0 z-50 shadow-lg">
-        <div className="px-4 pt-4 pb-0">
-          <div className="flex items-center gap-2.5 mb-3">
-            <div className="w-9 h-9 bg-[#4a9eff] rounded-lg flex items-center justify-center flex-shrink-0">
-              <MapPin size={20} className="text-white"/>
-            </div>
-            <div>
-              <h1 className="text-white font-extrabold text-base leading-tight tracking-tight">
-                ParkEasy — Belfast
-              </h1>
-              <p className="text-blue-300 text-xs">Where locals actually park</p>
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <a href="https://github.com/MartySpanish/parkeasy-mobile" target="_blank" rel="noreferrer"
-                className="text-blue-300 hover:text-white transition opacity-60 hover:opacity-100 p-1">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                </svg>
-              </a>
-              {user ? (
-                <button onClick={()=>setShowUserMenu(v=>!v)}
-                  className="relative w-8 h-8 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-xs hover:bg-blue-400 transition">
-                  {user.name.charAt(0).toUpperCase()}
-                  {isPremium && (
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-yellow-400 rounded-full flex items-center justify-center text-yellow-900 font-black" style={{fontSize:7}}>★</span>
-                  )}
-                </button>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <button onClick={()=>setShowPricing(true)}
-                    className="text-xs bg-yellow-400 text-yellow-900 px-2.5 py-1.5 rounded-full font-bold hover:bg-yellow-300 transition">
-                    ★ PRO
-                  </button>
-                  <button onClick={()=>setShowWelcome(true)}
-                    className="text-xs bg-[#4a9eff] text-white px-3 py-1.5 rounded-full font-semibold hover:bg-blue-400 transition">
-                    Sign in
-                  </button>
-                </div>
-              )}
-            </div>
+        <div className="px-4 py-3 flex items-center gap-2.5">
+          <div className="w-9 h-9 bg-[#4a9eff] rounded-xl flex items-center justify-center flex-shrink-0">
+            <MapPin size={20} className="text-white"/>
           </div>
-
-          {/* Tab bar */}
-          <div className="flex border-b border-white border-opacity-10">
-            {TABS.map(({id,label,Icon})=>{
-              const active = tab===id;
-              const pill = id==='saved' && saved.size>0 ? saved.size : null;
-              return (
-                <button key={id} onClick={()=>setTab(id)}
-                  className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold border-b-2 transition ${
-                    active ? 'text-[#4a9eff] border-[#4a9eff]' : 'text-blue-300 border-transparent hover:text-white'
-                  }`}>
-                  <div className="relative">
-                    <Icon size={17}/>
-                    {pill && (
-                      <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] bg-[#4a9eff] text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
-                        {pill}
-                      </span>
-                    )}
-                  </div>
-                  {label}
-                </button>
-              );
-            })}
+          <div>
+            <h1 className="text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
+            <p className="text-blue-300 text-xs">Belfast parking finder</p>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {!user && (
+              <button onClick={()=>setShowPricing(true)}
+                className="text-xs bg-yellow-400 text-yellow-900 px-2.5 py-1.5 rounded-full font-bold hover:bg-yellow-300 transition">
+                ★ PRO
+              </button>
+            )}
+            {user ? (
+              <button onClick={()=>setShowUserMenu(v=>!v)}
+                className="relative w-9 h-9 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-sm hover:bg-blue-400 transition">
+                {user.name.charAt(0).toUpperCase()}
+                {isPremium && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center text-yellow-900 font-black" style={{fontSize:8}}>★</span>
+                )}
+              </button>
+            ) : (
+              <button onClick={()=>setShowWelcome(true)}
+                className="text-xs bg-[#4a9eff] text-white px-3 py-2 rounded-full font-semibold hover:bg-blue-400 transition">
+                Sign in
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto pb-8">
+      <main className="flex-1 overflow-auto pb-24">
         {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} recentSearches={recentSearches} onSearch={addRecentSearch}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
       </main>
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-2xl" style={{maxWidth:680,margin:'0 auto'}}>
+        <div className="flex">
+          {TABS.map(({id,label,Icon})=>{
+            const active = tab===id;
+            const pill = id==='saved' && saved.size>0 ? saved.size : null;
+            return (
+              <button key={id} onClick={()=>setTab(id)}
+                className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+                  active ? 'text-[#4a9eff]' : 'text-gray-400 hover:text-gray-600'
+                }`}>
+                <div className="relative">
+                  <Icon size={22} strokeWidth={active ? 2.5 : 1.8}/>
+                  {pill && (
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] bg-[#4a9eff] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                      {pill}
+                    </span>
+                  )}
+                </div>
+                <span className={`text-[10px] font-semibold ${active ? 'text-[#4a9eff]' : 'text-gray-400'}`}>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
