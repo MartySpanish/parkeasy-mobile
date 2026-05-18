@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   MapPin, Search, Crosshair, Plus, Building2, Navigation,
   Bookmark, Camera, Check, X, ChevronRight, Share2,
-  Map, Star, Clock, Car, Info, LogOut, User,
+  Map, Star, Clock, Car, Info, LogOut, User, Filter,
 } from 'lucide-react';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
@@ -35,71 +35,95 @@ const PIN = {
   hidden_gem: mkPin('#a855f7', '★'),
   timed:      mkPin('#f59e0b', 'T'),
   paid:       mkPin('#ef4444', '£'),
-  official:   mkPin('#1a2332', 'P'),
+  official:   mkPin('#3b82f6', 'P'),
 };
 
 const BADGES = {
-  free:       { label: 'FREE',          bg: '#dcfce7', fg: '#15803d' },
-  hidden_gem: { label: '💎 Hidden Gem', bg: '#f3e8ff', fg: '#7e22ce' },
-  timed:      { label: 'TIMED',         bg: '#fff7ed', fg: '#9a3412' },
-  paid:       { label: 'PAY & DISPLAY', bg: '#fef9c3', fg: '#92400e' },
-  official:   { label: '🅿 Official',    bg: '#dbeafe', fg: '#1e3a5f' },
+  free:       { label: 'FREE',          bg: '#dcfce7', fg: '#15803d', dot: '#22c55e' },
+  hidden_gem: { label: '💎 Hidden Gem', bg: '#f3e8ff', fg: '#7e22ce', dot: '#a855f7' },
+  timed:      { label: '⏱ Timed',       bg: '#fff7ed', fg: '#9a3412', dot: '#f59e0b' },
+  paid:       { label: 'Pay & Display', bg: '#fef9c3', fg: '#92400e', dot: '#eab308' },
+  official:   { label: '🅿 Official',    bg: '#dbeafe', fg: '#1e3a5f', dot: '#3b82f6' },
 };
+
+const BELFAST_CENTER = [54.5973, -5.9301];
+
+// ── Notification email (FormSubmit — free, no config needed) ────────────────
+const notifyAdmin = async (name, email) => {
+  try {
+    await fetch('https://formsubmit.co/ajax/martinrooney250@gmail.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        _subject: `🅿 New ParkEasy member: ${name}`,
+        Name: name,
+        Email: email,
+        Message: `New sign-up on ParkEasy Belfast!\n\nName: ${name}\nEmail: ${email}\nTime: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}`,
+        _honey: '',
+        _captcha: 'false',
+      }),
+    });
+  } catch { /* silent fail */ }
+};
+
+// ── Stripe links ─────────────────────────────────────────────────────────────────
+const STRIPE_MONTHLY = 'https://buy.stripe.com/00w4gscgJ6QoahjcTU0kE01';
+const STRIPE_ANNUAL  = 'https://buy.stripe.com/5kQ6oA1C5eiQ0GJg660kE00';
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
 const SPOTS = [
-  { id:1,  name:'Directly outside — Gransha Grill',   near:'Gransha Grill',    tags:['gransha grill','gransha road'],                      badge:'free',       dist:0.00, walk:'Right outside', restriction:'No restrictions',              notes:'Park right outside the door — 2–3 cars fit easily. Free all day, no signage spotted.', lat:54.5825, lng:-5.9758, by:'GranshaLocal',        votes:61, photo:'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&h=400&fit=crop', price:null,      spaces:3    },
-  { id:2,  name:'Gransha Road Lay-by (north side)',   near:'Gransha Grill',    tags:['gransha grill','gransha road'],                      badge:'free',       dist:0.04, walk:'1 min',          restriction:'Free all day',                 notes:'Wider lay-by fits 4+ cars, 1 min walk back. Locals use this daily — never seen a warden.', lat:54.5830, lng:-5.9762, by:'RegularDiner',        votes:44, photo:'https://images.unsplash.com/photo-1486006920555-c77dcf18193c?w=600&h=400&fit=crop', price:null,      spaces:5    },
-  { id:3,  name:'Side road off Gransha Road',         near:'Gransha Grill',    tags:['gransha grill','gransha'],                           badge:'hidden_gem', dist:0.07, walk:'2 min',          restriction:'Evenings & weekends fine',     notes:'Quiet residential street, no wardens ever spotted. Walk right back to the Grill.', lat:54.5835, lng:-5.9768, by:'ParkingPro_BT',      votes:29, photo:null,                                                                                          price:null,      spaces:8    },
-  { id:4,  name:'Trailhead gravel area',              near:'Black Mountain',   tags:['black mountain','black mountain walk','hiking'],     badge:'free',       dist:0.00, walk:'Trail start',    restriction:'Free all day',                 notes:"Gets busy weekends — arrive before 10am or you'll be circling. Gravel surface, 15–20 cars.", lat:54.6198, lng:-6.0225, by:'HikerBelfast',       votes:88, photo:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop', price:null,      spaces:20   },
-  { id:5,  name:'Hannahstown Hill roadside verge',    near:'Black Mountain',   tags:['black mountain','black mountain walk','hannahstown'],badge:'hidden_gem', dist:0.25, walk:'~5 min',         restriction:'No restrictions',              notes:'Wide verge fits 6+ easily. Better than the main area on busy days — most tourists miss it.', lat:54.6175, lng:-6.0190, by:'DogWalkerDermot',   votes:52, photo:'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=600&h=400&fit=crop', price:null,      spaces:7    },
-  { id:6,  name:'Whiterock Road lay-by',              near:'Black Mountain',   tags:['black mountain','black mountain walk','whiterock'],  badge:'free',       dist:0.38, walk:'~8 min',         restriction:'Free all day',                 notes:'Alternative start point, less crowded. Walk up through Whiterock — great views on the way.', lat:54.6150, lng:-6.0150, by:'Springfield_Regular',votes:31, photo:null,                                                                                          price:null,      spaces:6    },
-  { id:7,  name:'Glen Road on-street (outside)',      near:'Glen Road barber', tags:['glen road barber','tommy barber','glen road'],       badge:'timed',      dist:0.00, walk:'Outside',        restriction:'Mon–Sat 9am–5pm timed',        notes:'Check yellow lines carefully. Usually fine evenings and Sundays — quick in-and-out for a cut.', lat:54.5935, lng:-6.0012, by:'GlenRoadRegular',    votes:55, photo:'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=600&h=400&fit=crop', price:null,      spaces:4    },
-  { id:8,  name:'Bingnian Drive',                     near:'Glen Road barber', tags:['glen road barber','tommy barber','bingnian'],        badge:'free',       dist:0.05, walk:'~2 min',         restriction:'Free, unrestricted',           notes:'Quiet side street, 2 min walk to the barber. Community confirmed no restrictions.', lat:54.5940, lng:-6.0025, by:'NansenNeighbour',    votes:38, photo:null,                                                                                          price:null,      spaces:10   },
-  { id:9,  name:'Falls Road on-street',               near:'Falls Road',       tags:['falls road','west belfast fitness','felons','roma pizza','andersonstown'], badge:'paid', dist:0.00, walk:'On the road', restriction:'Mon–Sat 9am–6pm Pay & Display', notes:'Free evenings and Sundays. Pay & Display machine on the road. £1/hr during restricted hours.', lat:54.5965, lng:-5.9720, by:'FallsRoadFred', votes:73, photo:'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=600&h=400&fit=crop', price:'£1.00/hr', spaces:null },
-  { id:10, name:'Dunlewey Street',                    near:'Falls Road',       tags:['falls road','west belfast fitness'],                 badge:'free',       dist:0.06, walk:'~2 min',         restriction:'Unrestricted',                 notes:'Community confirmed no restrictions on this quiet side street. Always a space here.', lat:54.5970, lng:-5.9740, by:'ClowneyLocal',       votes:47, photo:null,                                                                                          price:null,      spaces:12   },
-  { id:11, name:'International Wall lay-by',          near:'Falls Road',       tags:['falls road','murals','international wall'],          badge:'hidden_gem', dist:0.09, walk:'~3 min',         restriction:'Free, no restrictions',        notes:'Handy for quick visits beside the murals. Hidden gem — rarely full even on tourist days.', lat:54.5975, lng:-5.9695, by:'DivisDweller',       votes:33, photo:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop', price:null,      spaces:6    },
-  { id:12, name:'Belfast Castle car park',            near:'Cave Hill',        tags:['cave hill','belfast castle','napoleons nose'],       badge:'free',       dist:0.00, walk:'1 min',          restriction:'Free all day',                 notes:"Fills up on sunny weekends — arrive before noon. Official free car park, well maintained.", lat:54.6375, lng:-5.9605, by:'CaveHillClimber',    votes:97, photo:'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=600&h=400&fit=crop', price:null,      spaces:80   },
-  { id:13, name:'Innisfayle Park overflow',           near:'Cave Hill',        tags:['cave hill','innisfayle','antrim road'],              badge:'hidden_gem', dist:0.19, walk:'~7 min',         restriction:'Residential — be respectful', notes:'When the castle car park is rammed, locals use this quiet road. Always space. Short walk up.', lat:54.6350, lng:-5.9580, by:'AntrimRoadAndy',     votes:51, photo:null,                                                                                          price:null,      spaces:null },
-  { id:14, name:'Boucher Road area streets',          near:'Balmoral Show',    tags:['balmoral show','boucher road','kings hall'],         badge:'free',       dist:0.35, walk:'~8 min',         restriction:'Show days — community use',    notes:'Community park in surrounding streets and walk. Saves a fortune vs official show parking.', lat:54.5710, lng:-5.9420, by:'ShowGoer',           votes:66, photo:'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?w=600&h=400&fit=crop', price:null,      spaces:null },
-  { id:15, name:'Tates Avenue',                       near:'Balmoral Show',    tags:['balmoral show','tates avenue'],                     badge:'free',       dist:0.90, walk:'~15 min',        restriction:'No restrictions',              notes:'15 min walk saves the show parking charges entirely. Well used on show days.', lat:54.5720, lng:-5.9370, by:'BalmoralBargain',     votes:44, photo:null,                                                                                          price:null,      spaces:null },
-  { id:16, name:'NCP Victoria Square',                near:'Victoria Square',  tags:['city centre','victoria square','ncp','belfast city centre'], badge:'official', dist:0.10, walk:'2 min', restriction:'Open 24/7',             notes:'NCP multi-storey. 1,000 spaces. Right beside Victoria Square mall.', lat:54.5973, lng:-5.9260, by:'NCP Belfast',         votes:0,  photo:'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&h=400&fit=crop', price:'£2.00/hr', spaces:1000 },
-  { id:17, name:'NCP Dunbar Link',                    near:'Cathedral Quarter',tags:['cathedral quarter','dunbar link','ncp','city centre'],badge:'official',   dist:0.20, walk:'4 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey. Great for Cathedral Quarter bars and restaurants.', lat:54.5998, lng:-5.9270, by:'NCP Belfast',         votes:0,  photo:null,                                                                                          price:'£1.80/hr', spaces:600  },
-  { id:18, name:'Q-Park Obel',                        near:'Titanic Quarter',  tags:['titanic quarter','obel','qpark','donegall quay','titanic'], badge:'official', dist:0.15, walk:'3 min',    restriction:'Open 24/7',                    notes:'Q-Park at the Obel tower. Best option for Titanic Quarter visits.', lat:54.6008, lng:-5.9245, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.50/hr', spaces:500  },
-  { id:19, name:'Q-Park Victoria Square',             near:'Victoria Square',  tags:['victoria square','qpark','city centre'],             badge:'official',   dist:0.05, walk:'1 min',          restriction:'Open 24/7',                    notes:'Q-Park inside Victoria Square. Validated parking available with some stores.', lat:54.5975, lng:-5.9255, by:'Q-Park Belfast', votes:0, photo:null,                                                                                          price:'£2.20/hr', spaces:700  },
-  { id:20, name:'BCC Bankmore Square',                near:'City Centre',      tags:['city centre','bankmore','belfast city council'],     badge:'official',   dist:0.30, walk:'6 min',          restriction:'Mon–Sat 8am–6pm',              notes:'Belfast City Council operated. Good rates. Short walk to City Hall.', lat:54.5940, lng:-5.9300, by:'Belfast City Council', votes:0,  photo:null,                                                                                          price:'£1.50/hr', spaces:400  },
-  { id:21, name:'BCC Castle Street',                  near:'Castle Court',     tags:['castle court','castle street','belfast city council','royal avenue'], badge:'official', dist:0.10, walk:'2 min', restriction:'Mon–Sat 8am–6pm',     notes:'City council car park. Perfect for Castle Court and Royal Avenue shopping.', lat:54.5985, lng:-5.9335, by:'Belfast City Council', votes:0, photo:null,                                                                                          price:'£1.60/hr', spaces:300  },
-  { id:22, name:'BCC Tomb Street',                    near:"St George's Market",tags:['city centre','tomb street','belfast city council',"st george's market",'markets'], badge:'official', dist:0.20, walk:'4 min', restriction:'Mon–Sat 8am–6pm', notes:'Good for St George\'s Market and Cathedral Quarter. Free after 6pm weekdays.', lat:54.6002, lng:-5.9280, by:'Belfast City Council', votes:0, photo:null,                                                                                          price:'£1.40/hr', spaces:350  },
-  { id:23, name:'Exchange Street on-street',          near:'Cathedral Quarter',tags:['cathedral quarter','exchange street','custom house square'], badge:'timed', dist:0.05, walk:'2 min',       restriction:'Mon–Sat 8am–6pm',              notes:'On-street right in the Cathedral Quarter. Free evenings and Sundays — ideal for a night out.', lat:54.6012, lng:-5.9268, by:'CQ_Regular', votes:42, photo:null, price:null, spaces:null },
-  { id:24, name:'Waring Street hidden lay-by',        near:'Cathedral Quarter',tags:['cathedral quarter','waring street','custom house square'], badge:'hidden_gem', dist:0.08, walk:'3 min',    restriction:'Evenings & weekends free',     notes:'Small lay-by most people miss — tucked just off Waring Street. Cathedral Quarter regulars swear by it.', lat:54.6010, lng:-5.9275, by:'CQ_Insider', votes:38, photo:null, price:null, spaces:4 },
-  { id:25, name:'Queens Road on-street',              near:'Titanic Quarter',  tags:['titanic quarter','titanic belfast','queens road','titanic','ss nomadic'], badge:'free', dist:0.10, walk:'3 min', restriction:'Free all day',           notes:'Long stretch of free on-street parking on Queens Road. Easy walk to Titanic Belfast and SS Nomadic.', lat:54.6077, lng:-5.9100, by:'TitanicVisitor', votes:67, photo:null, price:null, spaces:null },
-  { id:26, name:'University Road on-street',          near:'Botanic Gardens',  tags:['botanic gardens','botanic','queens university','university road','botanic avenue'], badge:'timed', dist:0.10, walk:'3 min', restriction:'Mon–Sat 8am–6pm', notes:'On-street along University Road. Free after 6pm and all day Sundays — best for Botanic Gardens.', lat:54.5840, lng:-5.9330, by:'QUB_Student', votes:53, photo:null, price:null, spaces:null },
-  { id:27, name:'Botanic Avenue side streets',        near:'Botanic Gardens',  tags:['botanic gardens','botanic avenue','botanic','queens university'], badge:'hidden_gem', dist:0.15, walk:'4 min', restriction:'Evenings & weekends free', notes:'Quiet residential streets off Botanic Avenue. Locals park here instead of paying nearby car parks.', lat:54.5835, lng:-5.9345, by:'BotanicLocal', votes:44, photo:null, price:null, spaces:null },
-  { id:28, name:'Millfield on-street',                near:'Castle Court',     tags:['castle court','millfield','royal avenue','castle court belfast'], badge:'free', dist:0.20, walk:'5 min',     restriction:'Free evenings & weekends',     notes:'Free on-street just north of Castle Court. Walk down through Royal Avenue to the shops.', lat:54.6002, lng:-5.9362, by:'ShopperLocal', votes:35, photo:null, price:null, spaces:null },
-  { id:29, name:'East Bridge Street on-street',       near:"St George's Market",tags:["st george's market","east bridge street","george's market","markets"], badge:'timed', dist:0.10, walk:'3 min', restriction:'Mon–Sat 8am–6pm',          notes:'Handy for the Friday and Saturday market. Free Sunday mornings — perfect timing for a market visit.', lat:54.5950, lng:-5.9215, by:'MarketGoer', votes:41, photo:null, price:null, spaces:null },
-  { id:30, name:'May Street on-street',               near:"St George's Market",tags:["st george's market","may street","george's market","markets"], badge:'hidden_gem', dist:0.12, walk:'3 min', restriction:'Free Sunday mornings',         notes:'Great for Sunday market visits — usually spaces even on busy market days. 3 min flat walk to the entrance.', lat:54.5945, lng:-5.9230, by:'SundayMarket', votes:29, photo:null, price:null, spaces:null },
-  { id:31, name:'Ann Street on-street',               near:'Victoria Square',  tags:['victoria square','ann street','victoria square belfast','city centre'], badge:'timed', dist:0.08, walk:'2 min', restriction:'Mon–Sat 8am–6pm',          notes:'On-street right beside Victoria Square. Free after 6pm — perfect for evening shopping or dinner.', lat:54.5968, lng:-5.9248, by:'VicSquareLocal', votes:38, photo:null, price:null, spaces:null },
+  { id:1,  name:'Directly outside — Gransha Grill',   near:'Gransha Grill',    tags:['gransha grill','gransha road'],                                          badge:'free',       dist:0.00, walk:'Right outside', restriction:'No restrictions',              notes:'Park right outside the door — 2–3 cars fit easily. Free all day, no signage spotted.', lat:54.5825, lng:-5.9758, by:'GranshaLocal',        votes:61, photo:'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&h=400&fit=crop', price:null,      spaces:3    },
+  { id:2,  name:'Gransha Road Lay-by (north side)',    near:'Gransha Grill',    tags:['gransha grill','gransha road'],                                          badge:'free',       dist:0.04, walk:'1 min',          restriction:'Free all day',                 notes:'Wider lay-by fits 4+ cars, 1 min walk back. Locals use this daily — never seen a warden.', lat:54.5830, lng:-5.9762, by:'RegularDiner',        votes:44, photo:'https://images.unsplash.com/photo-1486006920555-c77dcf18193c?w=600&h=400&fit=crop', price:null,      spaces:5    },
+  { id:3,  name:'Side road off Gransha Road',          near:'Gransha Grill',    tags:['gransha grill','gransha'],                                              badge:'hidden_gem', dist:0.07, walk:'2 min',          restriction:'Evenings & weekends fine',     notes:'Quiet residential street, no wardens ever spotted. Walk right back to the Grill.', lat:54.5835, lng:-5.9768, by:'ParkingPro_BT',      votes:29, photo:null,                                                                                          price:null,      spaces:8    },
+  { id:4,  name:'Trailhead gravel area',               near:'Black Mountain',   tags:['black mountain','black mountain walk','hiking'],                        badge:'free',       dist:0.00, walk:'Trail start',    restriction:'Free all day',                 notes:"Gets busy weekends — arrive before 10am or you'll be circling. Gravel surface, 15–20 cars.", lat:54.6198, lng:-6.0225, by:'HikerBelfast',       votes:88, photo:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop', price:null,      spaces:20   },
+  { id:5,  name:'Hannahstown Hill roadside verge',     near:'Black Mountain',   tags:['black mountain','black mountain walk','hannahstown'],                   badge:'hidden_gem', dist:0.25, walk:'~5 min',         restriction:'No restrictions',              notes:'Wide verge fits 6+ easily. Better than the main area on busy days — most tourists miss it.', lat:54.6175, lng:-6.0190, by:'DogWalkerDermot',   votes:52, photo:'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=600&h=400&fit=crop', price:null,      spaces:7    },
+  { id:6,  name:'Whiterock Road lay-by',               near:'Black Mountain',   tags:['black mountain','black mountain walk','whiterock'],                     badge:'free',       dist:0.38, walk:'~8 min',         restriction:'Free all day',                 notes:'Alternative start point, less crowded. Walk up through Whiterock — great views on the way.', lat:54.6150, lng:-6.0150, by:'Springfield_Regular',votes:31, photo:null,                                                                                          price:null,      spaces:6    },
+  { id:7,  name:'Glen Road on-street (outside)',       near:'Glen Road barber', tags:['glen road barber','tommy barber','glen road'],                          badge:'timed',      dist:0.00, walk:'Outside',        restriction:'Mon–Sat 9am–5pm timed',        notes:'Check yellow lines carefully. Usually fine evenings and Sundays — quick in-and-out for a cut.', lat:54.5935, lng:-6.0012, by:'GlenRoadRegular',    votes:55, photo:'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=600&h=400&fit=crop', price:null,      spaces:4    },
+  { id:8,  name:'Bingnian Drive',                      near:'Glen Road barber', tags:['glen road barber','tommy barber','bingnian'],                           badge:'free',       dist:0.05, walk:'~2 min',         restriction:'Free, unrestricted',           notes:'Quiet side street, 2 min walk to the barber. Community confirmed no restrictions.', lat:54.5940, lng:-6.0025, by:'NansenNeighbour',    votes:38, photo:null,                                                                                          price:null,      spaces:10   },
+  { id:9,  name:'Falls Road on-street',                near:'Falls Road',       tags:['falls road','west belfast fitness','felons','roma pizza','andersonstown'],badge:'paid',      dist:0.00, walk:'On the road',    restriction:'Mon–Sat 9am–6pm Pay & Display',notes:'Free evenings and Sundays. Pay & Display machine on the road. £1/hr during restricted hours.', lat:54.5965, lng:-5.9720, by:'FallsRoadFred', votes:73, photo:'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=600&h=400&fit=crop', price:'£1.00/hr', spaces:null },
+  { id:10, name:'Dunlewey Street',                     near:'Falls Road',       tags:['falls road','west belfast fitness'],                                    badge:'free',       dist:0.06, walk:'~2 min',         restriction:'Unrestricted',                 notes:'Community confirmed no restrictions on this quiet side street. Always a space here.', lat:54.5970, lng:-5.9740, by:'ClowneyLocal',       votes:47, photo:null,                                                                                          price:null,      spaces:12   },
+  { id:11, name:'International Wall lay-by',           near:'Falls Road',       tags:['falls road','murals','international wall'],                             badge:'hidden_gem', dist:0.09, walk:'~3 min',         restriction:'Free, no restrictions',        notes:'Handy for quick visits beside the murals. Hidden gem — rarely full even on tourist days.', lat:54.5975, lng:-5.9695, by:'DivisDweller',       votes:33, photo:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop', price:null,      spaces:6    },
+  { id:12, name:'Belfast Castle car park',             near:'Cave Hill',        tags:['cave hill','belfast castle','napoleons nose'],                          badge:'free',       dist:0.00, walk:'1 min',          restriction:'Free all day',                 notes:"Fills up on sunny weekends — arrive before noon. Official free car park, well maintained.", lat:54.6375, lng:-5.9605, by:'CaveHillClimber',    votes:97, photo:'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=600&h=400&fit=crop', price:null,      spaces:80   },
+  { id:13, name:'Innisfayle Park overflow',            near:'Cave Hill',        tags:['cave hill','innisfayle','antrim road'],                                 badge:'hidden_gem', dist:0.19, walk:'~7 min',         restriction:'Residential — be respectful',  notes:'When the castle car park is rammed, locals use this quiet road. Always space. Short walk up.', lat:54.6350, lng:-5.9580, by:'AntrimRoadAndy',     votes:51, photo:null,                                                                                          price:null,      spaces:null },
+  { id:14, name:'Boucher Road area streets',           near:'Balmoral Show',    tags:['balmoral show','boucher road','kings hall'],                            badge:'free',       dist:0.35, walk:'~8 min',         restriction:'Show days — community use',    notes:'Community park in surrounding streets and walk. Saves a fortune vs official show parking.', lat:54.5710, lng:-5.9420, by:'ShowGoer',           votes:66, photo:'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?w=600&h=400&fit=crop', price:null,      spaces:null },
+  { id:15, name:'Tates Avenue',                        near:'Balmoral Show',    tags:['balmoral show','tates avenue'],                                         badge:'free',       dist:0.90, walk:'~15 min',        restriction:'No restrictions',              notes:'15 min walk saves the show parking charges entirely. Well used on show days.', lat:54.5720, lng:-5.9370, by:'BalmoralBargain',     votes:44, photo:null,                                                                                          price:null,      spaces:null },
+  { id:16, name:'NCP Victoria Square',                 near:'Victoria Square',  tags:['city centre','victoria square','ncp','belfast city centre'],            badge:'official',   dist:0.10, walk:'2 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey. 1,000 spaces. Right beside Victoria Square mall.', lat:54.5973, lng:-5.9260, by:'NCP Belfast',         votes:0,  photo:'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&h=400&fit=crop', price:'£2.00/hr', spaces:1000 },
+  { id:17, name:'NCP Dunbar Link',                     near:'Cathedral Quarter',tags:['cathedral quarter','dunbar link','ncp','city centre'],                  badge:'official',   dist:0.20, walk:'4 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey. Great for Cathedral Quarter bars and restaurants.', lat:54.5998, lng:-5.9270, by:'NCP Belfast',         votes:0,  photo:null,                                                                                          price:'£1.80/hr', spaces:600  },
+  { id:18, name:'Q-Park Obel',                         near:'Titanic Quarter',  tags:['titanic quarter','obel','qpark','donegall quay','titanic'],             badge:'official',   dist:0.15, walk:'3 min',          restriction:'Open 24/7',                    notes:'Q-Park at the Obel tower. Best option for Titanic Quarter visits.', lat:54.6008, lng:-5.9245, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.50/hr', spaces:500  },
+  { id:19, name:'Q-Park Victoria Square',              near:'Victoria Square',  tags:['victoria square','qpark','city centre'],                                badge:'official',   dist:0.05, walk:'1 min',          restriction:'Open 24/7',                    notes:'Q-Park inside Victoria Square. Validated parking available with some stores.', lat:54.5975, lng:-5.9255, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.20/hr', spaces:700  },
+  { id:20, name:'BCC Bankmore Square',                 near:'City Centre',      tags:['city centre','bankmore','belfast city council'],                        badge:'official',   dist:0.30, walk:'6 min',          restriction:'Mon–Sat 8am–6pm',              notes:'Belfast City Council operated. Good rates. Short walk to City Hall.', lat:54.5940, lng:-5.9300, by:'Belfast City Council',votes:0,  photo:null,                                                                                          price:'£1.50/hr', spaces:400  },
+  { id:21, name:'BCC Castle Street',                   near:'Castle Court',     tags:['castle court','castle street','belfast city council','royal avenue'],   badge:'official',   dist:0.10, walk:'2 min',          restriction:'Mon–Sat 8am–6pm',              notes:'City council car park. Perfect for Castle Court and Royal Avenue shopping.', lat:54.5985, lng:-5.9335, by:'Belfast City Council',votes:0,  photo:null,                                                                                          price:'£1.60/hr', spaces:300  },
+  { id:22, name:'BCC Tomb Street',                     near:"St George's Market",tags:['city centre','tomb street','belfast city council',"st george's market",'markets'],badge:'official',dist:0.20,walk:'4 min',restriction:'Mon–Sat 8am–6pm',notes:"Good for St George's Market and Cathedral Quarter. Free after 6pm weekdays.", lat:54.6002, lng:-5.9280, by:'Belfast City Council',votes:0,  photo:null,                                                                                          price:'£1.40/hr', spaces:350  },
+  { id:23, name:'Exchange Street on-street',           near:'Cathedral Quarter',tags:['cathedral quarter','exchange street','custom house square'],            badge:'timed',      dist:0.05, walk:'2 min',          restriction:'Mon–Sat 8am–6pm',              notes:'On-street right in the Cathedral Quarter. Free evenings and Sundays — ideal for a night out.', lat:54.6012, lng:-5.9268, by:'CQ_Regular',         votes:42, photo:null, price:null, spaces:null },
+  { id:24, name:'Waring Street hidden lay-by',         near:'Cathedral Quarter',tags:['cathedral quarter','waring street','custom house square'],              badge:'hidden_gem', dist:0.08, walk:'3 min',          restriction:'Evenings & weekends free',     notes:'Small lay-by most people miss — tucked just off Waring Street. Cathedral Quarter regulars swear by it.', lat:54.6010, lng:-5.9275, by:'CQ_Insider',         votes:38, photo:null, price:null, spaces:4 },
+  { id:25, name:'Queens Road on-street',               near:'Titanic Quarter',  tags:['titanic quarter','titanic belfast','queens road','titanic','ss nomadic'],badge:'free',      dist:0.10, walk:'3 min',          restriction:'Free all day',                 notes:'Long stretch of free on-street parking on Queens Road. Easy walk to Titanic Belfast and SS Nomadic.', lat:54.6077, lng:-5.9100, by:'TitanicVisitor',      votes:67, photo:null, price:null, spaces:null },
+  { id:26, name:'University Road on-street',           near:'Botanic Gardens',  tags:['botanic gardens','botanic','queens university','university road','botanic avenue'],badge:'timed',dist:0.10,walk:'3 min',restriction:'Mon–Sat 8am–6pm',notes:'On-street along University Road. Free after 6pm and all day Sundays — best for Botanic Gardens.', lat:54.5840, lng:-5.9330, by:'QUB_Student',         votes:53, photo:null, price:null, spaces:null },
+  { id:27, name:'Botanic Avenue side streets',         near:'Botanic Gardens',  tags:['botanic gardens','botanic avenue','botanic','queens university'],       badge:'hidden_gem', dist:0.15, walk:'4 min',          restriction:'Evenings & weekends free',     notes:'Quiet residential streets off Botanic Avenue. Locals park here instead of paying nearby car parks.', lat:54.5835, lng:-5.9345, by:'BotanicLocal',        votes:44, photo:null, price:null, spaces:null },
+  { id:28, name:'Millfield on-street',                 near:'Castle Court',     tags:['castle court','millfield','royal avenue','castle court belfast'],       badge:'free',       dist:0.20, walk:'5 min',          restriction:'Free evenings & weekends',     notes:'Free on-street just north of Castle Court. Walk down through Royal Avenue to the shops.', lat:54.6002, lng:-5.9362, by:'ShopperLocal',       votes:35, photo:null, price:null, spaces:null },
+  { id:29, name:'East Bridge Street on-street',        near:"St George's Market",tags:["st george's market","east bridge street","george's market","markets"], badge:'timed',      dist:0.10, walk:'3 min',          restriction:'Mon–Sat 8am–6pm',              notes:'Handy for the Friday and Saturday market. Free Sunday mornings — perfect timing for a market visit.', lat:54.5950, lng:-5.9215, by:'MarketGoer',         votes:41, photo:null, price:null, spaces:null },
+  { id:30, name:'May Street on-street',                near:"St George's Market",tags:["st george's market","may street","george's market","markets"],         badge:'hidden_gem', dist:0.12, walk:'3 min',          restriction:'Free Sunday mornings',         notes:'Great for Sunday market visits — usually spaces even on busy market days. 3 min flat walk to the entrance.', lat:54.5945, lng:-5.9230, by:'SundayMarket',        votes:29, photo:null, price:null, spaces:null },
+  { id:31, name:'Ann Street on-street',                near:'Victoria Square',  tags:['victoria square','ann street','victoria square belfast','city centre'], badge:'timed',      dist:0.08, walk:'2 min',          restriction:'Mon–Sat 8am–6pm',              notes:'On-street right beside Victoria Square. Free after 6pm — perfect for evening shopping or dinner.', lat:54.5968, lng:-5.9248, by:'VicSquareLocal',     votes:38, photo:null, price:null, spaces:null },
 ];
 
 const BUSINESSES = [
-  { id:1,  name:"Tommy's Barber",       area:'Glen Road',          addr:'245 Glen Road, West Belfast BT11',       cat:'Barber',         icon:'✂️',  key:'glen road barber',    lat:54.5935, lng:-6.0012 },
-  { id:2,  name:'Gransha Grill',        area:'Hannahstown',        addr:'Gransha Road, BT17',                     cat:'Restaurant',     icon:'🍽️',  key:'gransha grill',       lat:54.5825, lng:-5.9758 },
-  { id:3,  name:'West Belfast Fitness', area:'Falls Road',         addr:'Falls Road, West Belfast BT12',          cat:'Gym',            icon:'💪',  key:'falls road',          lat:54.5965, lng:-5.9720 },
-  { id:4,  name:'The Felons Club',      area:'Andersonstown',      addr:'Andersonstown Road, BT11',               cat:'Social Club',    icon:'🍺',  key:'falls road',          lat:54.5870, lng:-5.9870 },
-  { id:5,  name:"Roma's Pizza",         area:'Andersonstown',      addr:'Andersonstown Road, BT11',               cat:'Restaurant',     icon:'🍕',  key:'falls road',          lat:54.5875, lng:-5.9875 },
-  { id:6,  name:'Victoria Square',      area:'City Centre',        addr:'Victoria Square, Belfast BT1 4QG',       cat:'Shopping Centre',icon:'🛍️',  key:'victoria square',     lat:54.5973, lng:-5.9255 },
-  { id:7,  name:'Titanic Belfast',      area:'Titanic Quarter',    addr:"Queen's Road, Belfast BT3 9EP",          cat:'Museum',         icon:'🚢',  key:'titanic quarter',     lat:54.6085, lng:-5.9095 },
-  { id:8,  name:'The Crown Bar',        area:'City Centre',        addr:'46 Great Victoria Street, BT2 7BA',      cat:'Bar',            icon:'🍻',  key:'city centre',         lat:54.5955, lng:-5.9337 },
-  { id:9,  name:"St George's Market",   area:'City Centre',        addr:'12-20 East Bridge Street, BT1 3NQ',      cat:'Market',         icon:'🛒',  key:"st george's market",  lat:54.5948, lng:-5.9220 },
-  { id:10, name:'The Merchant Hotel',   area:'Cathedral Quarter',  addr:'16 Skipper Street, Belfast BT1 2DZ',     cat:'Hotel & Bar',    icon:'🏨',  key:'cathedral quarter',   lat:54.6012, lng:-5.9268 },
-  { id:11, name:'W5 Science Centre',    area:'Titanic Quarter',    addr:"2 Queen's Road, Belfast BT3 9QQ",        cat:'Attraction',     icon:'🔬',  key:'titanic quarter',     lat:54.6080, lng:-5.9105 },
-  { id:12, name:'Castle Court',         area:'City Centre',        addr:'Royal Avenue, Belfast BT1 1DD',          cat:'Shopping Centre',icon:'🏬',  key:'castle court',        lat:54.5995, lng:-5.9348 },
-  { id:13, name:'Botanic Gardens',      area:'South Belfast',      addr:'Stranmillis Road, Belfast BT9 5AB',      cat:'Park',           icon:'🌿',  key:'botanic gardens',     lat:54.5840, lng:-5.9330 },
+  { id:1,  name:"Tommy's Barber",       area:'Glen Road',         addr:'245 Glen Road, West Belfast BT11',    cat:'Barber',         icon:'✂️',  key:'glen road barber',   lat:54.5935, lng:-6.0012 },
+  { id:2,  name:'Gransha Grill',        area:'Hannahstown',       addr:'Gransha Road, BT17',                  cat:'Restaurant',     icon:'🍽️',  key:'gransha grill',      lat:54.5825, lng:-5.9758 },
+  { id:3,  name:'West Belfast Fitness', area:'Falls Road',        addr:'Falls Road, West Belfast BT12',       cat:'Gym',            icon:'💪',  key:'falls road',         lat:54.5965, lng:-5.9720 },
+  { id:4,  name:'The Felons Club',      area:'Andersonstown',     addr:'Andersonstown Road, BT11',            cat:'Social Club',    icon:'🍺',  key:'falls road',         lat:54.5870, lng:-5.9870 },
+  { id:5,  name:"Roma's Pizza",         area:'Andersonstown',     addr:'Andersonstown Road, BT11',            cat:'Restaurant',     icon:'🍕',  key:'falls road',         lat:54.5875, lng:-5.9875 },
+  { id:6,  name:'Victoria Square',      area:'City Centre',       addr:'Victoria Square, Belfast BT1 4QG',    cat:'Shopping',       icon:'🛍️',  key:'victoria square',    lat:54.5973, lng:-5.9255 },
+  { id:7,  name:'Titanic Belfast',      area:'Titanic Quarter',   addr:"Queen's Road, Belfast BT3 9EP",       cat:'Museum',         icon:'🚢',  key:'titanic quarter',    lat:54.6085, lng:-5.9095 },
+  { id:8,  name:'The Crown Bar',        area:'City Centre',       addr:'46 Great Victoria Street, BT2 7BA',   cat:'Bar',            icon:'🍻',  key:'city centre',        lat:54.5955, lng:-5.9337 },
+  { id:9,  name:"St George's Market",   area:'City Centre',       addr:'12-20 East Bridge Street, BT1 3NQ',   cat:'Market',         icon:'🛒',  key:"st george's market", lat:54.5948, lng:-5.9220 },
+  { id:10, name:'The Merchant Hotel',   area:'Cathedral Quarter', addr:'16 Skipper Street, Belfast BT1 2DZ',  cat:'Hotel & Bar',    icon:'🏨',  key:'cathedral quarter',  lat:54.6012, lng:-5.9268 },
+  { id:11, name:'W5 Science Centre',    area:'Titanic Quarter',   addr:"2 Queen's Road, Belfast BT3 9QQ",     cat:'Attraction',     icon:'🔬',  key:'titanic quarter',    lat:54.6080, lng:-5.9105 },
+  { id:12, name:'Castle Court',         area:'City Centre',       addr:'Royal Avenue, Belfast BT1 1DD',       cat:'Shopping',       icon:'🏬',  key:'castle court',       lat:54.5995, lng:-5.9348 },
+  { id:13, name:'Botanic Gardens',      area:'South Belfast',     addr:'Stranmillis Road, Belfast BT9 5AB',   cat:'Park',           icon:'🌿',  key:'botanic gardens',    lat:54.5840, lng:-5.9330 },
 ];
 
-const SUGGESTIONS = [
-  'City Centre','Victoria Square','Cathedral Quarter',
-  'Titanic Quarter','Botanic Gardens','Castle Court',"St George's Market",
+const AREAS = [
+  'City Centre', 'Victoria Square', 'Cathedral Quarter',
+  'Titanic Quarter', 'Botanic Gardens', 'Castle Court', "St George's Market",
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -112,7 +136,8 @@ const haversine = (lat1, lng1, lat2, lng2) => {
 };
 
 const isFreeNow = (spot) => {
-  if (['free','hidden_gem','official'].includes(spot.badge)) return null;
+  if (['free','hidden_gem'].includes(spot.badge)) return null;
+  if (spot.badge === 'official') return null;
   const r = (spot.restriction||'').toLowerCase();
   if (r.includes('24/7')||r.includes('no restrict')||r.includes('unrestrict')) return null;
   const now = new Date();
@@ -135,16 +160,16 @@ const directionsUrl = (lat, lng) => {
 };
 
 const ls = {
-  get: (k, fallback) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+  get: (k, fb) => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; } catch { return fb; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 
-// ── Badge ─────────────────────────────────────────────────────────────────────
-const Badge = ({ type }) => {
+// ── Badge pill ─────────────────────────────────────────────────────────────────────
+const Badge = ({ type, sm }) => {
   const cfg = BADGES[type] || BADGES.free;
   return (
     <span style={{ background:cfg.bg, color:cfg.fg }}
-      className="text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap">
+      className={`font-bold rounded-full whitespace-nowrap ${sm ? 'text-[10px] px-2 py-0.5' : 'text-xs px-2.5 py-1'}`}>
       {cfg.label}
     </span>
   );
@@ -152,58 +177,59 @@ const Badge = ({ type }) => {
 
 // ── Welcome / Auth Modal ──────────────────────────────────────────────────────
 const WelcomeModal = ({ onJoin, onSkip }) => {
-  const [name, setName] = useState('');
+  const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    onJoin({ name: name.trim(), email: email.trim(), joined: new Date().toISOString(), spotsAdded: 0 });
+    setLoading(true);
+    const userData = { name: name.trim(), email: email.trim(), joined: new Date().toISOString(), spotsAdded: 0 };
+    await notifyAdmin(name.trim(), email.trim());
+    onJoin(userData);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 z-[200] flex items-end sm:items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-        <div style={{ background:'#1a2332' }} className="p-6 text-center">
-          <div className="w-14 h-14 bg-[#4a9eff] rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <MapPin size={28} className="text-white" />
+        <div style={{ background: 'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)' }} className="px-6 pt-8 pb-6 text-center">
+          <div className="w-16 h-16 bg-[#4a9eff] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <MapPin size={30} className="text-white" strokeWidth={2.5}/>
           </div>
-          <h2 className="text-white font-extrabold text-xl">Welcome to ParkEasy</h2>
-          <p className="text-blue-300 text-sm mt-0.5">Belfast's community parking finder</p>
+          <h2 className="text-white font-extrabold text-2xl tracking-tight">ParkEasy Belfast</h2>
+          <p className="text-blue-300 text-sm mt-1">Find where locals actually park</p>
         </div>
 
-        <div className="p-6 space-y-4">
-          <div className="space-y-2">
-            {[
-              ['🟢','Find free spots locals actually use'],
-              ['💎','Discover hidden gems off the main roads'],
-              ['🏆','Add spots and earn free Premium'],
-            ].map(([icon, text]) => (
-              <div key={text} className="flex items-center gap-3 text-sm text-gray-700">
-                <span>{icon}</span><span>{text}</span>
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[['🟢','31','Spots'],['💎','8','Hidden Gems'],['🅿','7','Car Parks']].map(([e,n,l])=>(
+              <div key={l} className="bg-gray-50 rounded-xl py-2.5">
+                <p className="text-lg">{e}</p>
+                <p className="font-extrabold text-gray-900 text-sm">{n}</p>
+                <p className="text-gray-400 text-[10px]">{l}</p>
               </div>
             ))}
           </div>
 
-          <form onSubmit={submit} className="space-y-3 pt-1">
+          <form onSubmit={submit} className="space-y-3">
             <input
               required value={name} onChange={e=>setName(e.target.value)}
-              placeholder="Your name"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]"
+              placeholder="Your first name"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"
             />
             <input
               required type="email" value={email} onChange={e=>setEmail(e.target.value)}
               placeholder="Email address"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"
             />
-            <button type="submit"
-              className="w-full bg-[#4a9eff] text-white py-3.5 rounded-xl font-bold text-sm hover:bg-blue-500 transition shadow-md">
-              Join the community — it's free
+            <button type="submit" disabled={loading}
+              className="w-full bg-[#4a9eff] text-white py-3.5 rounded-xl font-bold text-sm hover:bg-blue-500 active:scale-[0.98] transition-all shadow-md disabled:opacity-60">
+              {loading ? '⏳ Joining…' : 'Join the community — it\'s free →'}
             </button>
           </form>
 
-          <button onClick={onSkip}
-            className="w-full text-center text-xs text-gray-400 hover:text-gray-600 py-1">
-            Browse without signing up →
+          <button onClick={onSkip} className="w-full text-center text-xs text-gray-400 hover:text-gray-600 py-1 transition-colors">
+            Browse without an account
           </button>
         </div>
       </div>
@@ -218,51 +244,35 @@ const BusinessModal = ({ onClose }) => {
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
 
   if (done) return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 z-[200] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
-        <div className="w-16 h-16 bg-[#dcfce7] rounded-full flex items-center justify-center mx-auto">
-          <Check size={32} className="text-[#15803d]" />
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+          <Check size={32} className="text-green-600" strokeWidth={2.5}/>
         </div>
         <h3 className="text-xl font-bold text-gray-900">Request Received!</h3>
-        <p className="text-sm text-gray-500 leading-relaxed">
-          We'll add your business to the directory and map your nearest parking spots within 24 hours.
-        </p>
-        <button onClick={onClose}
-          className="w-full bg-[#1a2332] text-white py-3 rounded-xl font-bold hover:bg-[#243447] transition">
-          Done
-        </button>
+        <p className="text-sm text-gray-500 leading-relaxed">We'll add your business to the directory and map your nearest parking spots within 24 hours.</p>
+        <button onClick={onClose} className="w-full bg-[#1a2332] text-white py-3 rounded-xl font-bold hover:bg-[#243447] transition">Done</button>
       </div>
     </div>
   );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 z-[200] flex items-end sm:items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">List Your Business Free</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">List Your Business Free</h2>
+            <p className="text-xs text-gray-400">Customers see exactly where to park</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><X size={16}/></button>
         </div>
         <div className="p-6">
-          <p className="text-sm text-gray-500 mb-4 leading-relaxed">
-            Customers searching for your business will see exactly where to park. Free forever.
-          </p>
           <form onSubmit={e=>{e.preventDefault();setDone(true);}} className="space-y-3">
-            <input required value={form.name} onChange={e=>set('name',e.target.value)}
-              placeholder="Business name *"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" />
-            <input required value={form.address} onChange={e=>set('address',e.target.value)}
-              placeholder="Full address *"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" />
-            <input required type="email" value={form.email} onChange={e=>set('email',e.target.value)}
-              placeholder="Contact email *"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" />
-            <input value={form.phone} onChange={e=>set('phone',e.target.value)}
-              placeholder="Phone number (optional)"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]" />
-            <button type="submit"
-              className="w-full bg-[#4a9eff] text-white py-3.5 rounded-xl font-bold text-sm hover:bg-blue-500 transition shadow-md">
-              Submit for free listing
-            </button>
+            <input required value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Business name *" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
+            <input required value={form.address} onChange={e=>set('address',e.target.value)} placeholder="Full address *" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
+            <input required type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="Contact email *" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
+            <input value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="Phone (optional)" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
+            <button type="submit" className="w-full bg-[#4a9eff] text-white py-3.5 rounded-xl font-bold text-sm hover:bg-blue-500 transition shadow-md">Submit for free listing →</button>
           </form>
         </div>
       </div>
@@ -271,73 +281,54 @@ const BusinessModal = ({ onClose }) => {
 };
 
 // ── Pricing / Premium Modal ───────────────────────────────────────────────────
-const STRIPE_MONTHLY = 'https://buy.stripe.com/00w4gscgJ6QoahjcTU0kE01';
-const STRIPE_ANNUAL  = 'https://buy.stripe.com/5kQ6oA1C5eiQ0GJg660kE00';
-
 const PricingModal = ({ isPremium, onClose }) => {
-
   if (isPremium) return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 z-[200] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
         <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto">
           <Star size={32} className="text-yellow-500" fill="#eab308"/>
         </div>
-        <h3 className="text-xl font-bold text-gray-900">You're Premium! ★</h3>
-        <p className="text-sm text-gray-500 leading-relaxed">
-          Full access to all ParkEasy Premium features. Thanks for supporting Belfast's community parking finder!
-        </p>
-        <button onClick={onClose}
-          className="w-full bg-[#1a2332] text-white py-3 rounded-xl font-bold hover:bg-[#243447] transition">
-          Done
-        </button>
+        <h3 className="text-xl font-bold text-gray-900">You're Premium ★</h3>
+        <p className="text-sm text-gray-500 leading-relaxed">Full access to all ParkEasy Premium features. Thanks for supporting Belfast's community!</p>
+        <button onClick={onClose} className="w-full bg-[#1a2332] text-white py-3 rounded-xl font-bold hover:bg-[#243447] transition">Done</button>
       </div>
     </div>
   );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 z-[200] flex items-end sm:items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
         <div style={{ background: 'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)' }} className="p-6 text-center relative">
-          <button onClick={onClose} className="absolute top-4 right-4 text-blue-300 hover:text-white"><X size={20}/></button>
-          <div className="w-14 h-14 bg-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-3">
+          <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition"><X size={16}/></button>
+          <div className="w-14 h-14 bg-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
             <Star size={28} fill="currentColor" className="text-yellow-900"/>
           </div>
           <h2 className="text-white font-extrabold text-xl">ParkEasy Premium</h2>
-          <p className="text-blue-300 text-sm mt-0.5">Support Belfast's community parking finder</p>
+          <p className="text-blue-300 text-sm mt-1">Support Belfast's community parking finder</p>
         </div>
         <div className="p-6 space-y-4">
-          <div className="space-y-2.5">
-            {[
-              ['⚡','Priority spot updates & real-time alerts'],
-              ['🗺️','Offline map — works without signal'],
-              ['🔔','Get notified when spots free up'],
-              ['💎','Premium badge on your profile'],
-              ['❤️','Keep ParkEasy free for the whole community'],
-            ].map(([icon,text])=>(
+          <div className="space-y-2">
+            {[['⚡','Real-time spot updates & alerts'],['🗺️','Offline maps — works without signal'],['🔔','Notifications when spots free up'],['💎','Premium badge on your profile'],['❤️','Keep ParkEasy free for everyone']].map(([icon,text])=>(
               <div key={text} className="flex items-center gap-3 text-sm text-gray-700">
-                <span className="text-base w-6 text-center">{icon}</span><span>{text}</span>
+                <span className="w-6 text-center text-base">{icon}</span><span>{text}</span>
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <a href={STRIPE_MONTHLY} target="_blank" rel="noreferrer"
-              className="block rounded-2xl border-2 border-[#4a9eff] p-3 text-center hover:bg-blue-50 transition">
-              <p className="text-xs text-[#4a9eff] font-bold uppercase tracking-wide mb-1">Monthly</p>
-              <p className="text-2xl font-extrabold text-gray-900">£2.99</p>
-              <p className="text-xs text-gray-500">per month</p>
-              <span className="mt-2 block w-full bg-[#4a9eff] text-white py-2 rounded-xl text-xs font-bold">
-                Subscribe
-              </span>
+              className="block rounded-2xl border-2 border-[#4a9eff] p-4 text-center hover:bg-blue-50 active:scale-[0.98] transition-all">
+              <p className="text-[10px] text-[#4a9eff] font-bold uppercase tracking-widest mb-1">Monthly</p>
+              <p className="text-3xl font-extrabold text-gray-900">£2.99</p>
+              <p className="text-xs text-gray-400 mb-3">per month</p>
+              <span className="block w-full bg-[#4a9eff] text-white py-2 rounded-xl text-xs font-bold">Subscribe</span>
             </a>
             <a href={STRIPE_ANNUAL} target="_blank" rel="noreferrer"
-              className="block rounded-2xl border-2 border-[#1a2332] p-3 text-center hover:bg-gray-50 transition relative">
-              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap">BEST VALUE</span>
-              <p className="text-xs text-[#1a2332] font-bold uppercase tracking-wide mb-1">Annual</p>
-              <p className="text-2xl font-extrabold text-gray-900">£20</p>
-              <p className="text-xs text-gray-500">per year</p>
-              <span className="mt-2 block w-full bg-[#1a2332] text-white py-2 rounded-xl text-xs font-bold">
-                Subscribe
-              </span>
+              className="block rounded-2xl border-2 border-[#1a2332] p-4 text-center hover:bg-gray-50 active:scale-[0.98] transition-all relative">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[9px] font-black px-3 py-1 rounded-full whitespace-nowrap shadow">BEST VALUE</span>
+              <p className="text-[10px] text-[#1a2332] font-bold uppercase tracking-widest mb-1 mt-1">Annual</p>
+              <p className="text-3xl font-extrabold text-gray-900">£20</p>
+              <p className="text-xs text-gray-400 mb-3">per year</p>
+              <span className="block w-full bg-[#1a2332] text-white py-2 rounded-xl text-xs font-bold">Subscribe</span>
             </a>
           </div>
           <p className="text-center text-xs text-gray-400">Secure payment via Stripe · Cancel any time</p>
@@ -350,39 +341,37 @@ const PricingModal = ({ isPremium, onClose }) => {
 // ── User Menu ─────────────────────────────────────────────────────────────────
 const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
-    <div
-      className="absolute top-16 right-3 bg-white rounded-2xl shadow-2xl border border-gray-100 w-64 overflow-hidden"
-      onClick={e=>e.stopPropagation()}
-    >
+    <div className="absolute top-16 right-3 bg-white rounded-2xl shadow-2xl border border-gray-100 w-64 overflow-hidden" onClick={e=>e.stopPropagation()}>
       <div style={{background:'#1a2332'}} className="p-4 flex items-center gap-3">
-        <div className="w-10 h-10 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+        <div className="w-11 h-11 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0">
           {user.name.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0">
           <p className="text-white font-bold text-sm truncate">{user.name}</p>
           <p className="text-blue-300 text-xs truncate">{user.email}</p>
         </div>
+        {isPremium && <Star size={16} className="text-yellow-400 flex-shrink-0 ml-auto" fill="#facc15"/>}
       </div>
       <div className="p-4 space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-500">Spots added</span>
-          <span className="font-bold text-gray-900">{spotsAdded}</span>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-gray-50 rounded-xl p-3 text-center">
+            <p className="text-xl font-extrabold text-gray-900">{spotsAdded}</p>
+            <p className="text-[10px] text-gray-400 font-medium">Spots Added</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-3 text-center">
+            {isPremium
+              ? <><p className="text-yellow-500 font-extrabold text-sm">★ PREMIUM</p><p className="text-[10px] text-gray-400 font-medium">Active</p></>
+              : <><p className="text-[#4a9eff] font-extrabold text-sm">FREE</p><p className="text-[10px] text-gray-400 font-medium">Upgrade →</p></>
+            }
+          </div>
         </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-500">Premium</span>
-          {isPremium
-            ? <span className="font-bold text-yellow-600">★ Active</span>
-            : <button onClick={onUpgrade}
-                className="font-bold text-[#4a9eff] text-xs hover:text-blue-600 underline">
-                Upgrade £2.99/mo →
-              </button>
-          }
-        </div>
-        <div className="pt-1 border-t border-gray-100">
-          <button
-            onClick={onSignOut}
-            className="w-full flex items-center gap-2 text-sm text-red-600 hover:text-red-700 font-medium py-1"
-          >
+        {!isPremium && (
+          <button onClick={onUpgrade} className="w-full bg-yellow-400 text-yellow-900 py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
+            ★ Upgrade to Premium — £2.99/mo
+          </button>
+        )}
+        <div className="border-t border-gray-100 pt-2">
+          <button onClick={onSignOut} className="w-full flex items-center gap-2 text-sm text-red-500 hover:text-red-600 font-medium py-1 transition-colors">
             <LogOut size={15}/> Sign out
           </button>
         </div>
@@ -410,71 +399,83 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate }) => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
       <div
         className="relative h-40 overflow-hidden flex items-center justify-center"
-        style={{ background: spot.photo ? undefined : 'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)' }}
+        style={{ background: spot.photo ? undefined : 'linear-gradient(135deg,#1a2332 0%,#243447 100%)' }}
       >
         {spot.photo
-          ? <img src={spot.photo} alt={spot.name} className="w-full h-full object-cover" loading="lazy"/>
-          : <Car size={44} className="text-white opacity-20"/>}
-        <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+          ? <img src={spot.photo} alt={spot.name} className="w-full h-full object-cover"/>
+          : <div className="flex flex-col items-center gap-2 opacity-20"><Car size={40} className="text-white"/></div>}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none"/>
+
+        <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
           <Badge type={spot.badge}/>
           {freeNow === true && (
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-green-500 text-white animate-pulse">
-              Free right now
+            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-green-500 text-white animate-pulse shadow">
+              Free now ✓
             </span>
           )}
         </div>
+
         {spot.price && (
-          <div className="absolute top-2 right-10 bg-black bg-opacity-70 text-white text-xs font-bold px-2 py-1 rounded-full">
+          <div className="absolute top-2.5 right-11 bg-black/70 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
             {spot.price}
           </div>
         )}
-        <button onClick={()=>onSave(spot.id)}
-          className="absolute top-2 right-2 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center hover:scale-110 transition-transform">
-          <Bookmark size={15} className={saved?'text-[#4a9eff]':'text-gray-400'} fill={saved?'#4a9eff':'none'}/>
+
+        <button
+          onClick={()=>onSave(spot.id)}
+          className={`absolute top-2.5 right-2.5 w-9 h-9 rounded-full shadow-md flex items-center justify-center transition-all active:scale-90 ${
+            saved ? 'bg-[#4a9eff]' : 'bg-white/90 backdrop-blur-sm'
+          }`}>
+          <Bookmark size={15} className={saved?'text-white':'text-gray-500'} fill={saved?'white':'none'}/>
         </button>
       </div>
 
       <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-1">
+        <div className="flex items-start justify-between gap-2 mb-2">
           <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{spot.name}</h3>
-          <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">{spot.walk}</span>
+          <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0 bg-gray-50 px-2 py-0.5 rounded-full">{spot.walk}</span>
         </div>
+
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 text-xs text-gray-500">
           <span className="flex items-center gap-1"><Clock size={11}/>{spot.restriction}</span>
-          {spot.spaces!=null && <span className="flex items-center gap-1"><Car size={11}/>{spot.spaces} spaces</span>}
+          {spot.spaces != null && <span className="flex items-center gap-1"><Car size={11}/>{spot.spaces} spaces</span>}
         </div>
-        <div className="border-l-4 border-[#4a9eff] pl-3 mb-3">
-          <p className="text-sm text-gray-600 italic leading-relaxed line-clamp-2">{spot.notes}</p>
+
+        <div className="border-l-[3px] border-[#4a9eff] pl-3 mb-3 bg-blue-50/50 py-2 rounded-r-lg">
+          <p className="text-xs text-gray-600 italic leading-relaxed line-clamp-2">{spot.notes}</p>
         </div>
+
         <div className="flex items-center gap-2 mb-3">
           <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs bg-[#4a9eff] text-white px-3 py-1.5 rounded-full font-semibold hover:bg-blue-500 transition">
+            className="flex items-center gap-1.5 text-xs bg-[#1a2332] text-white px-3 py-2 rounded-full font-semibold hover:bg-[#243447] active:scale-95 transition-all">
             <Navigation size={11}/>Directions
           </a>
           <button onClick={handleShare}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold border transition ${
+            className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold border transition-all active:scale-95 ${
               shareDone ? 'bg-green-50 border-green-300 text-green-700' : 'border-gray-200 text-gray-600 hover:border-[#4a9eff] hover:text-[#4a9eff]'
             }`}>
             {shareDone ? <><Check size={11}/>Copied!</> : <><Share2 size={11}/>Share</>}
           </button>
           <div className="ml-auto text-xs text-gray-400">
             {isOfficial
-              ? <span className="font-semibold text-[#1e3a5f]">{spot.by}</span>
-              : <span className="flex items-center gap-1"><Star size={11} className="text-yellow-400" fill="#facc15"/>{spot.votes} confirmed</span>}
+              ? <span className="font-semibold text-blue-700">{spot.by}</span>
+              : <span className="flex items-center gap-1"><Star size={11} className="text-yellow-400" fill="#facc15"/><span className="font-medium text-gray-600">{spot.votes}</span></span>}
           </div>
         </div>
-        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-          <span className="text-xs text-gray-400 flex-1">Still accurate?</span>
+
+        <div className="flex items-center gap-2 pt-2.5 border-t border-gray-100">
+          <span className="text-[11px] text-gray-400 flex-1">Still accurate?</span>
           <button onClick={()=>onRate(spot.id,'accurate')}
-            className={`text-xs px-2.5 py-1 rounded-full border transition ${
-              rating==='accurate' ? 'bg-green-50 border-green-300 text-green-700 font-semibold' : 'border-gray-200 text-gray-500 hover:border-green-300 hover:text-green-600'
+            className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+              rating==='accurate' ? 'bg-green-50 border-green-400 text-green-700 font-bold' : 'border-gray-200 text-gray-500 hover:border-green-300'
             }`}>✓ Yes</button>
           <button onClick={()=>onRate(spot.id,'changed')}
-            className={`text-xs px-2.5 py-1 rounded-full border transition ${
-              rating==='changed' ? 'bg-amber-50 border-amber-300 text-amber-700 font-semibold' : 'border-gray-200 text-gray-500 hover:border-amber-300 hover:text-amber-600'
+            className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+              rating==='changed' ? 'bg-amber-50 border-amber-400 text-amber-700 font-bold' : 'border-gray-200 text-gray-500 hover:border-amber-300'
             }`}>⚠ Changed</button>
         </div>
       </div>
@@ -489,22 +490,25 @@ const RecenterMap = ({ center, zoom }) => {
   return null;
 };
 
-const ParkingMap = ({ spots, center, zoom=14, height=220, onSelect }) => (
-  <div style={{height}} className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-    <MapContainer center={center||[54.5973,-5.9301]} zoom={zoom}
-      style={{width:'100%',height:'100%'}} scrollWheelZoom={false}>
+const ParkingMap = ({ spots, center, zoom=13, height=220 }) => (
+  <div style={{height}} className="rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+    <MapContainer center={center || BELFAST_CENTER} zoom={zoom}
+      style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'/>
       {center && <RecenterMap center={center} zoom={zoom}/>}
       {spots.map(s=>(
-        <Marker key={s.id} position={[s.lat,s.lng]} icon={PIN[s.badge]||PIN.free}
-          eventHandlers={{click:()=>onSelect&&onSelect(s)}}>
+        <Marker key={s.id} position={[s.lat,s.lng]} icon={PIN[s.badge]||PIN.free}>
           <Popup>
             <div style={{minWidth:160}}>
               <p className="font-bold text-sm mb-1">{s.name}</p>
-              <Badge type={s.badge}/>
-              {s.price && <p className="text-xs mt-1 font-semibold">{s.price}</p>}
-              <p className="text-xs text-gray-600 mt-1">{s.notes.slice(0,90)}…</p>
+              <Badge type={s.badge} sm/>
+              {s.price && <p className="text-xs mt-1.5 font-semibold text-gray-700">{s.price}</p>}
+              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.notes.slice(0,80)}…</p>
+              <a href={directionsUrl(s.lat,s.lng)} target="_blank" rel="noreferrer"
+                className="mt-2 block text-center text-xs bg-[#4a9eff] text-white px-3 py-1.5 rounded-lg font-semibold">
+                Directions →
+              </a>
             </div>
           </Popup>
         </Marker>
@@ -514,76 +518,141 @@ const ParkingMap = ({ spots, center, zoom=14, height=220, onSelect }) => (
 );
 
 // ── SearchTab ─────────────────────────────────────────────────────────────────
+const BADGE_FILTERS = [
+  { id:'all',       label:'All',        color:'#374151', bg:'#f3f4f6' },
+  { id:'free',      label:'🟢 Free',    color:'#15803d', bg:'#dcfce7' },
+  { id:'hidden_gem',label:'💎 Hidden',  color:'#7e22ce', bg:'#f3e8ff' },
+  { id:'official',  label:'🅿 Official', color:'#1e3a5f', bg:'#dbeafe' },
+  { id:'timed',     label:'⏱ Timed',    color:'#9a3412', bg:'#fff7ed' },
+];
+
+const SORT_OPTIONS = [
+  { id:'popular', label:'Most Popular' },
+  { id:'free',    label:'Free First'   },
+  { id:'alpha',   label:'A–Z'          },
+];
+
 const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch }) => {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSugg, setShowSugg] = useState(false);
-  const [mapCenter, setMapCenter] = useState(null);
-  const [showMap, setShowMap] = useState(true);
+  const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
+  const [sortBy,      setSortBy]      = useState('popular');
+  const [showMap,     setShowMap]     = useState(true);
+  const [showSort,    setShowSort]    = useState(false);
   const inputRef = useRef(null);
 
-  const doSearch = useCallback((q) => {
-    const lq = q.toLowerCase().trim();
-    if (!lq) { setResults([]); return; }
-    const res = SPOTS.filter(s =>
-      s.tags.some(t=>t.includes(lq)) || s.name.toLowerCase().includes(lq) || s.near.toLowerCase().includes(lq)
-    );
-    setResults(res);
-    setBadgeFilter('all');
-    if (res.length) setMapCenter([res[0].lat, res[0].lng]);
-  }, []);
+  const filtered = useMemo(() => {
+    let spots = SPOTS;
+    if (query.trim()) {
+      const lq = query.toLowerCase().trim();
+      spots = spots.filter(s =>
+        s.name.toLowerCase().includes(lq) ||
+        s.near.toLowerCase().includes(lq) ||
+        s.tags.some(t => t.includes(lq)) ||
+        s.notes.toLowerCase().includes(lq)
+      );
+    }
+    if (badgeFilter !== 'all') spots = spots.filter(s => s.badge === badgeFilter);
+    return [...spots].sort((a, b) => {
+      if (sortBy === 'popular') return b.votes - a.votes;
+      if (sortBy === 'free') {
+        const fa = ['free','hidden_gem'].includes(a.badge) ? 0 : 1;
+        const fb = ['free','hidden_gem'].includes(b.badge) ? 0 : 1;
+        return fa - fb || b.votes - a.votes;
+      }
+      if (sortBy === 'alpha') return a.name.localeCompare(b.name);
+      return 0;
+    });
+  }, [query, badgeFilter, sortBy]);
 
-  const handleInput = (val) => {
-    setQuery(val);
-    setSuggestions(val.length>1 ? SUGGESTIONS.filter(s=>s.toLowerCase().includes(val.toLowerCase())) : []);
-    setShowSugg(val.length>1);
-    if (val.length>2) doSearch(val);
-    else if (!val) setResults([]);
+  const isSearching = query.trim().length > 0 || badgeFilter !== 'all';
+  const mapCenter = filtered.length ? [filtered[0].lat, filtered[0].lng] : BELFAST_CENTER;
+  const mapZoom = isSearching ? 13 : 12;
+  const freeCount = SPOTS.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
+
+  const doSearch = (q) => {
+    setQuery(q);
+    if (q.trim()) onSearch(q.trim());
+    inputRef.current?.blur();
   };
-
-  const pick = (s) => { setQuery(s); setShowSugg(false); doSearch(s); onSearch(s); inputRef.current?.blur(); };
-  const clear = () => { setQuery(''); setResults([]); setShowSugg(false); };
-
-  const badgesInResults = results.length ? ['all',...new Set(results.map(r=>r.badge))] : [];
-  const displayed = badgeFilter==='all' ? results : results.filter(r=>r.badge===badgeFilter);
 
   return (
     <div className="p-4 space-y-4">
       <div className="relative">
-        <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
-        <input ref={inputRef} value={query} onChange={e=>handleInput(e.target.value)}
-          onKeyDown={e=>{ if(e.key==='Enter'){doSearch(query);onSearch(query);setShowSugg(false);} }}
-          placeholder="Try 'Victoria Square' or 'Cathedral Quarter'…"
-          className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]"
+        <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e=>setQuery(e.target.value)}
+          onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
+          placeholder="Search 31 Belfast parking spots…"
+          className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
         />
         {query && (
-          <button onClick={clear} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-            <X size={16}/>
+          <button onClick={()=>setQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-300 transition">
+            <X size={12}/>
           </button>
-        )}
-        {showSugg && suggestions.length>0 && (
-          <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 mt-1 overflow-hidden">
-            {suggestions.map(s=>(
-              <button key={s} onClick={()=>pick(s)}
-                className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 flex items-center gap-2 border-b border-gray-100 last:border-0">
-                <Search size={13} className="text-[#4a9eff]"/>{s}
-              </button>
-            ))}
-          </div>
         )}
       </div>
 
-      {!results.length && (
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {BADGE_FILTERS.map(f => (
+          <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
+            style={badgeFilter===f.id ? {background:f.bg, color:f.color} : {}}
+            className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap font-semibold flex-shrink-0 transition-all active:scale-95 ${
+              badgeFilter===f.id ? 'border-current shadow-sm' : 'border-gray-200 text-gray-500 bg-white hover:border-gray-300'
+            }`}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-bold text-gray-900">
+            {filtered.length} {isSearching ? 'matching' : ''} spot{filtered.length!==1?'s':''}
+            {isSearching && query && <span className="text-[#4a9eff] font-normal"> for "{query}"</span>}
+          </p>
+          {!isSearching && <p className="text-xs text-gray-400">{freeCount} free or hidden gem spots</p>}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="relative">
+            <button onClick={()=>setShowSort(v=>!v)}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full border border-gray-200 bg-white text-gray-600 font-semibold hover:border-gray-300 transition">
+              <Filter size={11}/>{SORT_OPTIONS.find(s=>s.id===sortBy)?.label}
+            </button>
+            {showSort && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden w-36">
+                {SORT_OPTIONS.map(o=>(
+                  <button key={o.id} onClick={()=>{setSortBy(o.id);setShowSort(false);}}
+                    className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50 ${sortBy===o.id?'text-[#4a9eff] font-bold':'text-gray-700'}`}>
+                    {sortBy===o.id && '✓ '}{o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={()=>setShowMap(m=>!m)}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border font-semibold transition-all ${
+              showMap ? 'bg-[#1a2332] text-white border-[#1a2332]' : 'bg-white text-gray-600 border-gray-200'
+            }`}>
+            <Map size={11}/>Map
+          </button>
+        </div>
+      </div>
+
+      {showMap && (
+        <ParkingMap spots={filtered} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
+      )}
+
+      {!isSearching && (
         <>
-          {recentSearches.length>0 && (
+          {recentSearches.length > 0 && (
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-2">Recent</p>
+              <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold mb-2">Recent</p>
               <div className="flex flex-wrap gap-2">
                 {recentSearches.map(s=>(
-                  <button key={s} onClick={()=>pick(s)}
-                    className="text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full hover:border-[#4a9eff] hover:text-[#4a9eff] transition shadow-sm flex items-center gap-1">
+                  <button key={s} onClick={()=>doSearch(s)}
+                    className="text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full flex items-center gap-1 hover:border-[#4a9eff] hover:text-[#4a9eff] transition-all shadow-sm">
                     <Clock size={10}/>{s}
                   </button>
                 ))}
@@ -591,74 +660,34 @@ const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch })
             </div>
           )}
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-2">Popular searches</p>
+            <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold mb-2">Search by area</p>
             <div className="flex flex-wrap gap-2">
-              {SUGGESTIONS.map(s=>(
-                <button key={s} onClick={()=>pick(s)}
-                  className="text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full hover:border-[#4a9eff] hover:text-[#4a9eff] transition shadow-sm">
-                  {s}
+              {AREAS.map(a=>(
+                <button key={a} onClick={()=>doSearch(a)}
+                  className="text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full hover:border-[#4a9eff] hover:text-[#4a9eff] transition-all shadow-sm">
+                  {a}
                 </button>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-2xl overflow-hidden bg-gradient-to-br from-[#1a2332] to-[#2d4a6e] p-5 text-white">
-            <p className="text-xs uppercase tracking-widest text-blue-300 mb-1">Community-powered</p>
-            <h2 className="text-lg font-bold mb-2">Find where locals actually park</h2>
-            <p className="text-sm text-blue-200 leading-relaxed">
-              Street spots, lay-bys, hidden gems and official car parks — all in one place for Belfast.
-            </p>
-            <div className="flex flex-wrap gap-2 mt-4">
-              {Object.entries(BADGES).map(([key,cfg])=>(
-                <span key={key} style={{background:cfg.bg,color:cfg.fg}}
-                  className="text-xs font-bold px-2.5 py-1 rounded-full">{cfg.label}</span>
               ))}
             </div>
           </div>
         </>
       )}
 
-      {results.length>0 && (
-        <>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              <span className="font-bold text-gray-900">{displayed.length}</span> spots near{' '}
-              <span className="text-[#4a9eff] font-semibold">"{query}"</span>
-            </p>
-            <button onClick={()=>setShowMap(m=>!m)}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border font-semibold transition ${
-                showMap ? 'bg-[#1a2332] text-white border-[#1a2332]' : 'bg-white text-gray-600 border-gray-200'
-              }`}>
-              <Map size={13}/>{showMap?'Hide map':'Show map'}
-            </button>
+      {filtered.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Search size={24} className="text-gray-300"/>
           </div>
-
-          {badgesInResults.length>2 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {badgesInResults.map(b=>{
-                const cfg = b==='all' ? {label:'All',bg:'#f3f4f6',fg:'#374151'} : BADGES[b];
-                const active = badgeFilter===b;
-                return (
-                  <button key={b} onClick={()=>setBadgeFilter(b)}
-                    style={active ? {background:cfg.bg,color:cfg.fg} : {}}
-                    className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap font-semibold transition flex-shrink-0 ${
-                      active ? 'border-current shadow-sm' : 'border-gray-200 text-gray-500 bg-white'
-                    }`}>
-                    {cfg?.label||b}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {showMap && mapCenter && <ParkingMap spots={displayed} center={mapCenter} zoom={13} height={210}/>}
-
-          <div className="space-y-4">
-            {displayed.map(s=>(
-              <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave}
-                rating={ratings[s.id]} onRate={onRate}/>
-            ))}
-          </div>
-        </>
+          <p className="font-bold text-gray-700">No spots found</p>
+          <p className="text-sm text-gray-400 mt-1">Try searching "City Centre" or "Cathedral Quarter"</p>
+          <button onClick={()=>{setQuery('');setBadgeFilter('all');}} className="mt-3 text-xs text-[#4a9eff] font-semibold underline">Clear filters</button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map(s=>(
+            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate}/>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -666,37 +695,39 @@ const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch })
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
 const NearbyTab = ({ saved, onSave, ratings, onRate }) => {
-  const [loc, setLoc] = useState(null);
-  const [nearby, setNearby] = useState([]);
+  const [loc,     setLoc]     = useState(null);
+  const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
+  const [err,     setErr]     = useState('');
 
-  const buildNearby = useCallback((lat,lng) => {
-    const sorted = SPOTS.map(s=>({...s,realDist:haversine(lat,lng,s.lat,s.lng)}))
-      .sort((a,b)=>a.realDist-b.realDist).slice(0,10);
+  const buildNearby = useCallback((lat, lng) => {
+    const sorted = SPOTS
+      .map(s => ({...s, realDist: haversine(lat, lng, s.lat, s.lng)}))
+      .sort((a,b) => a.realDist - b.realDist)
+      .slice(0, 12);
     setNearby(sorted);
     setLoading(false);
-  },[]);
+  }, []);
 
   const findNearby = () => {
     setLoading(true); setErr('');
     navigator.geolocation.getCurrentPosition(
-      ({coords:{latitude:lat,longitude:lng}})=>{ setLoc([lat,lng]); buildNearby(lat,lng); },
-      ()=>{ const lat=54.5973,lng=-5.9301; setLoc([lat,lng]); buildNearby(lat,lng); setErr('Location access denied — showing spots from Belfast city centre.'); }
+      ({coords:{latitude:lat,longitude:lng}}) => { setLoc([lat,lng]); buildNearby(lat,lng); },
+      () => { const lat=54.5973,lng=-5.9301; setLoc([lat,lng]); buildNearby(lat,lng); setErr('Location access denied — showing spots from Belfast city centre.'); }
     );
   };
 
   if (!loc) return (
     <div className="p-8 flex flex-col items-center text-center space-y-5">
-      <div className="w-20 h-20 bg-[#eef5ff] rounded-full flex items-center justify-center">
-        <Crosshair size={38} className="text-[#4a9eff]"/>
+      <div className="w-24 h-24 bg-gradient-to-br from-[#eef5ff] to-[#dbeafe] rounded-full flex items-center justify-center shadow-inner">
+        <Crosshair size={42} className="text-[#4a9eff]"/>
       </div>
-      <h3 className="text-lg font-bold text-gray-900">Parking Spots Near You</h3>
-      <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-        Use your location to find the closest community-verified parking spots in Belfast.
-      </p>
+      <div>
+        <h3 className="text-xl font-bold text-gray-900">Parking Near You</h3>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">See the closest community-verified spots to your current location in Belfast.</p>
+      </div>
       <button onClick={findNearby} disabled={loading}
-        className="flex items-center gap-2 bg-[#4a9eff] text-white px-6 py-3.5 rounded-xl font-semibold hover:bg-blue-500 transition disabled:opacity-60 shadow-md">
+        className="flex items-center gap-2 bg-[#4a9eff] text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-500 active:scale-95 transition-all disabled:opacity-60 shadow-md">
         {loading ? '⏳ Locating…' : <><Crosshair size={18}/>Use My Location</>}
       </button>
     </div>
@@ -705,15 +736,18 @@ const NearbyTab = ({ saved, onSave, ratings, onRate }) => {
   return (
     <div className="p-4 space-y-4">
       {err && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2.5 rounded-xl">
-          <Info size={14} className="mt-0.5 flex-shrink-0"/>{err}
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3.5 py-3 rounded-xl">
+          <Info size={14} className="mt-0.5 flex-shrink-0"/><span>{err}</span>
         </div>
       )}
-      <ParkingMap spots={nearby} center={loc} zoom={12} height={220}/>
-      <p className="text-sm text-gray-600"><span className="font-bold text-gray-900">{nearby.length}</span> closest spots</p>
+      <ParkingMap spots={nearby} center={loc} zoom={13} height={240}/>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-gray-900">{nearby.length} closest spots</p>
+        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
+      </div>
       <div className="space-y-4">
         {nearby.map(s=>(
-          <SpotCard key={s.id} spot={{...s,dist:Math.round(s.realDist*10)/10}}
+          <SpotCard key={s.id} spot={{...s, dist:Math.round(s.realDist*10)/10}}
             saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate}/>
         ))}
       </div>
@@ -723,66 +757,88 @@ const NearbyTab = ({ saved, onSave, ratings, onRate }) => {
 
 // ── BusinessesTab ─────────────────────────────────────────────────────────────
 const BusinessesTab = ({ onGetListed }) => {
-  const [open, setOpen] = useState(null);
+  const [open,      setOpen]      = useState(null);
+  const [bizSearch, setBizSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!bizSearch.trim()) return BUSINESSES;
+    const lq = bizSearch.toLowerCase();
+    return BUSINESSES.filter(b =>
+      b.name.toLowerCase().includes(lq) ||
+      b.area.toLowerCase().includes(lq) ||
+      b.cat.toLowerCase().includes(lq)
+    );
+  }, [bizSearch]);
 
   return (
     <div className="p-4 space-y-3">
-      <div className="bg-gradient-to-r from-[#1a2332] to-[#243447] text-white p-4 rounded-2xl">
-        <p className="font-bold mb-0.5">Own a business?</p>
-        <p className="text-sm text-blue-200 leading-relaxed">
-          Get listed free — customers will see exactly where to park when they search for you.
-        </p>
-        <button onClick={onGetListed}
-          className="mt-3 text-xs bg-[#4a9eff] text-white px-4 py-2 rounded-full font-semibold hover:bg-blue-400 transition">
-          Get Listed Free →
-        </button>
+      <div className="bg-gradient-to-r from-[#1a2332] to-[#2d4a6e] text-white p-4 rounded-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-bold">Own a business in Belfast?</p>
+            <p className="text-xs text-blue-200 mt-0.5 leading-relaxed">Get listed free — customers see exactly where to park when they search for you.</p>
+          </div>
+          <button onClick={onGetListed}
+            className="flex-shrink-0 text-xs bg-[#4a9eff] text-white px-3 py-2 rounded-full font-semibold hover:bg-blue-400 active:scale-95 transition-all whitespace-nowrap">
+            Get Listed →
+          </button>
+        </div>
       </div>
 
-      <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold pt-1">Belfast Business Directory</p>
+      <div className="relative">
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+        <input
+          value={bizSearch} onChange={e=>setBizSearch(e.target.value)}
+          placeholder="Search businesses…"
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
+        />
+      </div>
 
-      {BUSINESSES.map(b=>{
-        const spots = SPOTS.filter(s=>s.tags.some(t=>t.includes(b.key)));
-        const isOpen = open===b.id;
+      <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold">{filtered.length} businesses · Belfast</p>
+
+      {filtered.map(b => {
+        const spots = SPOTS.filter(s => s.tags.some(t => t.includes(b.key)));
+        const isOpen = open === b.id;
         return (
           <div key={b.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <button onClick={()=>setOpen(isOpen?null:b.id)}
-              className="w-full p-4 flex items-center gap-3 text-left hover:bg-gray-50 transition">
-              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
-                {b.icon}
-              </div>
+            <button onClick={()=>setOpen(isOpen ? null : b.id)}
+              className="w-full p-4 flex items-center gap-3 text-left hover:bg-gray-50 active:bg-gray-100 transition-colors">
+              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">{b.icon}</div>
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-gray-900 text-sm">{b.name}</p>
-                <p className="text-xs text-gray-500 truncate">{b.addr}</p>
+                <p className="text-xs text-gray-400 truncate">{b.addr}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs text-gray-400">{b.cat}</span>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                    style={{background:'#dcfce7',color:'#15803d'}}>
-                    {spots.length} parking spots
-                  </span>
+                  <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-medium">{b.cat}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{spots.length} parking spots</span>
                 </div>
               </div>
-              <ChevronRight size={18} className={`text-gray-300 transition-transform flex-shrink-0 ${isOpen?'rotate-90':''}`}/>
+              <ChevronRight size={16} className={`text-gray-300 transition-transform duration-200 flex-shrink-0 ${isOpen?'rotate-90':''}`}/>
             </button>
+
             {isOpen && (
               <div className="border-t border-gray-100">
-                {spots.length>0 && (
+                {spots.length > 0 && (
                   <div className="px-3 pt-3">
-                    <ParkingMap spots={spots} center={[b.lat,b.lng]} zoom={15} height={180}/>
+                    <ParkingMap spots={spots} center={[b.lat, b.lng]} zoom={15} height={180}/>
                   </div>
                 )}
                 <div className="p-3 space-y-2">
-                  {spots.length===0
-                    ? <p className="text-sm text-gray-400 text-center py-4">No spots yet — be the first to add one!</p>
-                    : spots.map(s=>(
+                  {spots.length === 0
+                    ? <p className="text-sm text-gray-400 text-center py-6">No spots yet — be the first to add one!</p>
+                    : spots.map(s => (
                       <div key={s.id} className="flex gap-3 p-3 bg-gray-50 rounded-xl">
                         {s.photo && <img src={s.photo} alt={s.name} className="w-16 h-16 object-cover rounded-lg flex-shrink-0"/>}
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            <span className="font-semibold text-xs text-gray-900">{s.name}</span>
-                            <Badge type={s.badge}/>
+                            <span className="font-semibold text-xs text-gray-900 flex-1">{s.name}</span>
+                            <Badge type={s.badge} sm/>
                           </div>
-                          <p className="text-xs text-gray-500 line-clamp-2 italic">{s.notes}</p>
-                          <p className="text-xs text-gray-400 mt-1">{s.walk} · {s.restriction}</p>
+                          <p className="text-xs text-gray-500 line-clamp-2 italic leading-relaxed">{s.notes}</p>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className="text-[10px] text-gray-400">{s.walk} · {s.restriction}</span>
+                            <a href={directionsUrl(s.lat,s.lng)} target="_blank" rel="noreferrer"
+                              className="text-[10px] text-[#4a9eff] font-bold">Directions →</a>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -799,24 +855,25 @@ const BusinessesTab = ({ onGetListed }) => {
 
 // ── SavedTab ──────────────────────────────────────────────────────────────────
 const SavedTab = ({ saved, onSave, ratings, onRate }) => {
-  const spots = SPOTS.filter(s=>saved.has(s.id));
+  const spots = SPOTS.filter(s => saved.has(s.id));
   if (!spots.length) return (
     <div className="p-8 flex flex-col items-center text-center space-y-4">
-      <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center">
-        <Bookmark size={36} className="text-gray-300"/>
+      <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center">
+        <Bookmark size={38} className="text-gray-300"/>
       </div>
-      <h3 className="text-lg font-bold text-gray-900">No saved spots yet</h3>
-      <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-        Tap the bookmark icon on any parking spot to save it here for quick access.
-      </p>
+      <div>
+        <h3 className="text-xl font-bold text-gray-900">No saved spots</h3>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">Tap the bookmark icon on any parking spot to save it here for quick access.</p>
+      </div>
     </div>
   );
   return (
     <div className="p-4 space-y-4">
-      <p className="text-sm text-gray-600">
-        <span className="font-bold text-gray-900">{spots.length}</span> saved spot{spots.length!==1?'s':''}
-      </p>
-      {spots.length>1 && <ParkingMap spots={spots} center={[spots[0].lat,spots[0].lng]} zoom={12} height={200}/>}
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-gray-900">{spots.length} saved spot{spots.length!==1?'s':''}</p>
+        <span className="text-xs text-gray-400">Tap bookmark to remove</span>
+      </div>
+      {spots.length > 1 && <ParkingMap spots={spots} center={[spots[0].lat, spots[0].lng]} zoom={12} height={200}/>}
       <div className="space-y-4">
         {spots.map(s=>(
           <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate}/>
@@ -832,105 +889,105 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   const [preview, setPreview] = useState(null);
   const [done, setDone] = useState(false);
   const fileRef = useRef(null);
-  const SPOT_TYPES = ['Street parking','Lay-by','Car park','Side road','Grass verge','Private (shared)'];
+  const SPOT_TYPES   = ['Street parking','Lay-by','Car park','Side road','Grass verge','Private (shared)'];
   const RESTRICTIONS = ['Free all day','Time limited','Evenings free','Weekends free','No restrictions'];
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
 
   if (!user) return (
     <div className="p-8 flex flex-col items-center text-center space-y-5">
-      <div className="w-20 h-20 bg-[#eef5ff] rounded-full flex items-center justify-center">
-        <User size={38} className="text-[#4a9eff]"/>
+      <div className="w-24 h-24 bg-gradient-to-br from-[#eef5ff] to-[#dbeafe] rounded-full flex items-center justify-center shadow-inner">
+        <User size={42} className="text-[#4a9eff]"/>
       </div>
-      <h3 className="text-lg font-bold text-gray-900">Join to Add a Spot</h3>
-      <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-        Sign up free to contribute parking spots and earn 1 month of Premium for every verified spot you add.
-      </p>
+      <div>
+        <h3 className="text-xl font-bold text-gray-900">Join to Add a Spot</h3>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">Sign up free to contribute spots. Earn 1 month of Premium for every verified spot you add.</p>
+      </div>
       <button onClick={onJoinPrompt}
-        className="flex items-center gap-2 bg-[#4a9eff] text-white px-6 py-3.5 rounded-xl font-semibold hover:bg-blue-500 transition shadow-md">
-        Join Free — it takes 30 seconds
+        className="flex items-center gap-2 bg-[#4a9eff] text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-500 active:scale-95 transition-all shadow-md">
+        Join Free — 30 seconds →
       </button>
     </div>
   );
 
   if (done) return (
     <div className="p-8 flex flex-col items-center text-center space-y-5">
-      <div className="w-20 h-20 bg-[#dcfce7] rounded-full flex items-center justify-center">
-        <Check size={38} className="text-[#15803d]"/>
+      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center">
+        <Check size={42} className="text-green-600" strokeWidth={2.5}/>
       </div>
-      <h3 className="text-xl font-bold text-gray-900">Spot Submitted!</h3>
-      <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-        Your spot will appear after a quick community review. Thanks for helping Belfast drivers!
-      </p>
-      <div className="bg-gradient-to-r from-[#1a2332] to-[#243447] text-white px-6 py-4 rounded-2xl text-sm font-bold w-full text-center">
-        🏆 +1 month Premium unlocked
+      <div>
+        <h3 className="text-2xl font-bold text-gray-900">Spot Submitted!</h3>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">Your spot will appear after a quick community review. Thanks for helping Belfast drivers!</p>
+      </div>
+      <div className="w-full bg-gradient-to-r from-[#1a2332] to-[#243447] text-white px-6 py-4 rounded-2xl text-center">
+        <p className="font-bold text-base">🏆 +1 month Premium unlocked</p>
+        <p className="text-blue-300 text-xs mt-0.5">Added to your account</p>
       </div>
       <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);}}
-        className="text-[#4a9eff] text-sm font-medium underline">Submit another spot</button>
+        className="text-[#4a9eff] text-sm font-bold underline">Submit another spot</button>
     </div>
   );
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="bg-gradient-to-r from-[#4a9eff] to-purple-500 text-white p-4 rounded-2xl">
-        <p className="font-bold mb-0.5">Earn Free Premium, {user.name.split(' ')[0]}</p>
-        <p className="text-sm opacity-90 leading-relaxed">
-          Add a verified spot the community doesn't know about — get 1 month of Premium free.
-        </p>
+    <div className="p-4 space-y-5">
+      <div className="bg-gradient-to-r from-[#4a9eff] to-purple-500 text-white p-4 rounded-2xl shadow-md">
+        <p className="font-bold text-base">Earn Free Premium, {user.name.split(' ')[0]} 🏆</p>
+        <p className="text-sm opacity-90 mt-0.5 leading-relaxed">Add a spot the community doesn't know about — get 1 free month of Premium.</p>
       </div>
-      <form onSubmit={e=>{e.preventDefault();setDone(true);onSpotAdded();}} className="space-y-4">
+
+      <form onSubmit={e=>{e.preventDefault();setDone(true);onSpotAdded();}} className="space-y-5">
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Photo</label>
+          <label className="block text-sm font-bold text-gray-800 mb-2">Photo (optional)</label>
           <button type="button" onClick={()=>fileRef.current.click()}
-            className="w-full border-2 border-dashed border-gray-300 rounded-xl p-5 flex flex-col items-center gap-2 text-gray-400 hover:border-[#4a9eff] hover:text-[#4a9eff] transition">
+            className="w-full border-2 border-dashed border-gray-300 rounded-xl p-5 flex flex-col items-center gap-2 text-gray-400 hover:border-[#4a9eff] hover:text-[#4a9eff] active:scale-[0.98] transition-all">
             {preview
-              ? <img src={preview} alt="preview" className="w-full h-32 object-cover rounded-lg"/>
-              : <><Camera size={26}/><span className="text-sm">Tap to upload a photo</span></>}
+              ? <img src={preview} alt="preview" className="w-full h-32 object-cover rounded-xl"/>
+              : <><Camera size={28}/><span className="text-sm font-medium">Tap to upload a photo</span></>}
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
             onChange={e=>{const f=e.target.files[0];if(f)setPreview(URL.createObjectURL(f));}}/>
         </div>
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">What's near this spot? *</label>
+          <label className="block text-sm font-bold text-gray-800 mb-2">What's near this spot? *</label>
           <input required value={form.near} onChange={e=>set('near',e.target.value)}
             placeholder="e.g. Victoria Square, Cathedral Quarter, Titanic Belfast"
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]"/>
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
         </div>
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Street or area *</label>
+          <label className="block text-sm font-bold text-gray-800 mb-2">Street or area *</label>
           <input required value={form.street} onChange={e=>set('street',e.target.value)}
-            placeholder="e.g. Ann Street, off Victoria Square"
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff]"/>
+            placeholder="e.g. Ann Street, beside Victoria Square"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
         </div>
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Spot type *</label>
+          <label className="block text-sm font-bold text-gray-800 mb-2">Spot type *</label>
           <div className="flex flex-wrap gap-2">
             {SPOT_TYPES.map(t=>(
               <button type="button" key={t} onClick={()=>set('type',t)}
-                className={`text-xs px-3 py-2 rounded-full border-2 font-medium transition ${
-                  form.type===t?'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff]':'border-gray-200 text-gray-600'
+                className={`text-xs px-3 py-2 rounded-full border-2 font-medium transition-all active:scale-95 ${
+                  form.type===t ? 'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff]' : 'border-gray-200 text-gray-600 bg-white'
                 }`}>{t}</button>
             ))}
           </div>
         </div>
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Restrictions *</label>
+          <label className="block text-sm font-bold text-gray-800 mb-2">Restrictions *</label>
           <div className="flex flex-wrap gap-2">
             {RESTRICTIONS.map(r=>(
               <button type="button" key={r} onClick={()=>set('restriction',r)}
-                className={`text-xs px-3 py-2 rounded-full border-2 font-medium transition ${
-                  form.restriction===r?'border-[#22c55e] bg-[#dcfce7] text-[#15803d]':'border-gray-200 text-gray-600'
+                className={`text-xs px-3 py-2 rounded-full border-2 font-medium transition-all active:scale-95 ${
+                  form.restriction===r ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600 bg-white'
                 }`}>{r}</button>
             ))}
           </div>
         </div>
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Local knowledge (optional)</label>
+          <label className="block text-sm font-bold text-gray-800 mb-2">Local knowledge (optional)</label>
           <textarea value={form.notes} onChange={e=>set('notes',e.target.value)} rows={3}
-            placeholder="Tell locals what to expect — restrictions, best times, how many cars fit…"
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] resize-none"/>
+            placeholder="What should other drivers know? Restrictions, best times, how many cars fit…"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50 resize-none"/>
         </div>
         <button type="submit"
-          className="w-full bg-[#1a2332] text-white py-4 rounded-xl font-bold text-base hover:bg-[#243447] transition flex items-center justify-center gap-2 shadow-md">
+          className="w-full bg-[#1a2332] text-white py-4 rounded-xl font-bold text-base hover:bg-[#243447] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg">
           <Plus size={20}/>Submit Parking Spot
         </button>
       </form>
@@ -938,134 +995,98 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   );
 };
 
-// ── Main App ──────────────────────────────────────────────────────────────────
+// ── TABS ─────────────────────────────────────────────────────────────────────────
 const TABS = [
-  { id:'search',     label:'Search',     Icon:Search    },
-  { id:'nearby',     label:'Nearby',     Icon:Crosshair },
-  { id:'businesses', label:'Businesses', Icon:Building2 },
-  { id:'saved',      label:'Saved',      Icon:Bookmark  },
-  { id:'add',        label:'Add Spot',   Icon:Plus      },
+  { id:'search',     label:'Search',   Icon:Search    },
+  { id:'nearby',     label:'Nearby',   Icon:Crosshair },
+  { id:'businesses', label:'Local',    Icon:Building2 },
+  { id:'saved',      label:'Saved',    Icon:Bookmark  },
+  { id:'add',        label:'Add Spot', Icon:Plus      },
 ];
 
+// ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [tab, setTab] = useState('search');
-  const [user, setUser]       = useState(()=>ls.get('pe_user', null));
-  const [saved, setSaved]     = useState(()=>new Set(ls.get('pe_saved',[])));
-  const [ratings, setRatings] = useState(()=>ls.get('pe_ratings',{}));
-  const [recentSearches, setRecentSearches] = useState(()=>ls.get('pe_recent',[]));
-  const [showWelcome, setShowWelcome] = useState(()=>!ls.get('pe_user',null) && !ls.get('pe_skipped',false));
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showBizModal, setShowBizModal] = useState(false);
-  const [isPremium, setIsPremium] = useState(()=>ls.get('pe_premium', false));
-  const [showPricing, setShowPricing] = useState(false);
+  const [tab,           setTab]           = useState('search');
+  const [user,          setUser]          = useState(()=>ls.get('pe_user', null));
+  const [saved,         setSaved]         = useState(()=>new Set(ls.get('pe_saved', [])));
+  const [ratings,       setRatings]       = useState(()=>ls.get('pe_ratings', {}));
+  const [recentSearches,setRecentSearches]= useState(()=>ls.get('pe_recent', []));
+  const [showWelcome,   setShowWelcome]   = useState(()=>!ls.get('pe_user',null) && !ls.get('pe_skipped',false));
+  const [showUserMenu,  setShowUserMenu]  = useState(false);
+  const [showBizModal,  setShowBizModal]  = useState(false);
+  const [isPremium,     setIsPremium]     = useState(()=>ls.get('pe_premium', false));
+  const [showPricing,   setShowPricing]   = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('premium') === 'success') {
-      setIsPremium(true);
-      ls.set('pe_premium', true);
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('premium') === 'success') {
+      setIsPremium(true); ls.set('pe_premium', true);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
-  const handleJoin = (userData) => {
-    setUser(userData);
-    ls.set('pe_user', userData);
-    setShowWelcome(false);
-  };
-
-  const handleSkip = () => {
-    ls.set('pe_skipped', true);
-    setShowWelcome(false);
-  };
-
-  const handleSignOut = () => {
-    setUser(null);
-    ls.set('pe_user', null);
-    ls.set('pe_skipped', false);
-    setShowUserMenu(false);
-    setShowWelcome(true);
-  };
+  const handleJoin = (userData) => { setUser(userData); ls.set('pe_user', userData); setShowWelcome(false); };
+  const handleSkip = () => { ls.set('pe_skipped', true); setShowWelcome(false); };
+  const handleSignOut = () => { setUser(null); ls.set('pe_user', null); ls.set('pe_skipped', false); setShowUserMenu(false); setShowWelcome(true); };
 
   const toggleSave = (id) => {
-    setSaved(prev=>{
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      ls.set('pe_saved',[...next]);
-      return next;
-    });
+    setSaved(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); ls.set('pe_saved', [...next]); return next; });
   };
 
   const rateSpot = (id, val) => {
-    setRatings(prev=>{
-      const next={...prev};
-      next[id]===val ? delete next[id] : (next[id]=val);
-      ls.set('pe_ratings',next);
-      return next;
-    });
+    setRatings(prev => { const next={...prev}; next[id]===val ? delete next[id] : (next[id]=val); ls.set('pe_ratings', next); return next; });
   };
 
   const addRecentSearch = (q) => {
     if (!q.trim()) return;
-    setRecentSearches(prev=>{
-      const next=[q,...prev.filter(r=>r!==q)].slice(0,5);
-      ls.set('pe_recent',next);
-      return next;
-    });
+    setRecentSearches(prev => { const next=[q,...prev.filter(r=>r!==q)].slice(0,6); ls.set('pe_recent', next); return next; });
   };
 
   const handleSpotAdded = () => {
     if (!user) return;
     const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
-    setUser(updated);
-    ls.set('pe_user', updated);
+    setUser(updated); ls.set('pe_user', updated);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col" style={{maxWidth:680,margin:'0 auto'}}>
-      {/* Modals */}
-      {showWelcome && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col" style={{maxWidth:680,margin:'0 auto'}}>
+      {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
-      {showPricing && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)}/>}
+      {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)}/>}
       {showUserMenu && (
-        <UserMenu
-          user={user}
-          spotsAdded={user?.spotsAdded||0}
-          isPremium={isPremium}
+        <UserMenu user={user} spotsAdded={user?.spotsAdded||0} isPremium={isPremium}
           onSignOut={handleSignOut}
           onUpgrade={()=>{setShowUserMenu(false);setShowPricing(true);}}
-          onClose={()=>setShowUserMenu(false)}
-        />
+          onClose={()=>setShowUserMenu(false)}/>
       )}
 
-      {/* Header */}
       <header style={{background:'#1a2332'}} className="sticky top-0 z-50 shadow-lg">
-        <div className="px-4 py-3 flex items-center gap-2.5">
-          <div className="w-9 h-9 bg-[#4a9eff] rounded-xl flex items-center justify-center flex-shrink-0">
-            <MapPin size={20} className="text-white"/>
+        <div className="px-4 py-3 flex items-center gap-3">
+          <div className="w-9 h-9 bg-[#4a9eff] rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+            <MapPin size={20} className="text-white" strokeWidth={2.5}/>
           </div>
           <div>
             <h1 className="text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
-            <p className="text-blue-300 text-xs">Belfast parking finder</p>
+            <p className="text-blue-400 text-[10px] font-medium">Belfast · 31 spots</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            {!user && (
+            {!isPremium && (
               <button onClick={()=>setShowPricing(true)}
-                className="text-xs bg-yellow-400 text-yellow-900 px-2.5 py-1.5 rounded-full font-bold hover:bg-yellow-300 transition">
-                ★ PRO
+                className="text-[11px] bg-yellow-400 text-yellow-900 px-2.5 py-1.5 rounded-full font-bold hover:bg-yellow-300 active:scale-95 transition-all shadow">
+                ★ Premium
               </button>
             )}
             {user ? (
               <button onClick={()=>setShowUserMenu(v=>!v)}
-                className="relative w-9 h-9 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-sm hover:bg-blue-400 transition">
+                className="relative w-9 h-9 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-sm hover:bg-blue-400 active:scale-95 transition-all shadow">
                 {user.name.charAt(0).toUpperCase()}
                 {isPremium && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center text-yellow-900 font-black" style={{fontSize:8}}>★</span>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center text-yellow-900 font-black shadow" style={{fontSize:8}}>★</span>
                 )}
               </button>
             ) : (
               <button onClick={()=>setShowWelcome(true)}
-                className="text-xs bg-[#4a9eff] text-white px-3 py-2 rounded-full font-semibold hover:bg-blue-400 transition">
+                className="text-[11px] bg-white/10 text-white px-3 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/20">
                 Sign in
               </button>
             )}
@@ -1073,7 +1094,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Content */}
       <main className="flex-1 overflow-auto pb-24">
         {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} recentSearches={recentSearches} onSearch={addRecentSearch}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
@@ -1082,21 +1102,21 @@ export default function App() {
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
       </main>
 
-      {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-2xl" style={{maxWidth:680,margin:'0 auto'}}>
-        <div className="flex">
+        <div className="flex" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
           {TABS.map(({id,label,Icon})=>{
             const active = tab===id;
-            const pill = id==='saved' && saved.size>0 ? saved.size : null;
+            const pill   = id==='saved' && saved.size>0 ? saved.size : null;
             return (
               <button key={id} onClick={()=>setTab(id)}
-                className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
-                  active ? 'text-[#4a9eff]' : 'text-gray-400 hover:text-gray-600'
+                className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors active:bg-gray-50 ${
+                  active ? 'text-[#4a9eff]' : 'text-gray-400 hover:text-gray-500'
                 }`}>
                 <div className="relative">
+                  {active && <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-[#4a9eff] rounded-full"/>}
                   <Icon size={22} strokeWidth={active ? 2.5 : 1.8}/>
                   {pill && (
-                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] bg-[#4a9eff] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 bg-[#4a9eff] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
                       {pill}
                     </span>
                   )}
