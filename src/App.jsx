@@ -48,7 +48,7 @@ const BADGES = {
 
 const BELFAST_CENTER = [54.5973, -5.9301];
 
-// ── Notification email (FormSubmit — free, no config needed) ────────────────
+// ── Notification email (FormSubmit — free, no config needed) ──────────────────
 const notifyAdmin = async (name, email) => {
   try {
     await fetch('https://formsubmit.co/ajax/martinrooney250@gmail.com', {
@@ -63,10 +63,10 @@ const notifyAdmin = async (name, email) => {
         _captcha: 'false',
       }),
     });
-  } catch { /* silent fail */ }
+  } catch { /* silent fail — app still works */ }
 };
 
-// ── Stripe links ─────────────────────────────────────────────────────────────────
+// ── Stripe links ──────────────────────────────────────────────────────────────
 const STRIPE_MONTHLY = 'https://buy.stripe.com/00w4gscgJ6QoahjcTU0kE01';
 const STRIPE_ANNUAL  = 'https://buy.stripe.com/5kQ6oA1C5eiQ0GJg660kE00';
 
@@ -122,8 +122,8 @@ const BUSINESSES = [
 ];
 
 const AREAS = [
-  'City Centre', 'Victoria Square', 'Cathedral Quarter',
-  'Titanic Quarter', 'Botanic Gardens', 'Castle Court', "St George's Market",
+  'City Hall', 'Donegall Square', 'Victoria Square', 'Cathedral Quarter',
+  'Castle Court', "St George's Market", 'Great Victoria Street', 'Custom House Square',
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ const ls = {
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 
-// ── Badge pill ─────────────────────────────────────────────────────────────────────
+// ── Badge pill ────────────────────────────────────────────────────────────────
 const Badge = ({ type, sm }) => {
   const cfg = BADGES[type] || BADGES.free;
   return (
@@ -519,20 +519,20 @@ const ParkingMap = ({ spots, center, zoom=13, height=220 }) => (
 
 // ── SearchTab ─────────────────────────────────────────────────────────────────
 const BADGE_FILTERS = [
-  { id:'all',       label:'All',        color:'#374151', bg:'#f3f4f6' },
-  { id:'free',      label:'🟢 Free',    color:'#15803d', bg:'#dcfce7' },
-  { id:'hidden_gem',label:'💎 Hidden',  color:'#7e22ce', bg:'#f3e8ff' },
-  { id:'official',  label:'🅿 Official', color:'#1e3a5f', bg:'#dbeafe' },
-  { id:'timed',     label:'⏱ Timed',    color:'#9a3412', bg:'#fff7ed' },
+  { id:'all',       label:'All',       color:'#374151', bg:'#f3f4f6' },
+  { id:'free',      label:'🟢 Free',   color:'#15803d', bg:'#dcfce7' },
+  { id:'hidden_gem',label:'💎 Hidden', color:'#7e22ce', bg:'#f3e8ff' },
+  { id:'official',  label:'🅿 Official',color:'#1e3a5f', bg:'#dbeafe' },
+  { id:'timed',     label:'⏱ Timed',   color:'#9a3412', bg:'#fff7ed' },
 ];
 
 const SORT_OPTIONS = [
   { id:'popular', label:'Most Popular' },
-  { id:'free',    label:'Free First'   },
-  { id:'alpha',   label:'A–Z'          },
+  { id:'free',    label:'Free First' },
+  { id:'alpha',   label:'A–Z' },
 ];
 
-const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -542,6 +542,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch })
 
   const filtered = useMemo(() => {
     let spots = SPOTS;
+
     if (query.trim()) {
       const lq = query.toLowerCase().trim();
       spots = spots.filter(s =>
@@ -551,7 +552,11 @@ const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch })
         s.notes.toLowerCase().includes(lq)
       );
     }
-    if (badgeFilter !== 'all') spots = spots.filter(s => s.badge === badgeFilter);
+
+    if (badgeFilter !== 'all') {
+      spots = spots.filter(s => s.badge === badgeFilter);
+    }
+
     return [...spots].sort((a, b) => {
       if (sortBy === 'popular') return b.votes - a.votes;
       if (sortBy === 'free') {
@@ -567,16 +572,17 @@ const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch })
   const isSearching = query.trim().length > 0 || badgeFilter !== 'all';
   const mapCenter = filtered.length ? [filtered[0].lat, filtered[0].lng] : BELFAST_CENTER;
   const mapZoom = isSearching ? 13 : 12;
-  const freeCount = SPOTS.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
 
   const doSearch = (q) => {
     setQuery(q);
-    if (q.trim()) onSearch(q.trim());
     inputRef.current?.blur();
   };
 
+  const freeCount = SPOTS.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
+
   return (
     <div className="p-4 space-y-4">
+      {/* Search bar */}
       <div className="relative">
         <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
         <input
@@ -594,7 +600,8 @@ const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch })
         )}
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+      {/* Badge filter row */}
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
         {BADGE_FILTERS.map(f => (
           <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
             style={badgeFilter===f.id ? {background:f.bg, color:f.color} : {}}
@@ -606,6 +613,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch })
         ))}
       </div>
 
+      {/* Results header + controls */}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-bold text-gray-900">
@@ -635,44 +643,32 @@ const SearchTab = ({ saved, onSave, ratings, onRate, recentSearches, onSearch })
             className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border font-semibold transition-all ${
               showMap ? 'bg-[#1a2332] text-white border-[#1a2332]' : 'bg-white text-gray-600 border-gray-200'
             }`}>
-            <Map size={11}/>Map
+            <Map size={11}/>{showMap?'Map':'Map'}
           </button>
         </div>
       </div>
 
+      {/* Map */}
       {showMap && (
         <ParkingMap spots={filtered} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
       )}
 
+      {/* Area chips (when not searching) */}
       {!isSearching && (
-        <>
-          {recentSearches.length > 0 && (
-            <div>
-              <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold mb-2">Recent</p>
-              <div className="flex flex-wrap gap-2">
-                {recentSearches.map(s=>(
-                  <button key={s} onClick={()=>doSearch(s)}
-                    className="text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full flex items-center gap-1 hover:border-[#4a9eff] hover:text-[#4a9eff] transition-all shadow-sm">
-                    <Clock size={10}/>{s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <div>
-            <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold mb-2">Search by area</p>
-            <div className="flex flex-wrap gap-2">
-              {AREAS.map(a=>(
-                <button key={a} onClick={()=>doSearch(a)}
-                  className="text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full hover:border-[#4a9eff] hover:text-[#4a9eff] transition-all shadow-sm">
-                  {a}
-                </button>
-              ))}
-            </div>
+        <div>
+          <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold mb-2">Search by area</p>
+          <div className="flex flex-wrap gap-2">
+            {AREAS.map(a=>(
+              <button key={a} onClick={()=>doSearch(a)}
+                className="text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full hover:border-[#4a9eff] hover:text-[#4a9eff] transition-all shadow-sm">
+                {a}
+              </button>
+            ))}
           </div>
-        </>
+        </div>
       )}
 
+      {/* Spot list */}
       {filtered.length === 0 ? (
         <div className="text-center py-12">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -724,7 +720,9 @@ const NearbyTab = ({ saved, onSave, ratings, onRate }) => {
       </div>
       <div>
         <h3 className="text-xl font-bold text-gray-900">Parking Near You</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">See the closest community-verified spots to your current location in Belfast.</p>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
+          See the closest community-verified spots to your current location in Belfast.
+        </p>
       </div>
       <button onClick={findNearby} disabled={loading}
         className="flex items-center gap-2 bg-[#4a9eff] text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-500 active:scale-95 transition-all disabled:opacity-60 shadow-md">
@@ -772,6 +770,7 @@ const BusinessesTab = ({ onGetListed }) => {
 
   return (
     <div className="p-4 space-y-3">
+      {/* CTA */}
       <div className="bg-gradient-to-r from-[#1a2332] to-[#2d4a6e] text-white p-4 rounded-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -785,6 +784,7 @@ const BusinessesTab = ({ onGetListed }) => {
         </div>
       </div>
 
+      {/* Search */}
       <div className="relative">
         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
         <input
@@ -803,7 +803,9 @@ const BusinessesTab = ({ onGetListed }) => {
           <div key={b.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <button onClick={()=>setOpen(isOpen ? null : b.id)}
               className="w-full p-4 flex items-center gap-3 text-left hover:bg-gray-50 active:bg-gray-100 transition-colors">
-              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">{b.icon}</div>
+              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
+                {b.icon}
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-gray-900 text-sm">{b.name}</p>
                 <p className="text-xs text-gray-400 truncate">{b.addr}</p>
@@ -856,6 +858,7 @@ const BusinessesTab = ({ onGetListed }) => {
 // ── SavedTab ──────────────────────────────────────────────────────────────────
 const SavedTab = ({ saved, onSave, ratings, onRate }) => {
   const spots = SPOTS.filter(s => saved.has(s.id));
+
   if (!spots.length) return (
     <div className="p-8 flex flex-col items-center text-center space-y-4">
       <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center">
@@ -863,17 +866,22 @@ const SavedTab = ({ saved, onSave, ratings, onRate }) => {
       </div>
       <div>
         <h3 className="text-xl font-bold text-gray-900">No saved spots</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">Tap the bookmark icon on any parking spot to save it here for quick access.</p>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
+          Tap the bookmark icon on any parking spot to save it here for quick access.
+        </p>
       </div>
     </div>
   );
+
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold text-gray-900">{spots.length} saved spot{spots.length!==1?'s':''}</p>
         <span className="text-xs text-gray-400">Tap bookmark to remove</span>
       </div>
-      {spots.length > 1 && <ParkingMap spots={spots} center={[spots[0].lat, spots[0].lng]} zoom={12} height={200}/>}
+      {spots.length > 1 && (
+        <ParkingMap spots={spots} center={[spots[0].lat, spots[0].lng]} zoom={12} height={200}/>
+      )}
       <div className="space-y-4">
         {spots.map(s=>(
           <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate}/>
@@ -889,6 +897,7 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   const [preview, setPreview] = useState(null);
   const [done, setDone] = useState(false);
   const fileRef = useRef(null);
+
   const SPOT_TYPES   = ['Street parking','Lay-by','Car park','Side road','Grass verge','Private (shared)'];
   const RESTRICTIONS = ['Free all day','Time limited','Evenings free','Weekends free','No restrictions'];
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
@@ -900,7 +909,9 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
       </div>
       <div>
         <h3 className="text-xl font-bold text-gray-900">Join to Add a Spot</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">Sign up free to contribute spots. Earn 1 month of Premium for every verified spot you add.</p>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
+          Sign up free to contribute spots. Earn 1 month of Premium for every verified spot you add.
+        </p>
       </div>
       <button onClick={onJoinPrompt}
         className="flex items-center gap-2 bg-[#4a9eff] text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-500 active:scale-95 transition-all shadow-md">
@@ -916,7 +927,9 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
       </div>
       <div>
         <h3 className="text-2xl font-bold text-gray-900">Spot Submitted!</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">Your spot will appear after a quick community review. Thanks for helping Belfast drivers!</p>
+        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
+          Your spot will appear after a quick community review. Thanks for helping Belfast drivers!
+        </p>
       </div>
       <div className="w-full bg-gradient-to-r from-[#1a2332] to-[#243447] text-white px-6 py-4 rounded-2xl text-center">
         <p className="font-bold text-base">🏆 +1 month Premium unlocked</p>
@@ -941,51 +954,57 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
             className="w-full border-2 border-dashed border-gray-300 rounded-xl p-5 flex flex-col items-center gap-2 text-gray-400 hover:border-[#4a9eff] hover:text-[#4a9eff] active:scale-[0.98] transition-all">
             {preview
               ? <img src={preview} alt="preview" className="w-full h-32 object-cover rounded-xl"/>
-              : <><Camera size={28}/><span className="text-sm font-medium">Tap to upload a photo</span></>}
+              : <><Camera size={28}/><span className="text-sm font-medium">Tap to upload a photo</span><span className="text-xs text-gray-300">JPG, PNG, HEIC</span></>}
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
             onChange={e=>{const f=e.target.files[0];if(f)setPreview(URL.createObjectURL(f));}}/>
         </div>
+
         <div>
           <label className="block text-sm font-bold text-gray-800 mb-2">What's near this spot? *</label>
           <input required value={form.near} onChange={e=>set('near',e.target.value)}
             placeholder="e.g. Victoria Square, Cathedral Quarter, Titanic Belfast"
             className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
         </div>
+
         <div>
           <label className="block text-sm font-bold text-gray-800 mb-2">Street or area *</label>
           <input required value={form.street} onChange={e=>set('street',e.target.value)}
             placeholder="e.g. Ann Street, beside Victoria Square"
             className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
         </div>
+
         <div>
           <label className="block text-sm font-bold text-gray-800 mb-2">Spot type *</label>
           <div className="flex flex-wrap gap-2">
             {SPOT_TYPES.map(t=>(
               <button type="button" key={t} onClick={()=>set('type',t)}
                 className={`text-xs px-3 py-2 rounded-full border-2 font-medium transition-all active:scale-95 ${
-                  form.type===t ? 'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff]' : 'border-gray-200 text-gray-600 bg-white'
+                  form.type===t ? 'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff]' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-300'
                 }`}>{t}</button>
             ))}
           </div>
         </div>
+
         <div>
           <label className="block text-sm font-bold text-gray-800 mb-2">Restrictions *</label>
           <div className="flex flex-wrap gap-2">
             {RESTRICTIONS.map(r=>(
               <button type="button" key={r} onClick={()=>set('restriction',r)}
                 className={`text-xs px-3 py-2 rounded-full border-2 font-medium transition-all active:scale-95 ${
-                  form.restriction===r ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600 bg-white'
+                  form.restriction===r ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-300'
                 }`}>{r}</button>
             ))}
           </div>
         </div>
+
         <div>
           <label className="block text-sm font-bold text-gray-800 mb-2">Local knowledge (optional)</label>
           <textarea value={form.notes} onChange={e=>set('notes',e.target.value)} rows={3}
             placeholder="What should other drivers know? Restrictions, best times, how many cars fit…"
             className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50 resize-none"/>
         </div>
+
         <button type="submit"
           className="w-full bg-[#1a2332] text-white py-4 rounded-xl font-bold text-base hover:bg-[#243447] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg">
           <Plus size={20}/>Submit Parking Spot
@@ -995,13 +1014,13 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   );
 };
 
-// ── TABS ─────────────────────────────────────────────────────────────────────────
+// ── TABS ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { id:'search',     label:'Search',   Icon:Search    },
-  { id:'nearby',     label:'Nearby',   Icon:Crosshair },
-  { id:'businesses', label:'Local',    Icon:Building2 },
-  { id:'saved',      label:'Saved',    Icon:Bookmark  },
-  { id:'add',        label:'Add Spot', Icon:Plus      },
+  { id:'search',     label:'Search',     Icon:Search    },
+  { id:'nearby',     label:'Nearby',     Icon:Crosshair },
+  { id:'businesses', label:'Local',      Icon:Building2 },
+  { id:'saved',      label:'Saved',      Icon:Bookmark  },
+  { id:'add',        label:'Add Spot',   Icon:Plus      },
 ];
 
 // ── Main App ──────────────────────────────────────────────────────────────────
@@ -1020,36 +1039,68 @@ export default function App() {
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('premium') === 'success') {
-      setIsPremium(true); ls.set('pe_premium', true);
+      setIsPremium(true);
+      ls.set('pe_premium', true);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
-  const handleJoin = (userData) => { setUser(userData); ls.set('pe_user', userData); setShowWelcome(false); };
-  const handleSkip = () => { ls.set('pe_skipped', true); setShowWelcome(false); };
-  const handleSignOut = () => { setUser(null); ls.set('pe_user', null); ls.set('pe_skipped', false); setShowUserMenu(false); setShowWelcome(true); };
+  const handleJoin = (userData) => {
+    setUser(userData);
+    ls.set('pe_user', userData);
+    setShowWelcome(false);
+  };
+
+  const handleSkip = () => {
+    ls.set('pe_skipped', true);
+    setShowWelcome(false);
+  };
+
+  const handleSignOut = () => {
+    setUser(null);
+    ls.set('pe_user', null);
+    ls.set('pe_skipped', false);
+    setShowUserMenu(false);
+    setShowWelcome(true);
+  };
 
   const toggleSave = (id) => {
-    setSaved(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); ls.set('pe_saved', [...next]); return next; });
+    setSaved(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      ls.set('pe_saved', [...next]);
+      return next;
+    });
   };
 
   const rateSpot = (id, val) => {
-    setRatings(prev => { const next={...prev}; next[id]===val ? delete next[id] : (next[id]=val); ls.set('pe_ratings', next); return next; });
+    setRatings(prev => {
+      const next = {...prev};
+      next[id]===val ? delete next[id] : (next[id]=val);
+      ls.set('pe_ratings', next);
+      return next;
+    });
   };
 
   const addRecentSearch = (q) => {
     if (!q.trim()) return;
-    setRecentSearches(prev => { const next=[q,...prev.filter(r=>r!==q)].slice(0,6); ls.set('pe_recent', next); return next; });
+    setRecentSearches(prev => {
+      const next = [q, ...prev.filter(r=>r!==q)].slice(0,6);
+      ls.set('pe_recent', next);
+      return next;
+    });
   };
 
   const handleSpotAdded = () => {
     if (!user) return;
     const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
-    setUser(updated); ls.set('pe_user', updated);
+    setUser(updated);
+    ls.set('pe_user', updated);
   };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col" style={{maxWidth:680,margin:'0 auto'}}>
+      {/* ── Modals ── */}
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
       {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)}/>}
@@ -1060,6 +1111,7 @@ export default function App() {
           onClose={()=>setShowUserMenu(false)}/>
       )}
 
+      {/* ── Header ── */}
       <header style={{background:'#1a2332'}} className="sticky top-0 z-50 shadow-lg">
         <div className="px-4 py-3 flex items-center gap-3">
           <div className="w-9 h-9 bg-[#4a9eff] rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
@@ -1069,6 +1121,7 @@ export default function App() {
             <h1 className="text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
             <p className="text-blue-400 text-[10px] font-medium">Belfast · 31 spots</p>
           </div>
+
           <div className="ml-auto flex items-center gap-2">
             {!isPremium && (
               <button onClick={()=>setShowPricing(true)}
@@ -1094,14 +1147,16 @@ export default function App() {
         </div>
       </header>
 
+      {/* ── Content ── */}
       <main className="flex-1 overflow-auto pb-24">
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} recentSearches={recentSearches} onSearch={addRecentSearch}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
       </main>
 
+      {/* ── Bottom Navigation ── */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-2xl" style={{maxWidth:680,margin:'0 auto'}}>
         <div className="flex" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
           {TABS.map(({id,label,Icon})=>{
@@ -1113,7 +1168,9 @@ export default function App() {
                   active ? 'text-[#4a9eff]' : 'text-gray-400 hover:text-gray-500'
                 }`}>
                 <div className="relative">
-                  {active && <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-[#4a9eff] rounded-full"/>}
+                  {active && (
+                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-[#4a9eff] rounded-full"/>
+                  )}
                   <Icon size={22} strokeWidth={active ? 2.5 : 1.8}/>
                   {pill && (
                     <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 bg-[#4a9eff] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
