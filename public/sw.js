@@ -1,4 +1,4 @@
-const CACHE = 'parkeasy-v1';
+const CACHE = 'parkeasy-v3';
 const BASE = '/parkeasy-mobile/';
 
 const CORE = [
@@ -6,6 +6,8 @@ const CORE = [
   BASE + 'index.html',
   BASE + 'manifest.json',
   BASE + 'icon.svg',
+  BASE + 'icon-192.png',
+  BASE + 'icon-512.png',
 ];
 
 self.addEventListener('install', e => {
@@ -23,6 +25,7 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Network-first for API/tile requests, cache-first for app shell
   const url = new URL(e.request.url);
   const isAppShell = url.origin === self.location.origin;
 
@@ -33,4 +36,5 @@ self.addEventListener('fetch', e => {
         .catch(() => caches.match(e.request))
     );
   }
+  // External requests (OSM tiles, Unsplash) pass through normally
 });
