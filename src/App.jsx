@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import {
   MapPin, Search, Crosshair, Plus, Building2, Navigation,
   Bookmark, Camera, Check, X, ChevronRight, Share2,
-  Map, Star, Clock, Car, Info, LogOut, User, Filter,
+  Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
 } from 'lucide-react';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
@@ -419,12 +419,6 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate }) => {
           )}
         </div>
 
-        {spot.price && (
-          <div className="absolute top-2.5 right-11 bg-black/70 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
-            {spot.price}
-          </div>
-        )}
-
         <button
           onClick={()=>onSave(spot.id)}
           className={`absolute top-2.5 right-2.5 w-9 h-9 rounded-full shadow-md flex items-center justify-center transition-all active:scale-90 ${
@@ -440,9 +434,18 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate }) => {
           <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0 bg-gray-50 px-2 py-0.5 rounded-full">{spot.walk}</span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 text-xs text-gray-500">
-          <span className="flex items-center gap-1"><Clock size={11}/>{spot.restriction}</span>
-          {spot.spaces != null && <span className="flex items-center gap-1"><Car size={11}/>{spot.spaces} spaces</span>}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className="flex items-center gap-1 text-xs text-gray-500"><Clock size={11}/>{spot.restriction}</span>
+          {spot.spaces != null && (
+            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+              <Car size={10}/>{spot.spaces} spaces
+            </span>
+          )}
+          {spot.price && (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+              {spot.price}
+            </span>
+          )}
         </div>
 
         <div className="border-l-[3px] border-[#4a9eff] pl-3 mb-3 bg-blue-50/50 py-2 rounded-r-lg">
@@ -1014,6 +1017,62 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   );
 };
 
+// ── iOS Install Guide Modal ───────────────────────────────────────────────────
+const IOSGuide = ({ onClose }) => (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-end justify-center p-4">
+    <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl pb-2">
+      <div style={{background:'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)'}} className="px-6 pt-7 pb-5 text-center">
+        <div className="w-14 h-14 bg-[#4a9eff] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+          <Smartphone size={26} className="text-white"/>
+        </div>
+        <h2 className="text-white font-extrabold text-xl">Add to Home Screen</h2>
+        <p className="text-blue-300 text-sm mt-1">Install ParkEasy on your iPhone</p>
+      </div>
+      <div className="p-6 space-y-4">
+        {[
+          ['1', '⬆️', 'Tap the Share button', 'The box with an arrow at the bottom of Safari'],
+          ['2', '📲', 'Tap "Add to Home Screen"', 'Scroll down in the share sheet to find it'],
+          ['3', '✅', 'Tap "Add"', 'ParkEasy appears on your home screen like any app'],
+        ].map(([n, emoji, title, desc]) => (
+          <div key={n} className="flex items-start gap-3">
+            <div className="w-7 h-7 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5">{n}</div>
+            <div>
+              <p className="font-bold text-gray-900 text-sm">{emoji} {title}</p>
+              <p className="text-gray-400 text-xs leading-relaxed">{desc}</p>
+            </div>
+          </div>
+        ))}
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-center">
+          <p className="text-xs text-blue-700 font-medium">Works offline · No App Store needed · Free forever</p>
+        </div>
+        <button onClick={onClose} className="w-full bg-[#1a2332] text-white py-3 rounded-xl font-bold hover:bg-[#243447] transition">Got it</button>
+      </div>
+    </div>
+  </div>
+);
+
+// ── Install Banner ────────────────────────────────────────────────────────────
+const InstallBanner = ({ onInstall, onDismiss, isIOS }) => (
+  <div className="mx-3 mt-3 bg-gradient-to-r from-[#1a2332] to-[#2d4a6e] text-white px-4 py-3 rounded-2xl flex items-center gap-3 shadow-lg">
+    <div className="w-10 h-10 bg-[#4a9eff] rounded-xl flex items-center justify-center flex-shrink-0 shadow">
+      <Download size={18} className="text-white"/>
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="font-bold text-sm leading-tight">Install ParkEasy</p>
+      <p className="text-blue-300 text-xs leading-tight mt-0.5">
+        {isIOS ? 'Tap Share → Add to Home Screen' : 'Add to your home screen — works offline'}
+      </p>
+    </div>
+    <button onClick={onInstall}
+      className="flex-shrink-0 bg-[#4a9eff] text-white text-xs px-3 py-1.5 rounded-full font-bold hover:bg-blue-400 active:scale-95 transition-all whitespace-nowrap">
+      {isIOS ? 'How?' : 'Install'}
+    </button>
+    <button onClick={onDismiss} className="flex-shrink-0 w-6 h-6 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition">
+      <X size={11}/>
+    </button>
+  </div>
+);
+
 // ── TABS ──────────────────────────────────────────────────────────────────────
 const TABS = [
   { id:'search',     label:'Search',     Icon:Search    },
@@ -1029,12 +1088,17 @@ export default function App() {
   const [user,          setUser]          = useState(()=>ls.get('pe_user', null));
   const [saved,         setSaved]         = useState(()=>new Set(ls.get('pe_saved', [])));
   const [ratings,       setRatings]       = useState(()=>ls.get('pe_ratings', {}));
-  const [recentSearches,setRecentSearches]= useState(()=>ls.get('pe_recent', []));
   const [showWelcome,   setShowWelcome]   = useState(()=>!ls.get('pe_user',null) && !ls.get('pe_skipped',false));
   const [showUserMenu,  setShowUserMenu]  = useState(false);
   const [showBizModal,  setShowBizModal]  = useState(false);
   const [isPremium,     setIsPremium]     = useState(()=>ls.get('pe_premium', false));
   const [showPricing,   setShowPricing]   = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstall,    setShowInstall]    = useState(false);
+  const [showIOSGuide,   setShowIOSGuide]   = useState(false);
+
+  const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -1044,6 +1108,20 @@ export default function App() {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  useEffect(() => {
+    if (isStandalone) return;
+    if (isIOS) { setTimeout(() => setShowInstall(true), 3000); return; }
+    const handler = (e) => { e.preventDefault(); setDeferredPrompt(e); setShowInstall(true); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (isIOS) { setShowInstall(false); setShowIOSGuide(true); return; }
+    if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; setDeferredPrompt(null); }
+    setShowInstall(false);
+  };
 
   const handleJoin = (userData) => {
     setUser(userData);
@@ -1082,15 +1160,6 @@ export default function App() {
     });
   };
 
-  const addRecentSearch = (q) => {
-    if (!q.trim()) return;
-    setRecentSearches(prev => {
-      const next = [q, ...prev.filter(r=>r!==q)].slice(0,6);
-      ls.set('pe_recent', next);
-      return next;
-    });
-  };
-
   const handleSpotAdded = () => {
     if (!user) return;
     const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
@@ -1104,6 +1173,7 @@ export default function App() {
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
       {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)}/>}
+      {showIOSGuide && <IOSGuide onClose={()=>setShowIOSGuide(false)}/>}
       {showUserMenu && (
         <UserMenu user={user} spotsAdded={user?.spotsAdded||0} isPremium={isPremium}
           onSignOut={handleSignOut}
@@ -1123,6 +1193,12 @@ export default function App() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            {!isStandalone && (
+              <button onClick={()=>isIOS ? setShowIOSGuide(true) : handleInstall()}
+                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/20 flex items-center gap-1">
+                <Download size={11}/>Install
+              </button>
+            )}
             {!isPremium && (
               <button onClick={()=>setShowPricing(true)}
                 className="text-[11px] bg-yellow-400 text-yellow-900 px-2.5 py-1.5 rounded-full font-bold hover:bg-yellow-300 active:scale-95 transition-all shadow">
@@ -1149,6 +1225,9 @@ export default function App() {
 
       {/* ── Content ── */}
       <main className="flex-1 overflow-auto pb-24">
+        {showInstall && !isStandalone && (
+          <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
+        )}
         {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
