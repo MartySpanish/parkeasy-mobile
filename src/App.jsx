@@ -240,8 +240,30 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
 // ── Business Listing Modal ────────────────────────────────────────────────────
 const BusinessModal = ({ onClose }) => {
   const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name:'', address:'', email:'', phone:'' });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await fetch('https://formsubmit.co/ajax/martinrooney250@gmail.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          _subject: `🏪 New Business Listing: ${form.name}`,
+          'Business Name': form.name,
+          Address: form.address,
+          Email: form.email,
+          Phone: form.phone || 'Not provided',
+          _honey: '',
+          _captcha: 'false',
+        }),
+      });
+    } catch { /* silent fail */ }
+    setDone(true);
+  };
 
   if (done) return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
@@ -267,12 +289,14 @@ const BusinessModal = ({ onClose }) => {
           <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><X size={16}/></button>
         </div>
         <div className="p-6">
-          <form onSubmit={e=>{e.preventDefault();setDone(true);}} className="space-y-3">
+          <form onSubmit={submit} className="space-y-3">
             <input required value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Business name *" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
             <input required value={form.address} onChange={e=>set('address',e.target.value)} placeholder="Full address *" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
             <input required type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="Contact email *" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
             <input value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="Phone (optional)" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
-            <button type="submit" className="w-full bg-[#4a9eff] text-white py-3.5 rounded-xl font-bold text-sm hover:bg-blue-500 transition shadow-md">Submit for free listing →</button>
+            <button type="submit" disabled={submitting} className="w-full bg-[#4a9eff] text-white py-3.5 rounded-xl font-bold text-sm hover:bg-blue-500 transition shadow-md disabled:opacity-60">
+              {submitting ? '⏳ Sending…' : 'Submit for free listing →'}
+            </button>
           </form>
         </div>
       </div>
@@ -381,7 +405,7 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }
 );
 
 // ── SpotCard ──────────────────────────────────────────────────────────────────
-const SpotCard = ({ spot, saved, onSave, rating, onRate }) => {
+const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote }) => {
   const [shareDone, setShareDone] = useState(false);
   const isOfficial = ['NCP Belfast','Q-Park Belfast','Belfast City Council'].includes(spot.by);
   const freeNow = isFreeNow(spot);
@@ -466,7 +490,13 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate }) => {
           <div className="ml-auto text-xs text-gray-400">
             {isOfficial
               ? <span className="font-semibold text-blue-700">{spot.by}</span>
-              : <span className="flex items-center gap-1"><Star size={11} className="text-yellow-400" fill="#facc15"/><span className="font-medium text-gray-600">{spot.votes}</span></span>}
+              : (
+                <button onClick={() => onVote?.(spot.id)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-all active:scale-90 ${voted ? 'bg-amber-50 text-amber-600' : 'text-gray-500 hover:text-amber-500'}`}>
+                  <Star size={11} fill={voted ? '#fbbf24' : 'none'} className={voted ? 'text-amber-400' : 'text-gray-300'}/>
+                  <span className="font-medium">{spot.votes + (voted ? 1 : 0)}</span>
+                </button>
+              )}
           </div>
         </div>
 
@@ -535,7 +565,7 @@ const SORT_OPTIONS = [
   { id:'alpha',   label:'A–Z' },
 ];
 
-const SearchTab = ({ saved, onSave, ratings, onRate }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -684,7 +714,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate }) => {
       ) : (
         <div className="space-y-4">
           {filtered.map(s=>(
-            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate}/>
+            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote}/>
           ))}
         </div>
       )}
@@ -693,7 +723,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate }) => {
 };
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
-const NearbyTab = ({ saved, onSave, ratings, onRate }) => {
+const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
   const [loc,     setLoc]     = useState(null);
   const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
@@ -749,7 +779,7 @@ const NearbyTab = ({ saved, onSave, ratings, onRate }) => {
       <div className="space-y-4">
         {nearby.map(s=>(
           <SpotCard key={s.id} spot={{...s, dist:Math.round(s.realDist*10)/10}}
-            saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate}/>
+            saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote}/>
         ))}
       </div>
     </div>
@@ -859,7 +889,7 @@ const BusinessesTab = ({ onGetListed }) => {
 };
 
 // ── SavedTab ──────────────────────────────────────────────────────────────────
-const SavedTab = ({ saved, onSave, ratings, onRate }) => {
+const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
   const spots = SPOTS.filter(s => saved.has(s.id));
 
   if (!spots.length) return (
@@ -887,7 +917,7 @@ const SavedTab = ({ saved, onSave, ratings, onRate }) => {
       )}
       <div className="space-y-4">
         {spots.map(s=>(
-          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate}/>
+          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote}/>
         ))}
       </div>
     </div>
@@ -899,11 +929,38 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   const [form, setForm] = useState({near:'',street:'',type:'',restriction:'',notes:''});
   const [preview, setPreview] = useState(null);
   const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef(null);
 
   const SPOT_TYPES   = ['Street parking','Lay-by','Car park','Side road','Grass verge','Private (shared)'];
   const RESTRICTIONS = ['Free all day','Time limited','Evenings free','Weekends free','No restrictions'];
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const submitSpot = async (e) => {
+    e.preventDefault();
+    if (!form.type || !form.restriction) return;
+    setSubmitting(true);
+    try {
+      await fetch('https://formsubmit.co/ajax/martinrooney250@gmail.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          _subject: `🅿 New Spot from ${user.name}: near ${form.near}`,
+          'Submitted by': user.name,
+          'User email': user.email,
+          'Near': form.near,
+          'Street / Area': form.street,
+          'Spot type': form.type,
+          'Restrictions': form.restriction,
+          'Notes': form.notes || 'None',
+          _honey: '',
+          _captcha: 'false',
+        }),
+      });
+    } catch { /* silent fail */ }
+    setDone(true);
+    onSpotAdded();
+  };
 
   if (!user) return (
     <div className="p-8 flex flex-col items-center text-center space-y-5">
@@ -950,7 +1007,7 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
         <p className="text-sm opacity-90 mt-0.5 leading-relaxed">Add a spot the community doesn't know about — get 1 free month of Premium.</p>
       </div>
 
-      <form onSubmit={e=>{e.preventDefault();setDone(true);onSpotAdded();}} className="space-y-5">
+      <form onSubmit={submitSpot} className="space-y-5">
         <div>
           <label className="block text-sm font-bold text-gray-800 mb-2">Photo (optional)</label>
           <button type="button" onClick={()=>fileRef.current.click()}
@@ -1008,9 +1065,12 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
             className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50 resize-none"/>
         </div>
 
-        <button type="submit"
-          className="w-full bg-[#1a2332] text-white py-4 rounded-xl font-bold text-base hover:bg-[#243447] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg">
-          <Plus size={20}/>Submit Parking Spot
+        {(!form.type || !form.restriction) && (
+          <p className="text-xs text-center text-amber-600 font-medium">Please select a spot type and restriction above</p>
+        )}
+        <button type="submit" disabled={submitting || !form.type || !form.restriction}
+          className="w-full bg-[#1a2332] text-white py-4 rounded-xl font-bold text-base hover:bg-[#243447] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
+          {submitting ? '⏳ Submitting…' : <><Plus size={20}/>Submit Parking Spot</>}
         </button>
       </form>
     </div>
@@ -1093,6 +1153,7 @@ export default function App() {
   const [showBizModal,  setShowBizModal]  = useState(false);
   const [isPremium,     setIsPremium]     = useState(()=>ls.get('pe_premium', false));
   const [showPricing,   setShowPricing]   = useState(false);
+  const [votes,          setVotes]          = useState(()=>ls.get('pe_votes', {}));
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstall,    setShowInstall]    = useState(false);
   const [showIOSGuide,   setShowIOSGuide]   = useState(false);
@@ -1156,6 +1217,15 @@ export default function App() {
       const next = {...prev};
       next[id]===val ? delete next[id] : (next[id]=val);
       ls.set('pe_ratings', next);
+      return next;
+    });
+  };
+
+  const voteSpot = (id) => {
+    setVotes(prev => {
+      if (prev[id]) return prev;
+      const next = { ...prev, [id]: true };
+      ls.set('pe_votes', next);
       return next;
     });
   };
@@ -1228,10 +1298,10 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
-        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot}/>}
+        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
-        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot}/>}
+        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
       </main>
 
