@@ -1,4 +1,4 @@
-const CACHE = 'parkeasy-v1';
+const CACHE = 'parkeasy-v3';
 const BASE = '/parkeasy-mobile/';
 
 const CORE = [
@@ -6,6 +6,8 @@ const CORE = [
   BASE + 'index.html',
   BASE + 'manifest.json',
   BASE + 'icon.svg',
+  BASE + 'icon-192.png',
+  BASE + 'icon-512.png',
 ];
 
 self.addEventListener('install', e => {
