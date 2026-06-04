@@ -6,6 +6,7 @@ import {
   MapPin, Search, Crosshair, Plus, Building2, Navigation,
   Bookmark, Camera, Check, X, ChevronRight, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
+  Zap, Timer, Globe, Receipt,
 } from 'lucide-react';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
@@ -120,6 +121,13 @@ const SPOTS = [
   { id:45, name:'Ormeau Avenue on-street',             near:'City Centre',       tags:['ormeau avenue','bbc','google','city centre','gasworks'],                             badge:'timed', dist:0.00, walk:'Right there', restriction:'Mon–Fri 8am–6pm', notes:'On-street near BBC NI and Ormeau Baths Gallery. Free weekends — great for gallery visits and Ormeau events.', lat:54.5917, lng:-5.9245, by:'OrmAvLocal',      votes:34, photo:null, price:'£1.20/hr', spaces:null },
   { id:46, name:'Hamilton Dock overflow',              near:'Titanic Quarter',   tags:['titanic quarter','hamilton dock','ss nomadic','titanic belfast','titanic'],         badge:'hidden_gem', dist:0.20, walk:'5 min', restriction:'Free all day', notes:'Overflow area near Hamilton Dock — free and often has spaces when Queens Road fills up on peak days. Easy walk to Titanic Belfast and SS Nomadic.', lat:54.6068, lng:-5.9152, by:'TitanicLocal', votes:43, photo:null, price:null, spaces:null },
   { id:47, name:'Ravenhill Road on-street',            near:'East Belfast',      tags:['ravenhill','east belfast','kingspan stadium','ulster rugby','ravenhill road'],      badge:'free',  dist:0.00, walk:'On the road', restriction:'Free — no restrictions',   notes:'Long stretch of free on-street on Ravenhill Road. Popular with Ulster Rugby fans on match days. Easy access to Ormeau Park.', lat:54.5898, lng:-5.8972, by:'RavenhillLocal', votes:31, photo:null, price:null, spaces:null },
+  { id:48, name:'Lanyon Place on-street',              near:'Waterfront Hall',   tags:['waterfront hall','lanyon place','city centre','belfast city centre'],               badge:'timed',      dist:0.05, walk:'2 min',          restriction:'Mon–Sat 8am–6pm',              notes:'On-street at Lanyon Place. Free evenings — excellent for Waterfront and Ulster Hall events. Often overlooked by visitors.', lat:54.5960, lng:-5.9265, by:'WaterfrontGoer', votes:29, photo:null, price:'£1.60/hr', spaces:null, ev:{available:true,ports:2,speed:'7kW'} },
+  { id:49, name:'Grosvenor Road multi-storey',         near:'Royal Victoria Hospital', tags:['royal victoria','grosvenor road','west belfast','multi-storey'],               badge:'official',   dist:0.05, walk:'2 min',          restriction:'Open 24/7',                    notes:'Multi-storey beside the Royal Victoria Hospital. 24/7 access, good for Falls Road and Grosvenor Road.', lat:54.5960, lng:-5.9540, by:'Official', votes:0, photo:null, price:'£1.80/hr', spaces:300, available:180, total:300 },
+  { id:50, name:'Park & Ride — Cairnshill',            near:'South Belfast',     tags:['park and ride','cairnshill','south belfast','park & ride'],                         badge:'official',   dist:0.00, walk:'Bus to city',    restriction:'Mon–Sat 7am–7pm',              notes:'Official Park & Ride with regular Metro bus to city centre. Free parking — just pay the bus fare. Ideal for avoiding city centre traffic.', lat:54.5542, lng:-5.9255, by:'Belfast City Council', votes:0, photo:null, price:null, spaces:400, available:220, total:400 },
+  { id:51, name:'Park & Ride — Dundonald',             near:'East Belfast',      tags:['park and ride','dundonald','east belfast','park & ride'],                           badge:'official',   dist:0.00, walk:'Bus to city',    restriction:'Mon–Sat 7am–7pm',              notes:'Park & Ride at Dundonald. Regular Metro bus to the city centre. Free parking with bus ticket — great for East Belfast commuters.', lat:54.5812, lng:-5.8390, by:'Belfast City Council', votes:0, photo:null, price:null, spaces:350, available:180, total:350 },
+  { id:52, name:'Titanic Quarter multi-storey',        near:'Titanic Quarter',   tags:['titanic quarter','titanic belfast','multi-storey','titanic'],                       badge:'official',   dist:0.10, walk:'3 min',          restriction:'Open 7am–10pm',                notes:'Official multi-storey serving the Titanic Quarter. Close to Titanic Belfast, SS Nomadic and W5. Pre-booking recommended on busy days.', lat:54.6070, lng:-5.9125, by:'Official', votes:12, photo:'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?w=600&h=400&fit=crop', price:'£3.00/hr', spaces:600, available:320, total:600, ev:{available:true,ports:8,speed:'22kW'} },
+  { id:53, name:'Castle Court multi-storey',           near:'Castle Court',      tags:['castle court','multi-storey','city centre','royal avenue'],                         badge:'official',   dist:0.00, walk:'Right there',    restriction:'Open 7am–10pm Mon–Sat',        notes:'Multi-storey inside Castle Court shopping centre. 700+ spaces. Validated parking available with purchase in many stores.', lat:54.5992, lng:-5.9352, by:'Official', votes:8, photo:null, price:'£2.50/hr', spaces:730, available:380, total:730 },
+  { id:54, name:'Lagan Towpath riverside (free)',      near:'Lagan Towpath',     tags:['lagan towpath','riverside','lagan','south belfast','free parking'],                 badge:'hidden_gem', dist:0.00, walk:'Riverside start', restriction:'Free all day',                notes:'Completely free parking along the Lagan towpath riverside roads. Walk or cycle along the Lagan from here. Popular with locals but rarely on parking apps.', lat:54.5810, lng:-5.9155, by:'LaganLocal', votes:58, photo:'https://images.unsplash.com/photo-1504701954957-2010ec3bcec1?w=600&h=400&fit=crop', price:null, spaces:null },
 ];
 
 const BUSINESSES = [
@@ -138,9 +146,12 @@ const BUSINESSES = [
   { id:13, name:'Botanic Gardens',      area:'South Belfast',     addr:'Stranmillis Road, Belfast BT9 5AB',   cat:'Park',           icon:'🌿',  key:'botanic gardens',    lat:54.5840, lng:-5.9330 },
 ];
 
-const AREAS = [
-  'City Centre', 'South Belfast', 'East Belfast', 'West Belfast',
-  'Titanic Quarter', 'Cathedral Quarter', 'Botanic', 'Ormeau Road',
+// Quick-search keyword chips (replaces basic area chips)
+const SEARCH_KEYWORDS = [
+  'Free parking', 'EV charging', 'City Centre', 'Multi-storey',
+  'Titanic Quarter', 'Park & Ride', 'Cathedral Quarter', 'Hidden gems',
+  'Cave Hill', 'Black Mountain', 'Lagan Towpath', 'South Belfast',
+  'Botanic', 'Ormeau Road', 'West Belfast', 'East Belfast',
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -174,6 +185,15 @@ const directionsUrl = (lat, lng) => {
   return isIOS
     ? `https://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`
     : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+};
+
+const getAvailability = (spot) => {
+  if (!spot.available || !spot.total) return null;
+  const pct = spot.available / spot.total;
+  if (pct > 0.3) return { color:'#22c55e', label:'Available',   bg:'rgba(34,197,94,0.12)' };
+  if (pct > 0.1) return { color:'#f59e0b', label:'Filling up',  bg:'rgba(245,158,11,0.12)' };
+  if (pct > 0)   return { color:'#ef4444', label:'Almost full', bg:'rgba(239,68,68,0.12)' };
+  return           { color:'#ef4444', label:'FULL',         bg:'rgba(239,68,68,0.2)' };
 };
 
 const ls = {
@@ -219,7 +239,7 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
 
         <div className="p-6 space-y-5">
           <div className="grid grid-cols-3 gap-2 text-center">
-            {[['🟢','47','Spots'],['💎','11','Hidden Gems'],['🅿','7','Car Parks']].map(([e,n,l])=>(
+            {[['🟢','54','Spots'],['💎','12','Hidden Gems'],['🅿','9','Car Parks']].map(([e,n,l])=>(
               <div key={l} className="bg-gray-50 rounded-xl py-2.5">
                 <p className="text-lg">{e}</p>
                 <p className="font-extrabold text-gray-900 text-sm">{n}</p>
@@ -422,10 +442,11 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }
 );
 
 // ── SpotCard ──────────────────────────────────────────────────────────────────
-const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote }) => {
+const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }) => {
   const [shareDone, setShareDone] = useState(false);
-  const isOfficial = ['NCP Belfast','Q-Park Belfast','Belfast City Council'].includes(spot.by);
+  const isOfficial = ['NCP Belfast','Q-Park Belfast','Belfast City Council','Official'].includes(spot.by);
   const freeNow = isFreeNow(spot);
+  const avail = getAvailability(spot);
 
   const handleShare = async () => {
     const text = `${spot.name} — ${spot.notes.slice(0,100)}`;
@@ -477,7 +498,14 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote }) => {
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <span className="flex items-center gap-1 text-xs text-gray-500"><Clock size={11}/>{spot.restriction}</span>
-          {spot.spaces != null && (
+          {avail && (
+            <span style={{background:avail.bg,color:avail.color}}
+              className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{background:avail.color}}/>
+              {avail.label}
+            </span>
+          )}
+          {spot.spaces != null && !avail && (
             <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
               <Car size={10}/>{spot.spaces} spaces
             </span>
@@ -485,6 +513,11 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote }) => {
           {spot.price && (
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
               {spot.price}
+            </span>
+          )}
+          {spot.ev?.available && (
+            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
+              <Zap size={9}/>EV {spot.ev.ports} × {spot.ev.speed}
             </span>
           )}
         </div>
@@ -498,6 +531,12 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote }) => {
             className="flex items-center gap-1.5 text-xs bg-[#1a2332] text-white px-3 py-2 rounded-full font-semibold hover:bg-[#243447] active:scale-95 transition-all">
             <Navigation size={11}/>Directions
           </a>
+          {onBook && (
+            <button onClick={()=>onBook(spot)}
+              className="flex items-center gap-1.5 text-xs bg-green-600 text-white px-3 py-2 rounded-full font-semibold hover:bg-green-700 active:scale-95 transition-all">
+              <Receipt size={11}/>Book
+            </button>
+          )}
           <button onClick={handleShare}
             className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold border transition-all active:scale-95 ${
               shareDone ? 'bg-green-50 border-green-300 text-green-700' : 'border-gray-200 text-gray-600 hover:border-[#4a9eff] hover:text-[#4a9eff]'
@@ -582,7 +621,7 @@ const SORT_OPTIONS = [
   { id:'alpha',   label:'A–Z' },
 ];
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -640,7 +679,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
           value={query}
           onChange={e=>setQuery(e.target.value)}
           onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
-          placeholder="Search 47 Belfast parking spots…"
+          placeholder="Search 54 Belfast parking spots…"
           className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
         />
         {query && (
@@ -703,12 +742,12 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
         <ParkingMap spots={filtered} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
       )}
 
-      {/* Area chips (when not searching) */}
+      {/* Keyword chips (when not searching) */}
       {!isSearching && (
         <div>
-          <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold mb-2">Search by area</p>
+          <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold mb-2">Quick search</p>
           <div className="flex flex-wrap gap-2">
-            {AREAS.map(a=>(
+            {SEARCH_KEYWORDS.map(a=>(
               <button key={a} onClick={()=>doSearch(a)}
                 className="text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full hover:border-[#4a9eff] hover:text-[#4a9eff] transition-all shadow-sm">
                 {a}
@@ -731,7 +770,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
       ) : (
         <div className="space-y-4">
           {filtered.map(s=>(
-            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote}/>
+            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
           ))}
         </div>
       )}
@@ -740,7 +779,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
 };
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
-const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
+const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
   const [loc,     setLoc]     = useState(null);
   const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
@@ -796,7 +835,7 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
       <div className="space-y-4">
         {nearby.map(s=>(
           <SpotCard key={s.id} spot={{...s, dist:Math.round(s.realDist*10)/10}}
-            saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote}/>
+            saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
         ))}
       </div>
     </div>
@@ -906,7 +945,7 @@ const BusinessesTab = ({ onGetListed }) => {
 };
 
 // ── SavedTab ──────────────────────────────────────────────────────────────────
-const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
+const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
   const spots = SPOTS.filter(s => saved.has(s.id));
 
   if (!spots.length) return (
@@ -934,7 +973,7 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote }) => {
       )}
       <div className="space-y-4">
         {spots.map(s=>(
-          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote}/>
+          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
         ))}
       </div>
     </div>
@@ -1128,6 +1167,87 @@ const IOSGuide = ({ onClose }) => (
   </div>
 );
 
+// ── Booking Modal ─────────────────────────────────────────────────────────────
+const DURATIONS = [1, 2, 3, 4];
+const BookingModal = ({ spot, onClose, onConfirm }) => {
+  const [hours, setHours] = useState(2);
+  if (!spot) return null;
+  const total = spot.pricing?.free ? 'FREE' : spot.price
+    ? `£${(parseFloat(spot.price) * hours).toFixed(2)}`
+    : (spot.badge === 'free' || spot.badge === 'hidden_gem') ? 'FREE' : null;
+  const ref = `PE-${Date.now().toString().slice(-6)}`;
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+        <div style={{background:'#1a2332'}} className="px-6 py-5 flex items-center justify-between">
+          <div>
+            <h2 className="text-white font-bold text-base leading-snug">{spot.name}</h2>
+            <p className="text-blue-300 text-xs mt-0.5">Booking ref: {ref}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30">
+            <X size={16}/>
+          </button>
+        </div>
+        <div className="p-6 space-y-5">
+          <div>
+            <p className="text-sm font-bold text-gray-800 mb-2">Duration</p>
+            <div className="flex gap-2">
+              {DURATIONS.map(h => (
+                <button key={h} onClick={()=>setHours(h)}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                    hours===h ? 'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff]' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-300'
+                  }`}>{h}h</button>
+              ))}
+            </div>
+          </div>
+          <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Location</span><span className="font-semibold text-gray-800 text-right max-w-[55%] truncate">{spot.name}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Duration</span><span className="font-semibold text-gray-800">{hours} hour{hours>1?'s':''}</span></div>
+            <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
+              <span className="font-bold text-gray-800">Total</span>
+              <span className={`font-extrabold text-base ${total==='FREE'?'text-green-600':'text-gray-900'}`}>{total||'See on site'}</span>
+            </div>
+          </div>
+          <button onClick={()=>onConfirm({spot,hours,total,ref,date:new Date()})}
+            className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-sm hover:bg-green-700 active:scale-[0.98] transition-all shadow-md">
+            Confirm Booking →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Booking History tab ───────────────────────────────────────────────────────
+const BookingHistoryTab = ({ bookings }) => {
+  if (!bookings.length) return (
+    <div className="p-8 flex flex-col items-center text-center space-y-4">
+      <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center"><Receipt size={32} className="text-gray-300"/></div>
+      <h3 className="text-xl font-bold text-gray-900">No bookings yet</h3>
+      <p className="text-sm text-gray-500 max-w-xs leading-relaxed">Book a parking spot and your receipt will appear here.</p>
+    </div>
+  );
+  return (
+    <div className="p-4 space-y-3">
+      <p className="text-sm font-bold text-gray-900">{bookings.length} booking{bookings.length!==1?'s':''}</p>
+      {bookings.map(b=>(
+        <div key={b.ref} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-bold text-gray-900 text-sm leading-snug">{b.spot.name}</p>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 whitespace-nowrap">Confirmed</span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+            <span>Ref: <span className="font-semibold text-gray-700">{b.ref}</span></span>
+            <span>Duration: <span className="font-semibold text-gray-700">{b.hours}h</span></span>
+            <span>Date: <span className="font-semibold text-gray-700">{new Date(b.date).toLocaleDateString('en-GB')}</span></span>
+            <span>Total: <span className={`font-bold ${b.total==='FREE'?'text-green-600':'text-gray-900'}`}>{b.total||'—'}</span></span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // ── Install Banner ────────────────────────────────────────────────────────────
 const InstallBanner = ({ onInstall, onDismiss, isIOS }) => (
   <div className="mx-3 mt-3 bg-gradient-to-r from-[#1a2332] to-[#2d4a6e] text-white px-4 py-3 rounded-2xl flex items-center gap-3 shadow-lg">
@@ -1156,6 +1276,7 @@ const TABS = [
   { id:'nearby',     label:'Nearby',     Icon:Crosshair },
   { id:'businesses', label:'Local',      Icon:Building2 },
   { id:'saved',      label:'Saved',      Icon:Bookmark  },
+  { id:'bookings',   label:'Bookings',   Icon:Receipt   },
   { id:'add',        label:'Add Spot',   Icon:Plus      },
 ];
 
@@ -1174,6 +1295,10 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstall,    setShowInstall]    = useState(false);
   const [showIOSGuide,   setShowIOSGuide]   = useState(false);
+  const [bookings,       setBookings]       = useState(()=>ls.get('pe_bookings', []));
+  const [bookingSpot,    setBookingSpot]    = useState(null);
+  const [parkingTimer,   setParkingTimer]   = useState(()=>ls.get('pe_timer', null));
+  const [timerRemaining, setTimerRemaining] = useState(null);
 
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
@@ -1194,6 +1319,27 @@ export default function App() {
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
+
+  useEffect(() => {
+    if (!parkingTimer) { setTimerRemaining(null); return; }
+    const tick = () => {
+      const remaining = Math.max(0, parkingTimer.endsAt - Date.now());
+      setTimerRemaining(remaining);
+      if (remaining === 0) {
+        alert(`⏰ Your parking has expired at ${parkingTimer.name}!`);
+        setParkingTimer(null);
+        ls.set('pe_timer', null);
+      } else if (remaining <= 15 * 60 * 1000 && !parkingTimer.alerted15) {
+        alert(`⚠️ 15 minutes left at ${parkingTimer.name}!`);
+        const updated = { ...parkingTimer, alerted15: true };
+        setParkingTimer(updated);
+        ls.set('pe_timer', updated);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [parkingTimer]);
 
   const handleInstall = async () => {
     if (isIOS) { setShowInstall(false); setShowIOSGuide(true); return; }
@@ -1247,6 +1393,19 @@ export default function App() {
     });
   };
 
+  const handleBook = (spot) => setBookingSpot(spot);
+
+  const confirmBooking = (booking) => {
+    const saved = [booking, ...bookings];
+    setBookings(saved);
+    ls.set('pe_bookings', saved);
+    const timer = { name: booking.spot.name, endsAt: Date.now() + booking.hours * 60 * 60 * 1000, alerted15: false };
+    setParkingTimer(timer);
+    ls.set('pe_timer', timer);
+    setBookingSpot(null);
+    setTab('bookings');
+  };
+
   const handleSpotAdded = () => {
     if (!user) return;
     const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
@@ -1261,6 +1420,7 @@ export default function App() {
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
       {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)}/>}
       {showIOSGuide && <IOSGuide onClose={()=>setShowIOSGuide(false)}/>}
+      {bookingSpot  && <BookingModal spot={bookingSpot} onClose={()=>setBookingSpot(null)} onConfirm={confirmBooking}/>}
       {showUserMenu && (
         <UserMenu user={user} spotsAdded={user?.spotsAdded||0} isPremium={isPremium}
           onSignOut={handleSignOut}
@@ -1276,7 +1436,15 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
-            <p className="text-blue-400 text-[10px] font-medium">Belfast · 47 spots</p>
+            {timerRemaining != null && timerRemaining > 0
+              ? (
+                <p className="text-[10px] font-bold flex items-center gap-1" style={{color: timerRemaining <= 15*60*1000 ? '#fbbf24' : '#4ade80'}}>
+                  <Timer size={9}/>
+                  {`${Math.floor(timerRemaining/60000).toString().padStart(2,'0')}:${Math.floor((timerRemaining%60000)/1000).toString().padStart(2,'0')} remaining`}
+                </p>
+              )
+              : <p className="text-blue-400 text-[10px] font-medium">Belfast · 54 spots</p>
+            }
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -1315,10 +1483,11 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot}/>}
-        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
+        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
-        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot}/>}
+        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
+        {tab==='bookings'   && <BookingHistoryTab bookings={bookings}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
       </main>
 
@@ -1327,7 +1496,7 @@ export default function App() {
         <div className="flex" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
           {TABS.map(({id,label,Icon})=>{
             const active = tab===id;
-            const pill   = id==='saved' && saved.size>0 ? saved.size : null;
+            const pill   = id==='saved' && saved.size>0 ? saved.size : id==='bookings' && bookings.length>0 ? bookings.length : null;
             return (
               <button key={id} onClick={()=>setTab(id)}
                 className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors active:bg-gray-50 ${
