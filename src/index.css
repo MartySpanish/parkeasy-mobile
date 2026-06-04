@@ -15,3 +15,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Keep Leaflet's map layers (tiles, pins, zoom controls) contained in their own
+   stacking context so they can never render on top of modals/popups like the
+   login or install screens. */
+.leaflet-container {
+  isolation: isolate;
+  z-index: 0;
+}
