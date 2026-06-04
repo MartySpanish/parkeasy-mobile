@@ -9,9 +9,19 @@ on:
 permissions:
   contents: write
 
+# Cancel any in-progress build when a new commit lands, so runs don't pile up.
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Keep Gradle in a single foreground process (no lingering daemon that can
+      # stall on the free runner) and give the JVM enough headroom.
+      GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
 
     steps:
       - name: Checkout
@@ -28,6 +38,16 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Install dependencies
         run: npm ci
@@ -48,7 +68,8 @@ jobs:
         run: chmod +x android/gradlew
 
       - name: Build debug APK
-        run: cd android && ./gradlew assembleDebug
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
