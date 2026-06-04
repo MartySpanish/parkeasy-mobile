@@ -1,7 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#1a2332"/>
-  <circle cx="256" cy="256" r="160" fill="#4a9eff"/>
-  <text x="256" y="318" text-anchor="middle"
-    font-family="-apple-system,system-ui,sans-serif"
-    font-size="220" font-weight="900" fill="white">P</text>
+  <rect width="512" height="512" rx="102" fill="#1a2332"/>
+  <circle cx="256" cy="210" r="152" fill="#4a9eff"/>
+  <text x="256" y="272" text-anchor="middle"
+    font-family="-apple-system,system-ui,'Helvetica Neue',sans-serif"
+    font-size="200" font-weight="900" fill="white">P</text>
+  <text x="176" y="400" text-anchor="start"
+    font-family="-apple-system,system-ui,'Helvetica Neue',sans-serif"
+    font-size="76" font-weight="900" fill="white">Park</text>
+  <text x="355" y="400" text-anchor="start"
+    font-family="-apple-system,system-ui,'Helvetica Neue',sans-serif"
+    font-size="76" font-weight="900" fill="#4a9eff">Easy</text>
 </svg>
