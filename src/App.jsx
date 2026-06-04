@@ -8,6 +8,7 @@ import {
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt,
 } from 'lucide-react';
+import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -225,21 +226,87 @@ const Badge = ({ type, sm }) => {
 
 // ── Welcome / Auth Modal ──────────────────────────────────────────────────────
 const WelcomeModal = ({ onJoin, onSkip }) => {
+  // 'signup' or 'login'. With real accounts (Supabase) we let people do both.
+  const [mode, setMode]   = useState('signup');
   const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError]   = useState('');
+  const [notice, setNotice] = useState('');
+
+  const friendlyError = (msg='') => {
+    const m = msg.toLowerCase();
+    if (m.includes('invalid login')) return 'Wrong email or password. Try again, or reset your password.';
+    if (m.includes('already registered') || m.includes('already been registered')) return 'That email already has an account — switch to "Log in".';
+    if (m.includes('password') && m.includes('6')) return 'Password must be at least 6 characters.';
+    if (m.includes('email') && m.includes('confirm')) return 'Please confirm your email first — check your inbox.';
+    return msg || 'Something went wrong. Please try again.';
+  };
 
   const submit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    const userData = { name: name.trim(), email: email.trim(), joined: new Date().toISOString(), spotsAdded: 0 };
-    await notifyAdmin(name.trim(), email.trim());
-    onJoin(userData);
+    setError(''); setNotice(''); setLoading(true);
+
+    // Fallback: real accounts not configured yet → keep the simple
+    // "remember me on this device" behaviour so the app still works.
+    if (!isSupabaseEnabled) {
+      const userData = { name: name.trim(), email: email.trim(), joined: new Date().toISOString(), spotsAdded: 0 };
+      await notifyAdmin(name.trim(), email.trim());
+      onJoin(userData);
+      return;
+    }
+
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { data: { name: name.trim() } },
+        });
+        if (error) throw error;
+        await notifyAdmin(name.trim(), email.trim());
+        if (!data.session) {
+          // Email confirmation is required (default in Supabase).
+          setNotice('Almost there! Check your email for a confirmation link, then log in.');
+          setMode('login');
+          setPassword('');
+          setLoading(false);
+          return;
+        }
+        onJoin(sessionToUser(data.session, name.trim()));
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+        onJoin(sessionToUser(data.session));
+      }
+    } catch (err) {
+      setError(friendlyError(err?.message));
+      setLoading(false);
+    }
   };
 
+  const resetPassword = async () => {
+    setError(''); setNotice('');
+    if (!isSupabaseEnabled) return;
+    if (!email.trim()) { setError('Enter your email above first, then tap reset.'); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+    if (error) setError(friendlyError(error.message));
+    else setNotice('Password reset link sent — check your email.');
+  };
+
+  const isSignup = mode === 'signup';
+  const submitLabel = loading
+    ? '⏳ Please wait…'
+    : isSupabaseEnabled
+      ? (isSignup ? 'Create my account →' : 'Log in →')
+      : "Join the community — it's free →";
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl my-auto">
         <div style={{ background: 'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)' }} className="px-6 pt-8 pb-6 text-center">
           <div className="w-16 h-16 bg-[#4a9eff] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <MapPin size={30} className="text-white" strokeWidth={2.5}/>
@@ -259,22 +326,55 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
             ))}
           </div>
 
+          {isSupabaseEnabled && (
+            <div className="flex bg-gray-100 rounded-xl p-1 text-sm font-bold">
+              {[['signup','Sign up'],['login','Log in']].map(([m,label])=>(
+                <button key={m} type="button"
+                  onClick={()=>{ setMode(m); setError(''); setNotice(''); }}
+                  className={`flex-1 py-2 rounded-lg transition-all ${mode===m ? 'bg-white text-[#1a2332] shadow-sm' : 'text-gray-400'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <form onSubmit={submit} className="space-y-3">
-            <input
-              required value={name} onChange={e=>setName(e.target.value)}
-              placeholder="Your first name"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"
-            />
+            {isSignup && (
+              <input
+                required value={name} onChange={e=>setName(e.target.value)}
+                placeholder="Your first name"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"
+              />
+            )}
             <input
               required type="email" value={email} onChange={e=>setEmail(e.target.value)}
-              placeholder="Email address"
+              placeholder="Email address" autoComplete="email"
               className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"
             />
+            {isSupabaseEnabled && (
+              <input
+                required type="password" value={password} onChange={e=>setPassword(e.target.value)}
+                placeholder={isSignup ? 'Create a password (min 6 characters)' : 'Password'}
+                autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={6}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"
+              />
+            )}
+
+            {error  && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+            {notice && <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2">{notice}</p>}
+
             <button type="submit" disabled={loading}
               className="w-full bg-[#4a9eff] text-white py-3.5 rounded-xl font-bold text-sm hover:bg-blue-500 active:scale-[0.98] transition-all shadow-md disabled:opacity-60">
-              {loading ? '⏳ Joining…' : 'Join the community — it\'s free →'}
+              {submitLabel}
             </button>
           </form>
+
+          {isSupabaseEnabled && !isSignup && (
+            <button onClick={resetPassword} type="button"
+              className="w-full text-center text-xs text-[#4a9eff] hover:underline">
+              Forgot your password?
+            </button>
+          )}
 
           <button onClick={onSkip} className="w-full text-center text-xs text-gray-400 hover:text-gray-600 py-1 transition-colors">
             Browse without an account
@@ -1314,6 +1414,23 @@ export default function App() {
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
 
+  // Real accounts: restore any existing session and react to login/logout.
+  useEffect(() => {
+    if (!isSupabaseEnabled) return;
+    const applySession = (session) => {
+      if (session) {
+        const prev = ls.get('pe_user', null);
+        const u = { ...sessionToUser(session), spotsAdded: prev?.spotsAdded || 0 };
+        setUser(u); ls.set('pe_user', u); setShowWelcome(false);
+      } else {
+        setUser(null); ls.set('pe_user', null);
+      }
+    };
+    supabase.auth.getSession().then(({ data }) => applySession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => applySession(session));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('premium') === 'success') {
@@ -1369,7 +1486,8 @@ export default function App() {
     setShowWelcome(false);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    if (isSupabaseEnabled) { try { await supabase.auth.signOut(); } catch { /* ignore */ } }
     setUser(null);
     ls.set('pe_user', null);
     ls.set('pe_skipped', false);

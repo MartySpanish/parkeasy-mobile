@@ -28,6 +28,8 @@ jobs:
         run: npm run build
         env:
           VITE_STRIPE_PREMIUM_LINK: ${{ secrets.VITE_STRIPE_PREMIUM_LINK }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
