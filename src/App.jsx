@@ -480,7 +480,14 @@ const PricingModal = ({ isPremium, onClose }) => {
         </div>
         <div className="p-6 space-y-4">
           <div className="space-y-2">
-            {[['⚡','Real-time spot updates & alerts'],['🗺️','Offline maps — works without signal'],['🔔','Notifications when spots free up'],['💎','Premium badge on your profile']].map(([icon,text])=>(
+            {[
+              ['🔍','See all spots — free users see top 10 only'],
+              ['📍','Sort by distance — nearest spots first'],
+              ['⚡','EV charging filter — find charge points'],
+              ['🗺️','Offline maps — works without signal'],
+              ['🔔','Notifications when spots free up'],
+              ['💎','Premium badge on your profile'],
+            ].map(([icon,text])=>(
               <div key={text} className="flex items-center gap-3 text-sm text-gray-700">
                 <span className="w-6 text-center text-base">{icon}</span><span>{text}</span>
               </div>
@@ -555,9 +562,13 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }
 // ── SpotCard ──────────────────────────────────────────────────────────────────
 const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }) => {
   const [shareDone, setShareDone] = useState(false);
+  const [imgErr,    setImgErr]    = useState(false);
   const isOfficial = ['NCP Belfast','Q-Park Belfast','Belfast City Council','Official'].includes(spot.by);
   const freeNow = isFreeNow(spot);
   const avail = getAvailability(spot);
+
+  const svUrl = !spot.photo && !imgErr ? streetViewUrl(spot.lat, spot.lng) : null;
+  const photoSrc = spot.photo || svUrl;
 
   const handleShare = async () => {
     const text = `${spot.name} — ${spot.notes.slice(0,100)}`;
@@ -575,10 +586,10 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
       <div
         className="relative h-40 overflow-hidden flex items-center justify-center"
-        style={{ background: spot.photo ? undefined : 'linear-gradient(135deg,#1a2332 0%,#243447 100%)' }}
+        style={{ background: photoSrc ? undefined : 'linear-gradient(135deg,#1a2332 0%,#243447 100%)' }}
       >
-        {spot.photo
-          ? <img src={spot.photo} alt={spot.name} className="w-full h-full object-cover"/>
+        {photoSrc
+          ? <img src={photoSrc} alt={spot.name} className="w-full h-full object-cover" onError={()=>setImgErr(true)}/>
           : <div className="flex flex-col items-center gap-2 opacity-20"><Car size={40} className="text-white"/></div>}
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none"/>
@@ -726,19 +737,48 @@ const BADGE_FILTERS = [
   { id:'timed',     label:'⏱ Timed',   color:'#9a3412', bg:'#fff7ed' },
 ];
 
-const SORT_OPTIONS = [
+const SORT_OPTIONS_FREE    = [
   { id:'popular', label:'Most Popular' },
   { id:'free',    label:'Free First' },
   { id:'alpha',   label:'A–Z' },
 ];
+const SORT_OPTIONS_PREMIUM = [
+  { id:'popular',  label:'Most Popular' },
+  { id:'free',     label:'Free First' },
+  { id:'distance', label:'📍 Nearest' },
+  { id:'alpha',    label:'A–Z' },
+];
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
+const FREE_RESULTS_LIMIT = 10;
+
+const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+
+const streetViewUrl = (lat, lng) =>
+  GOOGLE_MAPS_KEY
+    ? `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=0&key=${GOOGLE_MAPS_KEY}`
+    : null;
+
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
   const [showMap,     setShowMap]     = useState(true);
   const [showSort,    setShowSort]    = useState(false);
+  const [evOnly,      setEvOnly]      = useState(false);
+  const [userLoc,     setUserLoc]     = useState(null);
   const inputRef = useRef(null);
+
+  const SORT_OPTIONS = isPremium ? SORT_OPTIONS_PREMIUM : SORT_OPTIONS_FREE;
+
+  // Grab location when distance sort is chosen
+  useEffect(() => {
+    if (sortBy === 'distance' && !userLoc) {
+      navigator.geolocation?.getCurrentPosition(
+        ({coords:{latitude:lat,longitude:lng}}) => setUserLoc([lat,lng]),
+        () => setSortBy('popular')
+      );
+    }
+  }, [sortBy]);
 
   const filtered = useMemo(() => {
     let spots = SPOTS;
@@ -757,6 +797,10 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
       spots = spots.filter(s => s.badge === badgeFilter);
     }
 
+    if (evOnly) {
+      spots = spots.filter(s => s.ev?.available);
+    }
+
     return [...spots].sort((a, b) => {
       if (sortBy === 'popular') return b.votes - a.votes;
       if (sortBy === 'free') {
@@ -764,13 +808,19 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
         const fb = ['free','hidden_gem'].includes(b.badge) ? 0 : 1;
         return fa - fb || b.votes - a.votes;
       }
+      if (sortBy === 'distance' && userLoc) {
+        return haversine(userLoc[0],userLoc[1],a.lat,a.lng) - haversine(userLoc[0],userLoc[1],b.lat,b.lng);
+      }
       if (sortBy === 'alpha') return a.name.localeCompare(b.name);
       return 0;
     });
-  }, [query, badgeFilter, sortBy]);
+  }, [query, badgeFilter, sortBy, evOnly, userLoc]);
 
-  const isSearching = query.trim().length > 0 || badgeFilter !== 'all';
-  const mapCenter = filtered.length ? [filtered[0].lat, filtered[0].lng] : BELFAST_CENTER;
+  const visibleSpots = isPremium ? filtered : filtered.slice(0, FREE_RESULTS_LIMIT);
+  const hiddenCount  = isPremium ? 0 : Math.max(0, filtered.length - FREE_RESULTS_LIMIT);
+
+  const isSearching = query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
+  const mapCenter = visibleSpots.length ? [visibleSpots[0].lat, visibleSpots[0].lng] : BELFAST_CENTER;
   const mapZoom = isSearching ? 13 : 12;
 
   const doSearch = (q) => {
@@ -848,9 +898,19 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
         </div>
       </div>
 
+      {/* EV filter toggle (premium) */}
+      {isPremium && (
+        <button onClick={()=>setEvOnly(v=>!v)}
+          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border font-semibold transition-all ${
+            evOnly ? 'bg-yellow-400 text-yellow-900 border-yellow-400' : 'bg-white text-gray-600 border-gray-200 hover:border-yellow-400'
+          }`}>
+          <Zap size={11}/> EV charging only
+        </button>
+      )}
+
       {/* Map */}
       {showMap && (
-        <ParkingMap spots={filtered} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
+        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
       )}
 
       {/* Keyword chips (when not searching) */}
@@ -876,13 +936,22 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
           </div>
           <p className="font-bold text-gray-700">No spots found</p>
           <p className="text-sm text-gray-400 mt-1">Try searching "City Centre" or "Cathedral Quarter"</p>
-          <button onClick={()=>{setQuery('');setBadgeFilter('all');}} className="mt-3 text-xs text-[#4a9eff] font-semibold underline">Clear filters</button>
+          <button onClick={()=>{setQuery('');setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#4a9eff] font-semibold underline">Clear filters</button>
         </div>
       ) : (
         <div className="space-y-4">
-          {filtered.map(s=>(
+          {visibleSpots.map(s=>(
             <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
           ))}
+          {hiddenCount > 0 && (
+            <div onClick={onUpgrade}
+              className="rounded-2xl border-2 border-dashed border-yellow-300 bg-yellow-50 p-5 text-center cursor-pointer hover:bg-yellow-100 transition-colors">
+              <p className="text-2xl mb-1">🔒</p>
+              <p className="font-bold text-gray-900 text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available</p>
+              <p className="text-xs text-gray-500 mt-0.5 mb-3">Upgrade to Premium to see all {filtered.length} results, sort by distance, and more</p>
+              <span className="inline-block bg-yellow-400 text-yellow-900 text-xs font-bold px-4 py-2 rounded-full shadow">★ Unlock Premium</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1612,7 +1681,7 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
