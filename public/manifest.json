@@ -2,8 +2,8 @@
   "name": "ParkEasy Belfast",
   "short_name": "ParkEasy",
   "description": "Find where locals actually park in Belfast — street spots, hidden gems and official car parks.",
-  "start_url": "/parkeasy-mobile/",
-  "scope": "/parkeasy-mobile/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#1a2332",
   "theme_color": "#1a2332",
@@ -12,19 +12,19 @@
   "lang": "en-GB",
   "icons": [
     {
-      "src": "/parkeasy-mobile/icon.svg",
+      "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/parkeasy-mobile/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/parkeasy-mobile/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
