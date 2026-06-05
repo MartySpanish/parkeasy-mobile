@@ -572,7 +572,7 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }
 
   const handleShare = async () => {
     const text = `${spot.name} — ${spot.notes.slice(0,100)}`;
-    const url = 'https://martyspanish.github.io/parkeasy-mobile/';
+    const url = 'https://parkeasy.uk/';
     if (navigator.share) {
       try { await navigator.share({ title:'ParkEasy Belfast', text, url }); } catch {}
     } else {
