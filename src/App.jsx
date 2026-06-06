@@ -1644,7 +1644,7 @@ export default function App() {
       )}
 
       {/* ── Header ── */}
-      <header style={{background:'#1a2332'}} className="sticky top-0 z-50 shadow-lg">
+      <header style={{background:'#1a2332', paddingTop:'env(safe-area-inset-top)'}} className="sticky top-0 z-50 shadow-lg">
         <div className="px-4 py-3 flex items-center gap-3">
           <div className="w-9 h-9 bg-[#4a9eff] rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
             <MapPin size={20} className="text-white" strokeWidth={2.5}/>
