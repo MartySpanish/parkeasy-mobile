@@ -567,7 +567,7 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }
   const freeNow = isFreeNow(spot);
   const avail = getAvailability(spot);
 
-  const svUrl = !spot.photo && !imgErr ? streetViewUrl(spot.lat, spot.lng) : null;
+  const svUrl = !spot.photo && !imgErr ? spotImageUrl(spot.lat, spot.lng) : null;
   const photoSrc = spot.photo || svUrl;
 
   const handleShare = async () => {
@@ -753,10 +753,13 @@ const FREE_RESULTS_LIMIT = 10;
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 
-const streetViewUrl = (lat, lng) =>
+// Returns a street-level image URL for a parking spot.
+// Prefers Google Street View when an API key is configured.
+// Falls back to a free OpenStreetMap static map tile — no key needed.
+const spotImageUrl = (lat, lng) =>
   GOOGLE_MAPS_KEY
     ? `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=0&key=${GOOGLE_MAPS_KEY}`
-    : null;
+    : `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=17&size=600x300&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
 
 const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade }) => {
   const [query,       setQuery]       = useState('');
@@ -1227,9 +1230,9 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
           Your spot will appear after a quick community review. Thanks for helping Belfast drivers!
         </p>
       </div>
-      <div className="w-full bg-gradient-to-r from-[#1a2332] to-[#243447] text-white px-6 py-4 rounded-2xl text-center">
-        <p className="font-bold text-base">🏆 +1 month Premium unlocked</p>
-        <p className="text-blue-300 text-xs mt-0.5">Added to your account</p>
+      <div className="w-full bg-gradient-to-r from-[#1a2332] to-[#243447] text-white px-6 py-4 rounded-2xl text-center space-y-1">
+        <p className="font-bold text-base">🏆 1 month Premium on the way!</p>
+        <p className="text-blue-300 text-xs leading-relaxed">We'll review your spot within 24 hours. Once approved we'll email you a link to activate your free Premium month.</p>
       </div>
       <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);}}
         className="text-[#4a9eff] text-sm font-bold underline">Submit another spot</button>
@@ -1238,9 +1241,21 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
 
   return (
     <div className="p-4 space-y-5">
-      <div className="bg-gradient-to-r from-[#4a9eff] to-purple-500 text-white p-4 rounded-2xl shadow-md">
-        <p className="font-bold text-base">Earn Free Premium, {user.name.split(' ')[0]} 🏆</p>
-        <p className="text-sm opacity-90 mt-0.5 leading-relaxed">Add a spot the community doesn't know about — get 1 free month of Premium.</p>
+      <div className="bg-gradient-to-r from-[#1a2332] to-[#2d4a6e] text-white p-5 rounded-2xl shadow-md">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 bg-yellow-400 rounded-xl flex items-center justify-center flex-shrink-0 shadow">
+            <Star size={20} fill="currentColor" className="text-yellow-900"/>
+          </div>
+          <div>
+            <p className="font-extrabold text-base leading-tight">Add a spot → get 1 month Premium FREE</p>
+            <p className="text-blue-300 text-xs mt-0.5">Activated after we review your spot (within 24hrs)</p>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-3 text-xs text-blue-200">
+          {['See all spots','Sort by distance','EV filter','Premium badge'].map(f=>(
+            <span key={f} className="bg-white/10 px-2 py-1 rounded-full whitespace-nowrap">{f}</span>
+          ))}
+        </div>
       </div>
 
       <form onSubmit={submitSpot} className="space-y-5">
@@ -1609,6 +1624,8 @@ export default function App() {
     const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
     setUser(updated);
     ls.set('pe_user', updated);
+    // Premium is NOT granted here — only after you review and approve the spot.
+    // You email the user a unique link: parkeasy.uk/?premium=success
   };
 
   return (
