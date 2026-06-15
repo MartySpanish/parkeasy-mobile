@@ -48,6 +48,15 @@ const BADGES = {
   official:   { label: '🅿 Official',    bg: '#dbeafe', fg: '#1e3a5f', dot: '#3b82f6' },
 };
 
+// Kerb-marking style indicators — left edge of each SpotCard mimics real kerb paint.
+const KERB = {
+  free:       { color: '#22c55e', style: 'solid',  width: 4 },
+  hidden_gem: { color: '#a855f7', style: 'double', width: 6 },
+  timed:      { color: '#f59e0b', style: 'dashed', width: 4 },
+  paid:       { color: '#eab308', style: 'dashed', width: 4 },
+  official:   { color: '#3b82f6', style: 'solid',  width: 4 },
+};
+
 const BELFAST_CENTER = [54.5973, -5.9301];
 
 // ── Notification email (FormSubmit — free, no config needed) ──────────────────
@@ -142,6 +151,21 @@ const SPOTS = [
   { id:64, name:'Cave Hill Country Park (Upper Cavehill Rd)', near:'Cave Hill', tags:['cave hill','cavehill','country park','walks','hiking','napoleons nose','free parking','north belfast','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — dawn to dusk', notes:'Alternative free car park higher up on Upper Cavehill Road — quicker route to the summit and Napoleon\'s Nose than the castle. Stunning views over the city and lough. Less crowded on busy weekends.', lat:54.6420, lng:-5.9560, by:'CaveHillHiker', votes:54, photo:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop', price:null, spaces:40 },
 ];
 
+// ── Cities (Northern Ireland) ────────────────────────────────────────────────
+// Belfast has full community-sourced spot data. Other towns are listed so
+// people can pick their area and be the first to add local spots.
+const CITIES = [
+  { id:'belfast',      name:'Belfast',           center:[54.5973,-5.9301] },
+  { id:'derry',        name:'Derry~Londonderry', center:[54.9966,-7.3086] },
+  { id:'lisburn',      name:'Lisburn',           center:[54.5162,-6.0581] },
+  { id:'newtownabbey', name:'Newtownabbey',      center:[54.6601,-5.9094] },
+  { id:'bangor',       name:'Bangor',            center:[54.6604,-5.6694] },
+  { id:'newry',        name:'Newry',             center:[54.1751,-6.3402] },
+  { id:'antrim',       name:'Antrim',            center:[54.7140,-6.2110] },
+];
+
+const getCitySpots = (cityId) => cityId === 'belfast' ? SPOTS : [];
+
 const BUSINESSES = [
   { id:1,  name:"Tommy's Barber",       area:'Glen Road',         addr:'245 Glen Road, West Belfast BT11',    cat:'Barber',         icon:'✂️',  key:'glen road barber',   lat:54.5935, lng:-6.0012 },
   { id:2,  name:'Gransha Grill',        area:'Hannahstown',       addr:'Gransha Road, BT17',                  cat:'Restaurant',     icon:'🍽️',  key:'gransha grill',      lat:54.5825, lng:-5.9758 },
@@ -173,6 +197,16 @@ const haversine = (lat1, lng1, lat2, lng2) => {
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+};
+
+// Pick the NI town/city whose centre is closest to a given location.
+const nearestCity = (lat, lng) => {
+  let best = CITIES[0], bestDist = Infinity;
+  for (const c of CITIES) {
+    const d = haversine(lat, lng, c.center[0], c.center[1]);
+    if (d < bestDist) { bestDist = d; best = c; }
+  }
+  return best;
 };
 
 const isFreeNow = (spot) => {
@@ -560,12 +594,13 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }
 );
 
 // ── SpotCard ──────────────────────────────────────────────────────────────────
-const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }) => {
+const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, onViewMap }) => {
   const [shareDone, setShareDone] = useState(false);
   const [imgErr,    setImgErr]    = useState(false);
   const isOfficial = ['NCP Belfast','Q-Park Belfast','Belfast City Council','Official'].includes(spot.by);
   const freeNow = isFreeNow(spot);
   const avail = getAvailability(spot);
+  const kerb = KERB[spot.badge] || KERB.free;
 
   const svUrl = !spot.photo && !imgErr ? spotImageUrl(spot.lat, spot.lng) : null;
   const photoSrc = spot.photo || svUrl;
@@ -583,7 +618,8 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
+      style={{borderLeft: `${kerb.width}px ${kerb.style} ${kerb.color}`}}>
       <div
         className="relative h-40 overflow-hidden flex items-center justify-center"
         style={{ background: photoSrc ? undefined : 'linear-gradient(135deg,#1a2332 0%,#243447 100%)' }}
@@ -665,6 +701,12 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }
             }`}>
             {shareDone ? <><Check size={11}/>Copied!</> : <><Share2 size={11}/>Share</>}
           </button>
+          {onViewMap && (
+            <button onClick={()=>onViewMap(spot)}
+              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold border border-gray-200 text-gray-600 hover:border-[#4a9eff] hover:text-[#4a9eff] active:scale-95 transition-all">
+              <Map size={11}/>Map
+            </button>
+          )}
           <div className="ml-auto text-xs text-gray-400">
             {isOfficial
               ? <span className="font-semibold text-blue-700">{spot.by}</span>
@@ -761,7 +803,7 @@ const spotImageUrl = (lat, lng) =>
     ? `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=0&key=${GOOGLE_MAPS_KEY}`
     : `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=17&size=600x300&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade, citySpots, cityCenter, cityName }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -769,9 +811,20 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
   const [showSort,    setShowSort]    = useState(false);
   const [evOnly,      setEvOnly]      = useState(false);
   const [userLoc,     setUserLoc]     = useState(null);
+  const [focusSpot,   setFocusSpot]   = useState(null);
   const inputRef = useRef(null);
+  const mapRef = useRef(null);
 
   const SORT_OPTIONS = isPremium ? SORT_OPTIONS_PREMIUM : SORT_OPTIONS_FREE;
+
+  // Reset map focus when switching city or search criteria
+  useEffect(() => { setFocusSpot(null); }, [cityCenter, query, badgeFilter, evOnly]);
+
+  const viewOnMap = (spot) => {
+    setFocusSpot(spot);
+    setShowMap(true);
+    setTimeout(() => mapRef.current?.scrollIntoView({behavior:'smooth', block:'center'}), 50);
+  };
 
   // Grab location when distance sort is chosen
   useEffect(() => {
@@ -784,7 +837,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
   }, [sortBy]);
 
   const filtered = useMemo(() => {
-    let spots = SPOTS;
+    let spots = citySpots;
 
     if (query.trim()) {
       const lq = query.toLowerCase().trim();
@@ -817,21 +870,21 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
       if (sortBy === 'alpha') return a.name.localeCompare(b.name);
       return 0;
     });
-  }, [query, badgeFilter, sortBy, evOnly, userLoc]);
+  }, [citySpots, query, badgeFilter, sortBy, evOnly, userLoc]);
 
   const visibleSpots = isPremium ? filtered : filtered.slice(0, FREE_RESULTS_LIMIT);
   const hiddenCount  = isPremium ? 0 : Math.max(0, filtered.length - FREE_RESULTS_LIMIT);
 
   const isSearching = query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
-  const mapCenter = visibleSpots.length ? [visibleSpots[0].lat, visibleSpots[0].lng] : BELFAST_CENTER;
-  const mapZoom = isSearching ? 13 : 12;
+  const mapCenter = focusSpot ? [focusSpot.lat, focusSpot.lng] : visibleSpots.length ? [visibleSpots[0].lat, visibleSpots[0].lng] : cityCenter;
+  const mapZoom = focusSpot ? 16 : isSearching ? 13 : 12;
 
   const doSearch = (q) => {
     setQuery(q);
     inputRef.current?.blur();
   };
 
-  const freeCount = SPOTS.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
+  const freeCount = citySpots.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
 
   return (
     <div className="p-4 space-y-4">
@@ -843,7 +896,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           value={query}
           onChange={e=>setQuery(e.target.value)}
           onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
-          placeholder={`Search ${SPOTS.length} Belfast parking spots…`}
+          placeholder={citySpots.length ? `Search ${citySpots.length} ${cityName} parking spots…` : `Search ${cityName} parking spots…`}
           className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
         />
         {query && (
@@ -913,7 +966,9 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
 
       {/* Map */}
       {showMap && (
-        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
+        <div ref={mapRef}>
+          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
+        </div>
       )}
 
       {/* Keyword chips (when not searching) */}
@@ -937,14 +992,23 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Search size={24} className="text-gray-300"/>
           </div>
-          <p className="font-bold text-gray-700">No spots found</p>
-          <p className="text-sm text-gray-400 mt-1">Try searching "City Centre" or "Cathedral Quarter"</p>
-          <button onClick={()=>{setQuery('');setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#4a9eff] font-semibold underline">Clear filters</button>
+          {citySpots.length === 0 ? (
+            <>
+              <p className="font-bold text-gray-700">No spots in {cityName} yet</p>
+              <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto leading-relaxed">Be the first to share a great parking spot in {cityName} — tap "Add Spot" below.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-bold text-gray-700">No spots found</p>
+              <p className="text-sm text-gray-400 mt-1">Try searching "City Centre" or "Cathedral Quarter"</p>
+              <button onClick={()=>{setQuery('');setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#4a9eff] font-semibold underline">Clear filters</button>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
           {visibleSpots.map(s=>(
-            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
+            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap}/>
           ))}
           {hiddenCount > 0 && (
             <div onClick={onUpgrade}
@@ -962,20 +1026,25 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
 };
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
-const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
+const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, cityName, onCityDetected }) => {
   const [loc,     setLoc]     = useState(null);
   const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
   const [err,     setErr]     = useState('');
+  const [focusSpot, setFocusSpot] = useState(null);
+  const mapRef = useRef(null);
 
   const buildNearby = useCallback((lat, lng) => {
-    const sorted = SPOTS
+    // Detect which NI town/city the user is closest to and switch to it.
+    const city = nearestCity(lat, lng);
+    onCityDetected?.(city.id);
+    const sorted = getCitySpots(city.id)
       .map(s => ({...s, realDist: haversine(lat, lng, s.lat, s.lng)}))
       .sort((a,b) => a.realDist - b.realDist)
       .slice(0, 12);
     setNearby(sorted);
     setLoading(false);
-  }, []);
+  }, [onCityDetected]);
 
   const findNearby = () => {
     setLoading(true); setErr('');
@@ -983,6 +1052,11 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
       ({coords:{latitude:lat,longitude:lng}}) => { setLoc([lat,lng]); buildNearby(lat,lng); },
       () => { const lat=54.5973,lng=-5.9301; setLoc([lat,lng]); buildNearby(lat,lng); setErr('Location access denied — showing spots from Belfast city centre.'); }
     );
+  };
+
+  const viewOnMap = (spot) => {
+    setFocusSpot(spot);
+    setTimeout(() => mapRef.current?.scrollIntoView({behavior:'smooth', block:'center'}), 50);
   };
 
   if (!loc) return (
@@ -993,7 +1067,7 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
       <div>
         <h3 className="text-xl font-bold text-gray-900">Parking Near You</h3>
         <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
-          See the closest community-verified spots to your current location in Belfast.
+          See the closest community-verified spots to your current location — we'll find your town automatically.
         </p>
       </div>
       <button onClick={findNearby} disabled={loading}
@@ -1010,15 +1084,22 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
           <Info size={14} className="mt-0.5 flex-shrink-0"/><span>{err}</span>
         </div>
       )}
-      <ParkingMap spots={nearby} center={loc} zoom={13} height={240}/>
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-gray-900">{nearby.length} closest spots</p>
-        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
+      <div ref={mapRef}>
+        <ParkingMap spots={nearby} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240}/>
       </div>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-gray-900">{nearby.length ? `${nearby.length} closest spots in ${cityName}` : `No spots near you yet`}</p>
+        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
+      </div>
+      {nearby.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-sm text-gray-400 max-w-xs mx-auto leading-relaxed">No community spots in {cityName} yet — be the first to add one from the "Add Spot" tab!</p>
+        </div>
+      )}
       <div className="space-y-4">
         {nearby.map(s=>(
           <SpotCard key={s.id} spot={{...s, dist:Math.round(s.realDist*10)/10}}
-            saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
+            saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap}/>
         ))}
       </div>
     </div>
@@ -1130,6 +1211,13 @@ const BusinessesTab = ({ onGetListed }) => {
 // ── SavedTab ──────────────────────────────────────────────────────────────────
 const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
   const spots = SPOTS.filter(s => saved.has(s.id));
+  const [focusSpot, setFocusSpot] = useState(null);
+  const mapRef = useRef(null);
+
+  const viewOnMap = (spot) => {
+    setFocusSpot(spot);
+    setTimeout(() => mapRef.current?.scrollIntoView({behavior:'smooth', block:'center'}), 50);
+  };
 
   if (!spots.length) return (
     <div className="p-8 flex flex-col items-center text-center space-y-4">
@@ -1151,12 +1239,14 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => 
         <p className="text-sm font-bold text-gray-900">{spots.length} saved spot{spots.length!==1?'s':''}</p>
         <span className="text-xs text-gray-400">Tap bookmark to remove</span>
       </div>
-      {spots.length > 1 && (
-        <ParkingMap spots={spots} center={[spots[0].lat, spots[0].lng]} zoom={12} height={200}/>
+      {(spots.length > 1 || focusSpot) && (
+        <div ref={mapRef}>
+          <ParkingMap spots={spots} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : [spots[0].lat, spots[0].lng]} zoom={focusSpot ? 16 : 12} height={200}/>
+        </div>
       )}
       <div className="space-y-4">
         {spots.map(s=>(
-          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
+          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap}/>
         ))}
       </div>
     </div>
@@ -1470,7 +1560,6 @@ const TABS = [
   { id:'search',     label:'Search',     Icon:Search    },
   { id:'nearby',     label:'Nearby',     Icon:Crosshair },
   { id:'businesses', label:'Local',      Icon:Building2 },
-  { id:'saved',      label:'Saved',      Icon:Bookmark  },
   { id:'bookings',   label:'Bookings',   Icon:Receipt   },
   { id:'add',        label:'Add Spot',   Icon:Plus      },
 ];
@@ -1494,9 +1583,20 @@ export default function App() {
   const [bookingSpot,    setBookingSpot]    = useState(null);
   const [parkingTimer,   setParkingTimer]   = useState(()=>ls.get('pe_timer', null));
   const [timerRemaining, setTimerRemaining] = useState(null);
+  const [city,           setCity]           = useState(()=>ls.get('pe_city', 'belfast'));
+  const [showCityPicker, setShowCityPicker] = useState(false);
 
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
+
+  const currentCity = CITIES.find(c => c.id === city) || CITIES[0];
+  const citySpots   = getCitySpots(currentCity.id);
+
+  const changeCity = (id) => {
+    setCity(id);
+    ls.set('pe_city', id);
+    setShowCityPicker(false);
+  };
 
   // Real accounts: restore any existing session and react to login/logout.
   useEffect(() => {
@@ -1649,7 +1749,7 @@ export default function App() {
           <div className="w-9 h-9 bg-[#4a9eff] rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
             <MapPin size={20} className="text-white" strokeWidth={2.5}/>
           </div>
-          <div>
+          <div className="relative">
             <h1 className="text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
             {timerRemaining != null && timerRemaining > 0
               ? (
@@ -1658,11 +1758,43 @@ export default function App() {
                   {`${Math.floor(timerRemaining/60000).toString().padStart(2,'0')}:${Math.floor((timerRemaining%60000)/1000).toString().padStart(2,'0')} remaining`}
                 </p>
               )
-              : <p className="text-blue-400 text-[10px] font-medium">Belfast · {SPOTS.length} spots</p>
+              : (
+                <button onClick={()=>setShowCityPicker(v=>!v)}
+                  className="text-blue-400 text-[10px] font-medium flex items-center gap-0.5 hover:text-blue-300 active:scale-95 transition">
+                  {currentCity.name} · {citySpots.length} spot{citySpots.length!==1?'s':''}
+                  <ChevronRight size={10} className={`transition-transform ${showCityPicker?'rotate-90':''}`}/>
+                </button>
+              )
             }
+            {showCityPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={()=>setShowCityPicker(false)}/>
+                <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 w-48 max-h-72 overflow-y-auto">
+                  <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 bg-gray-50">Northern Ireland</p>
+                  {CITIES.map(c=>(
+                    <button key={c.id} onClick={()=>changeCity(c.id)}
+                      className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${c.id===currentCity.id?'text-[#4a9eff] font-bold':'text-gray-700'}`}>
+                      {c.name}
+                      {c.id===currentCity.id && <Check size={12}/>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <button onClick={()=>setTab('saved')}
+              className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/20 ${
+                tab==='saved' ? 'bg-[#4a9eff] text-white' : 'bg-white/10 text-white hover:bg-white/20'
+              }`}>
+              <Bookmark size={16} fill={tab==='saved' ? 'white' : 'none'}/>
+              {saved.size > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-yellow-400 text-yellow-900 text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                  {saved.size}
+                </span>
+              )}
+            </button>
             {!isStandalone && (
               <button onClick={()=>isIOS ? setShowIOSGuide(true) : handleInstall()}
                 className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/20 flex items-center gap-1">
@@ -1698,8 +1830,8 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
-        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name}/>}
+        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
         {tab==='bookings'   && <BookingHistoryTab bookings={bookings}/>}
@@ -1711,7 +1843,7 @@ export default function App() {
         <div className="flex" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
           {TABS.map(({id,label,Icon})=>{
             const active = tab===id;
-            const pill   = id==='saved' && saved.size>0 ? saved.size : id==='bookings' && bookings.length>0 ? bookings.length : null;
+            const pill   = id==='bookings' && bookings.length>0 ? bookings.length : null;
             return (
               <button key={id} onClick={()=>setTab(id)}
                 className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors active:bg-gray-50 ${
