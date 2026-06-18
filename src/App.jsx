@@ -180,6 +180,14 @@ const BUSINESSES = [
   { id:11, name:'W5 Science Centre',    area:'Titanic Quarter',   addr:"2 Queen's Road, Belfast BT3 9QQ",     cat:'Attraction',     icon:'🔬',  key:'titanic quarter',    lat:54.6080, lng:-5.9105 },
   { id:12, name:'Castle Court',         area:'City Centre',       addr:'Royal Avenue, Belfast BT1 1DD',       cat:'Shopping',       icon:'🏬',  key:'castle court',       lat:54.5995, lng:-5.9348 },
   { id:13, name:'Botanic Gardens',      area:'South Belfast',     addr:'Stranmillis Road, Belfast BT9 5AB',   cat:'Park',           icon:'🌿',  key:'botanic gardens',    lat:54.5840, lng:-5.9330 },
+  { id:14, name:'Lyric Theatre',        area:'Stranmillis',       addr:'55 Ridgeway Street, Belfast BT9 5FB', cat:'Theatre',        icon:'🎭',  key:'stranmillis',        lat:54.5825, lng:-5.9357 },
+  { id:15, name:'Ulster Museum',        area:'Botanic Gardens',   addr:'Botanic Gardens, Belfast BT9 5AB',    cat:'Museum',         icon:'🏛️',  key:'botanic gardens',    lat:54.5837, lng:-5.9322 },
+  { id:16, name:'SSE Arena Belfast',    area:'Titanic Quarter',   addr:'2 Queens Quay, Belfast BT3 9QQ',      cat:'Arena',          icon:'🎤',  key:'titanic quarter',    lat:54.6037, lng:-5.9170 },
+  { id:17, name:'Belfast City Hall',    area:'City Centre',       addr:'Donegall Square, Belfast BT1 5GS',    cat:'Landmark',       icon:'🏛️',  key:'city hall',          lat:54.5965, lng:-5.9301 },
+  { id:18, name:'Parliament Buildings (Stormont)', area:'Stormont', addr:'Stormont Estate, Belfast BT4 3XX',  cat:'Landmark',       icon:'🏛️',  key:'stormont',           lat:54.6038, lng:-5.8345 },
+  { id:19, name:'Ulster Hall',          area:'City Centre',       addr:'34 Bedford Street, Belfast BT2 7FF',  cat:'Concert Hall',   icon:'🎵',  key:'ulster hall',        lat:54.5955, lng:-5.9295 },
+  { id:20, name:'Grand Opera House',    area:'City Centre',       addr:'2 Great Victoria Street, Belfast BT2 7HR', cat:'Theatre',    icon:'🎭',  key:'grand opera house',  lat:54.5950, lng:-5.9338 },
+  { id:21, name:"Queen's University Belfast", area:'South Belfast', addr:'University Road, Belfast BT7 1NN', cat:'University',     icon:'🎓',  key:'queens university',  lat:54.5840, lng:-5.9330 },
 ];
 
 // Quick-search keyword chips (replaces basic area chips)
@@ -188,6 +196,7 @@ const SEARCH_KEYWORDS = [
   'Titanic Quarter', 'Park & Ride', 'Cathedral Quarter', 'Hidden gems',
   'Cave Hill', 'Black Mountain', 'Lagan Towpath', 'South Belfast',
   'Botanic', 'Ormeau Road', 'West Belfast', 'East Belfast',
+  'Lyric Theatre', 'City Hall', 'Stormont', 'Ulster Hall', 'Grand Opera House',
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -841,11 +850,22 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
 
     if (query.trim()) {
       const lq = query.toLowerCase().trim();
+      // A search can also be a venue name (e.g. "Lyric Theatre") or a street
+      // address (e.g. "Ridgeway Street") rather than wording used in a spot's
+      // own name/notes — match those via the business directory and pull in
+      // spots tagged for that business too.
+      const matchedBizKeys = BUSINESSES.filter(b =>
+        b.name.toLowerCase().includes(lq) ||
+        b.area.toLowerCase().includes(lq) ||
+        b.addr.toLowerCase().includes(lq)
+      ).map(b => b.key);
+
       spots = spots.filter(s =>
         s.name.toLowerCase().includes(lq) ||
         s.near.toLowerCase().includes(lq) ||
         s.tags.some(t => t.includes(lq)) ||
-        s.notes.toLowerCase().includes(lq)
+        s.notes.toLowerCase().includes(lq) ||
+        matchedBizKeys.some(k => s.tags.includes(k))
       );
     }
 
@@ -1117,7 +1137,8 @@ const BusinessesTab = ({ onGetListed }) => {
     return BUSINESSES.filter(b =>
       b.name.toLowerCase().includes(lq) ||
       b.area.toLowerCase().includes(lq) ||
-      b.cat.toLowerCase().includes(lq)
+      b.cat.toLowerCase().includes(lq) ||
+      b.addr.toLowerCase().includes(lq)
     );
   }, [bizSearch]);
 
