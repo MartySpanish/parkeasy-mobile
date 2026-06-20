@@ -81,6 +81,15 @@ const notifyAdmin = async (name, email) => {
 const STRIPE_MONTHLY = 'https://buy.stripe.com/00w4gscgJ6QoahjcTU0kE01';
 const STRIPE_ANNUAL  = 'https://buy.stripe.com/5kQ6oA1C5eiQ0GJg660kE00';
 
+// ── Free / VIP Premium access ───────────────────────────────────────────────
+// Accounts that sign in with one of these emails are always Premium, on any
+// device — no Stripe checkout needed. Add more emails here as needed.
+const VIP_EMAILS = ['martinrooney3@hotmail.com'];
+// Shared invite code you can hand out to influencers etc. for free Premium.
+// This lives in the client bundle, so treat it as a "thank you" perk rather
+// than a secure paywall — anyone determined could find it in the page source.
+const VIP_CODE = 'PARKEASY-VIP';
+
 // ── Seed data ─────────────────────────────────────────────────────────────────
 const SPOTS = [
   { id:1,  name:'Directly outside — Gransha Grill',   near:'Gransha Grill',    tags:['gransha grill','gransha road'],                                          badge:'free',       dist:0.00, walk:'Right outside', restriction:'No restrictions',              notes:'Park right outside the door — 2–3 cars fit easily. Free all day, no signage spotted.', lat:54.5825, lng:-5.9758, by:'GranshaLocal',        votes:61, photo:null, price:null,      spaces:3    },
@@ -496,7 +505,16 @@ const BusinessModal = ({ onClose }) => {
 };
 
 // ── Pricing / Premium Modal ───────────────────────────────────────────────────
-const PricingModal = ({ isPremium, onClose }) => {
+const PricingModal = ({ isPremium, onClose, onRedeem }) => {
+  const [showCodeBox, setShowCodeBox] = useState(false);
+  const [code,        setCode]        = useState('');
+  const [codeError,   setCodeError]   = useState(false);
+
+  const submitCode = () => {
+    const ok = onRedeem?.(code);
+    if (ok) { onClose(); } else { setCodeError(true); }
+  };
+
   if (isPremium) return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
@@ -554,6 +572,22 @@ const PricingModal = ({ isPremium, onClose }) => {
             </a>
           </div>
           <p className="text-center text-xs text-gray-400">Secure payment via Stripe · Cancel any time</p>
+
+          {!showCodeBox ? (
+            <button onClick={()=>setShowCodeBox(true)} className="block w-full text-center text-xs text-gray-400 underline hover:text-gray-600">
+              Have a VIP code?
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input value={code} onChange={e=>{ setCode(e.target.value); setCodeError(false); }}
+                  placeholder="Enter VIP code" autoFocus
+                  className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#4a9eff]"/>
+                <button onClick={submitCode} className="bg-[#1a2332] text-white px-4 rounded-xl text-sm font-bold hover:bg-[#243447] transition">Redeem</button>
+              </div>
+              {codeError && <p className="text-center text-xs text-red-500">That code isn't valid. Check it and try again.</p>}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1645,6 +1679,21 @@ export default function App() {
     }
   }, []);
 
+  // VIP emails (e.g. the owner's own account) are always Premium, on any device.
+  useEffect(() => {
+    const email = user?.email?.trim().toLowerCase();
+    if (email && VIP_EMAILS.some(v => v.toLowerCase() === email)) {
+      setIsPremium(true);
+      ls.set('pe_premium', true);
+    }
+  }, [user]);
+
+  const redeemVipCode = (code) => {
+    const ok = code?.trim().toUpperCase() === VIP_CODE;
+    if (ok) { setIsPremium(true); ls.set('pe_premium', true); }
+    return ok;
+  };
+
   useEffect(() => {
     if (isStandalone) return;
     if (isIOS) { setTimeout(() => setShowInstall(true), 3000); return; }
@@ -1754,7 +1803,7 @@ export default function App() {
       {/* ── Modals ── */}
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
-      {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)}/>}
+      {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)} onRedeem={redeemVipCode}/>}
       {showIOSGuide && <IOSGuide onClose={()=>setShowIOSGuide(false)}/>}
       {bookingSpot  && <BookingModal spot={bookingSpot} onClose={()=>setBookingSpot(null)} onConfirm={confirmBooking}/>}
       {showUserMenu && (
