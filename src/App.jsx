@@ -175,6 +175,13 @@ const CITIES = [
 
 const getCitySpots = (cityId) => cityId === 'belfast' ? SPOTS : [];
 
+// Welcome-screen stats — derived from SPOTS so they never go stale as spots are added.
+const WELCOME_STATS = [
+  ['🟢', SPOTS.length, 'Spots'],
+  ['💎', SPOTS.filter(s => s.badge === 'hidden_gem').length, 'Hidden Gems'],
+  ['🅿', SPOTS.filter(s => s.badge === 'official').length, 'Car Parks'],
+];
+
 const BUSINESSES = [
   { id:1,  name:"Tommy's Barber",       area:'Glen Road',         addr:'245 Glen Road, West Belfast BT11',    cat:'Barber',         icon:'✂️',  key:'glen road barber',   lat:54.5935, lng:-6.0012 },
   { id:2,  name:'Gransha Grill',        area:'Hannahstown',       addr:'Gransha Road, BT17',                  cat:'Restaurant',     icon:'🍽️',  key:'gransha grill',      lat:54.5825, lng:-5.9758 },
@@ -369,7 +376,7 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
 
         <div className="p-6 space-y-5">
           <div className="grid grid-cols-3 gap-2 text-center">
-            {[['🟢','54','Spots'],['💎','12','Hidden Gems'],['🅿','9','Car Parks']].map(([e,n,l])=>(
+            {WELCOME_STATS.map(([e,n,l])=>(
               <div key={l} className="bg-gray-50 rounded-xl py-2.5">
                 <p className="text-lg">{e}</p>
                 <p className="font-extrabold text-gray-900 text-sm">{n}</p>
@@ -1513,7 +1520,7 @@ const BookingModal = ({ spot, onClose, onConfirm }) => {
   const [hours, setHours] = useState(2);
   if (!spot) return null;
   const total = spot.pricing?.free ? 'FREE' : spot.price
-    ? `£${(parseFloat(spot.price) * hours).toFixed(2)}`
+    ? `£${(parseFloat(spot.price.replace(/[^0-9.]/g, '')) * hours).toFixed(2)}`
     : (spot.badge === 'free' || spot.badge === 'hidden_gem') ? 'FREE' : null;
   const ref = `PE-${Date.now().toString().slice(-6)}`;
   return (
