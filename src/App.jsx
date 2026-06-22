@@ -48,6 +48,15 @@ const BADGES = {
   official:   { label: '🅿 Official',    bg: '#dbeafe', fg: '#1e3a5f', dot: '#3b82f6' },
 };
 
+// Kerb-marking style indicators — left edge of each SpotCard mimics real kerb paint.
+const KERB = {
+  free:       { color: '#22c55e', style: 'solid',  width: 4 },
+  hidden_gem: { color: '#a855f7', style: 'double', width: 6 },
+  timed:      { color: '#f59e0b', style: 'dashed', width: 4 },
+  paid:       { color: '#eab308', style: 'dashed', width: 4 },
+  official:   { color: '#3b82f6', style: 'solid',  width: 4 },
+};
+
 const BELFAST_CENTER = [54.5973, -5.9301];
 
 // ── Notification email (FormSubmit — free, no config needed) ──────────────────
@@ -72,24 +81,33 @@ const notifyAdmin = async (name, email) => {
 const STRIPE_MONTHLY = 'https://buy.stripe.com/00w4gscgJ6QoahjcTU0kE01';
 const STRIPE_ANNUAL  = 'https://buy.stripe.com/5kQ6oA1C5eiQ0GJg660kE00';
 
+// ── Free / VIP Premium access ───────────────────────────────────────────────
+// Accounts that sign in with one of these emails are always Premium, on any
+// device — no Stripe checkout needed. Add more emails here as needed.
+const VIP_EMAILS = ['martinrooney3@hotmail.com'];
+// Shared invite code you can hand out to influencers etc. for free Premium.
+// This lives in the client bundle, so treat it as a "thank you" perk rather
+// than a secure paywall — anyone determined could find it in the page source.
+const VIP_CODE = 'PARKEASY-VIP';
+
 // ── Seed data ─────────────────────────────────────────────────────────────────
 const SPOTS = [
-  { id:1,  name:'Directly outside — Gransha Grill',   near:'Gransha Grill',    tags:['gransha grill','gransha road'],                                          badge:'free',       dist:0.00, walk:'Right outside', restriction:'No restrictions',              notes:'Park right outside the door — 2–3 cars fit easily. Free all day, no signage spotted.', lat:54.5825, lng:-5.9758, by:'GranshaLocal',        votes:61, photo:'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&h=400&fit=crop', price:null,      spaces:3    },
-  { id:2,  name:'Gransha Road Lay-by (north side)',    near:'Gransha Grill',    tags:['gransha grill','gransha road'],                                          badge:'free',       dist:0.04, walk:'1 min',          restriction:'Free all day',                 notes:'Wider lay-by fits 4+ cars, 1 min walk back. Locals use this daily — never seen a warden.', lat:54.5830, lng:-5.9762, by:'RegularDiner',        votes:44, photo:'https://images.unsplash.com/photo-1486006920555-c77dcf18193c?w=600&h=400&fit=crop', price:null,      spaces:5    },
+  { id:1,  name:'Directly outside — Gransha Grill',   near:'Gransha Grill',    tags:['gransha grill','gransha road'],                                          badge:'free',       dist:0.00, walk:'Right outside', restriction:'No restrictions',              notes:'Park right outside the door — 2–3 cars fit easily. Free all day, no signage spotted.', lat:54.5825, lng:-5.9758, by:'GranshaLocal',        votes:61, photo:null, price:null,      spaces:3    },
+  { id:2,  name:'Gransha Road Lay-by (north side)',    near:'Gransha Grill',    tags:['gransha grill','gransha road'],                                          badge:'free',       dist:0.04, walk:'1 min',          restriction:'Free all day',                 notes:'Wider lay-by fits 4+ cars, 1 min walk back. Locals use this daily — never seen a warden.', lat:54.5830, lng:-5.9762, by:'RegularDiner',        votes:44, photo:null, price:null,      spaces:5    },
   { id:3,  name:'Side road off Gransha Road',          near:'Gransha Grill',    tags:['gransha grill','gransha'],                                              badge:'hidden_gem', dist:0.07, walk:'2 min',          restriction:'Evenings & weekends fine',     notes:'Quiet residential street, no wardens ever spotted. Walk right back to the Grill.', lat:54.5835, lng:-5.9768, by:'ParkingPro_BT',      votes:29, photo:null,                                                                                          price:null,      spaces:8    },
-  { id:4,  name:'Trailhead gravel area',               near:'Black Mountain',   tags:['black mountain','black mountain walk','hiking'],                        badge:'free',       dist:0.00, walk:'Trail start',    restriction:'Free all day',                 notes:"Gets busy weekends — arrive before 10am or you'll be circling. Gravel surface, 15–20 cars.", lat:54.6198, lng:-6.0225, by:'HikerBelfast',       votes:88, photo:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop', price:null,      spaces:20   },
-  { id:5,  name:'Hannahstown Hill roadside verge',     near:'Black Mountain',   tags:['black mountain','black mountain walk','hannahstown'],                   badge:'hidden_gem', dist:0.25, walk:'~5 min',         restriction:'No restrictions',              notes:'Wide verge fits 6+ easily. Better than the main area on busy days — most tourists miss it.', lat:54.6175, lng:-6.0190, by:'DogWalkerDermot',   votes:52, photo:'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=600&h=400&fit=crop', price:null,      spaces:7    },
+  { id:4,  name:'Trailhead gravel area',               near:'Black Mountain',   tags:['black mountain','black mountain walk','hiking'],                        badge:'free',       dist:0.00, walk:'Trail start',    restriction:'Free all day',                 notes:"Gets busy weekends — arrive before 10am or you'll be circling. Gravel surface, 15–20 cars.", lat:54.6198, lng:-6.0225, by:'HikerBelfast',       votes:88, photo:null, price:null,      spaces:20   },
+  { id:5,  name:'Hannahstown Hill roadside verge',     near:'Black Mountain',   tags:['black mountain','black mountain walk','hannahstown'],                   badge:'hidden_gem', dist:0.25, walk:'~5 min',         restriction:'No restrictions',              notes:'Wide verge fits 6+ easily. Better than the main area on busy days — most tourists miss it.', lat:54.6175, lng:-6.0190, by:'DogWalkerDermot',   votes:52, photo:null, price:null,      spaces:7    },
   { id:6,  name:'Whiterock Road lay-by',               near:'Black Mountain',   tags:['black mountain','black mountain walk','whiterock'],                     badge:'free',       dist:0.38, walk:'~8 min',         restriction:'Free all day',                 notes:'Alternative start point, less crowded. Walk up through Whiterock — great views on the way.', lat:54.6150, lng:-6.0150, by:'Springfield_Regular',votes:31, photo:null,                                                                                          price:null,      spaces:6    },
-  { id:7,  name:'Glen Road on-street (outside)',       near:'Glen Road barber', tags:['glen road barber','tommy barber','glen road'],                          badge:'timed',      dist:0.00, walk:'Outside',        restriction:'Mon–Sat 9am–5pm timed',        notes:'Check yellow lines carefully. Usually fine evenings and Sundays — quick in-and-out for a cut.', lat:54.5935, lng:-6.0012, by:'GlenRoadRegular',    votes:55, photo:'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=600&h=400&fit=crop', price:null,      spaces:4    },
+  { id:7,  name:'Glen Road on-street (outside)',       near:'Glen Road barber', tags:['glen road barber','tommy barber','glen road'],                          badge:'timed',      dist:0.00, walk:'Outside',        restriction:'Mon–Sat 9am–5pm timed',        notes:'Check yellow lines carefully. Usually fine evenings and Sundays — quick in-and-out for a cut.', lat:54.5935, lng:-6.0012, by:'GlenRoadRegular',    votes:55, photo:null, price:null,      spaces:4    },
   { id:8,  name:'Bingnian Drive',                      near:'Glen Road barber', tags:['glen road barber','tommy barber','bingnian'],                           badge:'free',       dist:0.05, walk:'~2 min',         restriction:'Free, unrestricted',           notes:'Quiet side street, 2 min walk to the barber. Community confirmed no restrictions.', lat:54.5940, lng:-6.0025, by:'NansenNeighbour',    votes:38, photo:null,                                                                                          price:null,      spaces:10   },
-  { id:9,  name:'Falls Road on-street',                near:'Falls Road',       tags:['falls road','west belfast fitness','felons','roma pizza','andersonstown'],badge:'paid',      dist:0.00, walk:'On the road',    restriction:'Mon–Sat 9am–6pm Pay & Display',notes:'Free evenings and Sundays. Pay & Display machine on the road. £1/hr during restricted hours.', lat:54.5965, lng:-5.9720, by:'FallsRoadFred', votes:73, photo:'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=600&h=400&fit=crop', price:'£1.00/hr', spaces:null },
+  { id:9,  name:'Falls Road on-street',                near:'Falls Road',       tags:['falls road','west belfast fitness','felons','roma pizza','andersonstown'],badge:'paid',      dist:0.00, walk:'On the road',    restriction:'Mon–Sat 9am–6pm Pay & Display',notes:'Free evenings and Sundays. Pay & Display machine on the road. £1/hr during restricted hours.', lat:54.5965, lng:-5.9720, by:'FallsRoadFred', votes:73, photo:null, price:'£1.00/hr', spaces:null },
   { id:10, name:'Dunlewey Street',                     near:'Falls Road',       tags:['falls road','west belfast fitness'],                                    badge:'free',       dist:0.06, walk:'~2 min',         restriction:'Unrestricted',                 notes:'Community confirmed no restrictions on this quiet side street. Always a space here.', lat:54.5970, lng:-5.9740, by:'ClowneyLocal',       votes:47, photo:null,                                                                                          price:null,      spaces:12   },
-  { id:11, name:'International Wall lay-by',           near:'Falls Road',       tags:['falls road','murals','international wall'],                             badge:'hidden_gem', dist:0.09, walk:'~3 min',         restriction:'Free, no restrictions',        notes:'Handy for quick visits beside the murals. Hidden gem — rarely full even on tourist days.', lat:54.5975, lng:-5.9695, by:'DivisDweller',       votes:33, photo:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop', price:null,      spaces:6    },
-  { id:12, name:'Belfast Castle car park',             near:'Cave Hill',        tags:['cave hill','belfast castle','napoleons nose'],                          badge:'free',       dist:0.00, walk:'1 min',          restriction:'Free all day',                 notes:"Fills up on sunny weekends — arrive before noon. Official free car park, well maintained.", lat:54.6375, lng:-5.9605, by:'CaveHillClimber',    votes:97, photo:'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=600&h=400&fit=crop', price:null,      spaces:80   },
+  { id:11, name:'International Wall lay-by',           near:'Falls Road',       tags:['falls road','murals','international wall'],                             badge:'hidden_gem', dist:0.09, walk:'~3 min',         restriction:'Free, no restrictions',        notes:'Handy for quick visits beside the murals. Hidden gem — rarely full even on tourist days.', lat:54.5975, lng:-5.9695, by:'DivisDweller',       votes:33, photo:null, price:null,      spaces:6    },
+  { id:12, name:'Belfast Castle car park',             near:'Cave Hill',        tags:['cave hill','belfast castle','napoleons nose'],                          badge:'free',       dist:0.00, walk:'1 min',          restriction:'Free all day',                 notes:"Fills up on sunny weekends — arrive before noon. Official free car park, well maintained.", lat:54.6375, lng:-5.9605, by:'CaveHillClimber',    votes:97, photo:null, price:null,      spaces:80   },
   { id:13, name:'Innisfayle Park overflow',            near:'Cave Hill',        tags:['cave hill','innisfayle','antrim road'],                                 badge:'hidden_gem', dist:0.19, walk:'~7 min',         restriction:'Residential — be respectful',  notes:'When the castle car park is rammed, locals use this quiet road. Always space. Short walk up.', lat:54.6350, lng:-5.9580, by:'AntrimRoadAndy',     votes:51, photo:null,                                                                                          price:null,      spaces:null },
-  { id:14, name:'Boucher Road area streets',           near:'Balmoral Show',    tags:['balmoral show','boucher road','kings hall'],                            badge:'free',       dist:0.35, walk:'~8 min',         restriction:'Show days — community use',    notes:'Community park in surrounding streets and walk. Saves a fortune vs official show parking.', lat:54.5710, lng:-5.9420, by:'ShowGoer',           votes:66, photo:'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?w=600&h=400&fit=crop', price:null,      spaces:null },
+  { id:14, name:'Boucher Road area streets',           near:'Balmoral Show',    tags:['balmoral show','boucher road','kings hall'],                            badge:'free',       dist:0.35, walk:'~8 min',         restriction:'Show days — community use',    notes:'Community park in surrounding streets and walk. Saves a fortune vs official show parking.', lat:54.5710, lng:-5.9420, by:'ShowGoer',           votes:66, photo:null, price:null,      spaces:null },
   { id:15, name:'Tates Avenue',                        near:'Balmoral Show',    tags:['balmoral show','tates avenue'],                                         badge:'free',       dist:0.90, walk:'~15 min',        restriction:'No restrictions',              notes:'15 min walk saves the show parking charges entirely. Well used on show days.', lat:54.5720, lng:-5.9370, by:'BalmoralBargain',     votes:44, photo:null,                                                                                          price:null,      spaces:null },
-  { id:16, name:'NCP Victoria Square',                 near:'Victoria Square',  tags:['city centre','victoria square','ncp','belfast city centre'],            badge:'official',   dist:0.10, walk:'2 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey. 547 spaces. Right beside Victoria Square mall. (Separate from Q-Park inside the shopping centre.)', lat:54.5973, lng:-5.9260, by:'NCP Belfast',         votes:0,  photo:'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&h=400&fit=crop', price:'£2.00/hr', spaces:547, available:330, total:547 },
+  { id:16, name:'NCP Victoria Square',                 near:'Victoria Square',  tags:['city centre','victoria square','ncp','belfast city centre'],            badge:'official',   dist:0.10, walk:'2 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey. 547 spaces. Right beside Victoria Square mall. (Separate from Q-Park inside the shopping centre.)', lat:54.5973, lng:-5.9260, by:'NCP Belfast',         votes:0,  photo:null, price:'£2.00/hr', spaces:547, available:330, total:547 },
   { id:17, name:'NCP Montgomery Street',               near:'Cathedral Quarter',tags:['cathedral quarter','montgomery street','ncp','city centre'],             badge:'official',   dist:0.20, walk:'4 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey on Montgomery Street. 447 spaces. Great for Cathedral Quarter bars and restaurants.', lat:54.5998, lng:-5.9270, by:'NCP Belfast',         votes:0,  photo:null,                                                                                          price:'£1.80/hr', spaces:447, available:270, total:447 },
   { id:18, name:'Q-Park Obel',                         near:'Titanic Quarter',  tags:['titanic quarter','obel','qpark','donegall quay','titanic'],             badge:'official',   dist:0.15, walk:'3 min',          restriction:'Open 24/7',                    notes:'Q-Park at the Obel tower, Donegall Quay. 267 spaces across 2 basement levels. Best option for Titanic Quarter visits.', lat:54.6008, lng:-5.9245, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.50/hr', spaces:267, available:160, total:267 },
   { id:19, name:'Q-Park Victoria Square',              near:'Victoria Square',  tags:['victoria square','qpark','city centre'],                                badge:'official',   dist:0.05, walk:'1 min',          restriction:'Open 24/7',                    notes:'Q-Park inside Victoria Square shopping centre — 1,000 spaces across 2 basement levels. Validated parking available with some stores.', lat:54.5975, lng:-5.9255, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.20/hr', spaces:1000, available:600, total:1000 },
@@ -106,14 +124,14 @@ const SPOTS = [
   { id:30, name:'May Street on-street',                near:"St George's Market",tags:["st george's market","may street","george's market","markets"],         badge:'hidden_gem', dist:0.12, walk:'3 min',          restriction:'Free Sunday mornings',         notes:'Great for Sunday market visits — usually spaces even on busy market days. 3 min flat walk to the entrance.', lat:54.5945, lng:-5.9230, by:'SundayMarket',        votes:29, photo:null, price:null, spaces:null },
   { id:31, name:'Ann Street on-street',                near:'Victoria Square',  tags:['victoria square','ann street','victoria square belfast','city centre'], badge:'timed',      dist:0.08, walk:'2 min',          restriction:'Mon–Sat 8am–6pm',              notes:'On-street right beside Victoria Square. Free after 6pm — perfect for evening shopping or dinner.', lat:54.5968, lng:-5.9248, by:'VicSquareLocal',     votes:38, photo:null, price:null, spaces:null },
   // ── Extra spots sourced from OpenStreetMap (overpass.openstreetmap.org) ──
-  { id:32, name:'Great Victoria Street on-street',    near:'Grand Opera House', tags:['grand opera house','great victoria street','europa hotel','crown bar','city centre'], badge:'timed', dist:0.00, walk:'Right there', restriction:'Mon–Sat 8am–6pm', notes:'On-street along Great Victoria Street. Free evenings and Sundays — ideal before a show at the Opera House or visiting the Crown Bar.', lat:54.5950, lng:-5.9338, by:'OperaLocal',       votes:48, photo:'https://images.unsplash.com/photo-1559941727-6fb446e7e8ae?w=600&h=400&fit=crop', price:'£1.20/hr', spaces:null },
+  { id:32, name:'Great Victoria Street on-street',    near:'Grand Opera House', tags:['grand opera house','great victoria street','europa hotel','crown bar','city centre'], badge:'timed', dist:0.00, walk:'Right there', restriction:'Mon–Sat 8am–6pm', notes:'On-street along Great Victoria Street. Free evenings and Sundays — ideal before a show at the Opera House or visiting the Crown Bar.', lat:54.5950, lng:-5.9338, by:'OperaLocal',       votes:48, photo:null, price:'£1.20/hr', spaces:null },
   { id:33, name:'Dublin Road on-street',               near:'Shaftesbury Square',tags:['shaftesbury square','dublin road','city centre','restaurants','golden mile'],       badge:'timed', dist:0.00, walk:'Right there', restriction:'Mon–Sat 8am–6pm', notes:'On Dublin Road near Shaftesbury Square. Free after 6pm — locals park here for the Golden Mile restaurants and bars.', lat:54.5922, lng:-5.9330, by:'DublinRdLocal',    votes:37, photo:null, price:'£1.20/hr', spaces:null },
   { id:34, name:'Cromac Street on-street',             near:"St George's Market",tags:["st george's market",'cromac street','markets','city centre'],                       badge:'timed', dist:0.12, walk:'3 min',      restriction:'Mon–Sat 8am–6pm', notes:'Good alternative to May Street for market visits. Quieter road — often spaces when elsewhere is full. Free evenings.', lat:54.5952, lng:-5.9218, by:'MarketLocal',      votes:31, photo:null, price:null,      spaces:null },
   { id:35, name:'Ormeau Road on-street',               near:'Ormeau Road',       tags:['ormeau road','south belfast','ormeau','ormeau bakehouse'],                          badge:'free',  dist:0.00, walk:'On the road', restriction:'Free — no restrictions',   notes:'Long stretch of free parking on Ormeau Road. Great for Ormeau Bakehouse, bars and restaurants along the strip.', lat:54.5870, lng:-5.9250, by:'OrmeauLocal',      votes:44, photo:null, price:null,      spaces:null },
-  { id:36, name:'Ormeau Embankment riverside',         near:'Ormeau Road',       tags:['ormeau embankment','lagan','riverside','ormeau','south belfast','free parking'],    badge:'hidden_gem', dist:0.20, walk:'5 min', restriction:'Free all day', notes:'Completely free riverside parking off Ormeau Embankment. Walk along the Lagan towpath to the Gasworks or city centre. Locals keep this quiet!', lat:54.5882, lng:-5.9185, by:'LagansideLad', votes:67, photo:'https://images.unsplash.com/photo-1504701954957-2010ec3bcec1?w=600&h=400&fit=crop', price:null, spaces:null },
+  { id:36, name:'Ormeau Embankment riverside',         near:'Ormeau Road',       tags:['ormeau embankment','lagan','riverside','ormeau','south belfast','free parking'],    badge:'hidden_gem', dist:0.20, walk:'5 min', restriction:'Free all day', notes:'Completely free riverside parking off Ormeau Embankment. Walk along the Lagan towpath to the Gasworks or city centre. Locals keep this quiet!', lat:54.5882, lng:-5.9185, by:'LagansideLad', votes:67, photo:null, price:null, spaces:null },
   { id:37, name:'Lisburn Road side streets',           near:'Lisburn Road',      tags:['lisburn road','south belfast','balmoral','lisburn road shops'],                     badge:'free',  dist:0.15, walk:'3–5 min',    restriction:'Residential — free',       notes:'Side streets off Lisburn Road are free and unrestricted. Walk back to the cafés and boutiques. Avoid double-yellows on the main road.', lat:54.5790, lng:-5.9430, by:'LisburnShopper', votes:52, photo:null, price:null, spaces:null },
   { id:38, name:'Stranmillis Road on-street',          near:'Stranmillis',       tags:['stranmillis','botanic gardens','queens university','stranmillis road','south belfast'],badge:'timed', dist:0.00, walk:'On the road', restriction:'Mon–Sat 9am–6pm', notes:'On-street on Stranmillis Road — free evenings and Sundays. Good for QUB, Botanic Gardens and Stranmillis village cafés.', lat:54.5812, lng:-5.9370, by:'QUBLocal',        votes:33, photo:null, price:null, spaces:null },
-  { id:39, name:'Wellington Place on-street',          near:'City Hall',         tags:['city hall','wellington place','donegall square','city centre'],                     badge:'timed', dist:0.05, walk:'2 min',      restriction:'Mon–Sat 8am–6pm', notes:'On-street right beside City Hall and Donegall Square. Free evenings — great for the Christmas market and city centre events.', lat:54.5968, lng:-5.9335, by:'CityHallLocal', votes:41, photo:'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=600&h=400&fit=crop', price:'£2.00/hr', spaces:null },
+  { id:39, name:'Wellington Place on-street',          near:'City Hall',         tags:['city hall','wellington place','donegall square','city centre'],                     badge:'timed', dist:0.05, walk:'2 min',      restriction:'Mon–Sat 8am–6pm', notes:'On-street right beside City Hall and Donegall Square. Free evenings — great for the Christmas market and city centre events.', lat:54.5968, lng:-5.9335, by:'CityHallLocal', votes:41, photo:null, price:'£2.00/hr', spaces:null },
   { id:40, name:'Bedford Street on-street',            near:'Waterfront Hall',   tags:['waterfront hall','bedford street','ulster hall','city centre'],                     badge:'timed', dist:0.10, walk:'3 min',      restriction:'Mon–Sat 8am–6pm', notes:'On-street near Waterfront Hall and Ulster Hall. Free evenings — perfect for concerts and events. Usually spaces even on event nights.', lat:54.5955, lng:-5.9295, by:'WaterfrontLocal', votes:38, photo:null, price:'£1.60/hr', spaces:null },
   { id:41, name:'York Street on-street',               near:'Titanic Quarter',   tags:['titanic quarter','york street','sailortown','north belfast','titanic'],             badge:'free',  dist:0.80, walk:'~15 min',    restriction:'Free — no restrictions',   notes:'Long free stretch on York Street and surrounding roads. Locals use this as a free base for Titanic Belfast — longer walk but saves the car park fee entirely.', lat:54.6045, lng:-5.9290, by:'TitanicWalker', votes:39, photo:null, price:null, spaces:null },
   { id:42, name:'Holywood Arches on-street',           near:'East Belfast',      tags:['holywood arches','east belfast','upper newtownards road'],                          badge:'free',  dist:0.00, walk:'On the road', restriction:'Free — no restrictions',   notes:'Plenty of on-street parking around Holywood Arches. Easy access to East Belfast shops, bars and restaurants on Upper Newtownards Road.', lat:54.5960, lng:-5.8875, by:'EastBelfastLocal', votes:29, photo:null, price:null, spaces:null },
@@ -126,21 +144,36 @@ const SPOTS = [
   { id:49, name:'Grosvenor Road multi-storey',         near:'Royal Victoria Hospital', tags:['royal victoria','grosvenor road','west belfast','multi-storey'],               badge:'official',   dist:0.05, walk:'2 min',          restriction:'Open 24/7',                    notes:'Multi-storey beside the Royal Victoria Hospital. 24/7 access, good for Falls Road and Grosvenor Road.', lat:54.5960, lng:-5.9540, by:'Official', votes:0, photo:null, price:'£1.80/hr', spaces:300, available:180, total:300 },
   { id:50, name:'Park & Ride — Cairnshill',            near:'South Belfast',     tags:['park and ride','cairnshill','south belfast','park & ride'],                         badge:'official',   dist:0.00, walk:'Bus to city',    restriction:'Mon–Sat 7am–7pm',              notes:'Official Translink Park & Ride — 725 spaces, 12 accessible bays. Regular Metro bus to city centre. Free parking — just pay the bus fare.', lat:54.5542, lng:-5.9255, by:'Translink', votes:0, photo:null, price:null, spaces:725, available:435, total:725, ev:{available:true,ports:2,speed:'7kW'} },
   { id:51, name:'Park & Ride — Dundonald',             near:'East Belfast',      tags:['park and ride','dundonald','east belfast','park & ride'],                           badge:'official',   dist:0.00, walk:'Bus to city',    restriction:'Mon–Sat 7am–7pm',              notes:'Official Translink Park & Ride — 517 spaces, 8 accessible bays. Regular Metro bus to the city centre. Free parking with bus ticket — great for East Belfast commuters.', lat:54.5812, lng:-5.8390, by:'Translink', votes:0, photo:null, price:null, spaces:517, available:310, total:517, ev:{available:true,ports:2,speed:'7kW'} },
-  { id:52, name:'Titanic Quarter multi-storey',        near:'Titanic Quarter',   tags:['titanic quarter','titanic belfast','multi-storey','titanic'],                       badge:'official',   dist:0.10, walk:'3 min',          restriction:'Open 7am–10pm',                notes:'Official underground car park for Titanic Belfast — 520 secure spaces. Close to Titanic Belfast, SS Nomadic and W5. Pre-booking recommended on busy days.', lat:54.6070, lng:-5.9125, by:'Titanic Belfast', votes:12, photo:'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?w=600&h=400&fit=crop', price:'£3.00/hr', spaces:520, available:312, total:520, ev:{available:true,ports:8,speed:'22kW'} },
+  { id:52, name:'Titanic Quarter multi-storey',        near:'Titanic Quarter',   tags:['titanic quarter','titanic belfast','multi-storey','titanic'],                       badge:'official',   dist:0.10, walk:'3 min',          restriction:'Open 7am–10pm',                notes:'Official underground car park for Titanic Belfast — 520 secure spaces. Close to Titanic Belfast, SS Nomadic and W5. Pre-booking recommended on busy days.', lat:54.6070, lng:-5.9125, by:'Titanic Belfast', votes:12, photo:null, price:'£3.00/hr', spaces:520, available:312, total:520, ev:{available:true,ports:8,speed:'22kW'} },
   { id:53, name:'Castle Court multi-storey',           near:'Castle Court',      tags:['castle court','multi-storey','city centre','royal avenue'],                         badge:'official',   dist:0.00, walk:'Right there',    restriction:'Open 7am–10pm Mon–Sat',        notes:'Multi-storey inside Castle Court shopping centre — 1,550 spaces with EV charging on level 5. Validated parking available with purchase in many stores.', lat:54.5992, lng:-5.9352, by:'CastleCourt', votes:8, photo:null, price:'£2.50/hr', spaces:1550, available:930, total:1550, ev:{available:true,ports:4,speed:'7kW'} },
-  { id:54, name:'Lagan Towpath riverside (free)',      near:'Lagan Towpath',     tags:['lagan towpath','riverside','lagan','south belfast','free parking'],                 badge:'hidden_gem', dist:0.00, walk:'Riverside start', restriction:'Free all day',                notes:'Completely free parking along the Lagan towpath riverside roads. Walk or cycle along the Lagan from here. Popular with locals but rarely on parking apps.', lat:54.5810, lng:-5.9155, by:'LaganLocal', votes:58, photo:'https://images.unsplash.com/photo-1504701954957-2010ec3bcec1?w=600&h=400&fit=crop', price:null, spaces:null },
+  { id:54, name:'Lagan Towpath riverside (free)',      near:'Lagan Towpath',     tags:['lagan towpath','riverside','lagan','south belfast','free parking'],                 badge:'hidden_gem', dist:0.00, walk:'Riverside start', restriction:'Free all day',                notes:'Completely free parking along the Lagan towpath riverside roads. Walk or cycle along the Lagan from here. Popular with locals but rarely on parking apps.', lat:54.5810, lng:-5.9155, by:'LaganLocal', votes:58, photo:null, price:null, spaces:null },
   // ── Parks & walks around Belfast (free car parks) ──
-  { id:55, name:'Stormont Estate car park',            near:'Stormont Estate',   tags:['stormont','stormont estate','east belfast','walks','parliament buildings','free parking','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — open dawn to dusk', notes:'Free car park at Parliament Buildings. Walk the 4km Long Woodland Walk (orange arrows), the 2km loop or the 1.6km fitness trail. Tree-lined avenue up to Stormont — great for families and dog walkers.', lat:54.6038, lng:-5.8345, by:'StormontWalker', votes:74, photo:'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=600&h=400&fit=crop', price:null, spaces:200 },
-  { id:56, name:'Ormeau Park car park',                near:'Ormeau Park',       tags:['ormeau park','south belfast','east belfast','walks','free parking','oldest park','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:"Belfast's oldest park (1871). Free car park by the Recreation Centre — toilets and refreshments on site. Walks through mature woodland, formal gardens and a wildflower meadow overlooking the Lagan.", lat:54.5905, lng:-5.9105, by:'OrmeauParkLocal', votes:61, photo:'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=600&h=400&fit=crop', price:null, spaces:120 },
-  { id:57, name:'Colin Glen Forest Park',              near:'Colin Glen',        tags:['colin glen','west belfast','forest park','walks','stewartstown road','free parking','waterfall','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — park hours', notes:"The green lungs of West Belfast off Stewartstown Road. Car park, toilets and café on site. Surfaced riverside paths through the Colin valley with views of Black Mountain — also home to the Gruffalo Trail and zipline.", lat:54.5680, lng:-6.0010, by:'ColinGlenLocal', votes:69, photo:'https://images.unsplash.com/photo-1448375240586-882707db888b?w=600&h=400&fit=crop', price:null, spaces:150 },
-  { id:58, name:'Lagan Meadows',                       near:'Lagan Meadows',     tags:['lagan meadows','south belfast','walks','lagan','riverside','free parking','dog walk'], badge:'hidden_gem', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:'Rolling riverside meadows south of the city, hugging the River Lagan. Few amenities — just wild, quiet walking and wildlife. Locals love it. Connect onto the towpath towards Shaws Bridge.', lat:54.5650, lng:-5.9230, by:'MeadowsWalker', votes:38, photo:'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&h=400&fit=crop', price:null, spaces:30 },
-  { id:59, name:'Divis & Black Mountain (NT) upper car park', near:'Divis Mountain', tags:['divis','black mountain','belfast hills','national trust','walks','hiking','free parking','summit','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — dawn to dusk', notes:'National Trust upper car park at the Divis Coffee Barn. Free parking and the start of the Summit Trail (1.5mi), Ridge Trail and longer loops — the best panoramic views over Belfast and Belfast Lough. Coffee Barn on site.', lat:54.6090, lng:-6.0260, by:'DivisHiker', votes:91, photo:'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=600&h=400&fit=crop', price:null, spaces:60 },
-  { id:60, name:'Minnowburn car park',                 near:'Minnowburn',        tags:['minnowburn','lagan valley','south belfast','walks','national trust','free parking','terrace hill','dog walk'], badge:'hidden_gem', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:'Green oasis in the Lagan Valley Regional Park. Free car park, then trails along the Lagan and through woodland and farmland. Chainsaw sculptures, a wildlife pond, and Terrace Hill views over the valley. Walk to the Giant\'s Ring nearby.', lat:54.5360, lng:-5.9410, by:'MinnowburnLocal', votes:47, photo:'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&h=400&fit=crop', price:null, spaces:40 },
-  { id:61, name:'Barnett Demesne / Malone House',      near:'Barnett Demesne',   tags:['barnett demesne','malone house','south belfast','walks','lagan valley','free parking','mary peters track','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — park hours', notes:'Open lawns, woodland and marsh bordered by the River Lagan. Free parking at Malone House (restaurant & café on site). Easy walks and links to the towpath and Mary Peters Track.', lat:54.5520, lng:-5.9430, by:'MaloneLocal', votes:42, photo:'https://images.unsplash.com/photo-1476231682828-37e571bc172f?w=600&h=400&fit=crop', price:null, spaces:80 },
-  { id:62, name:'Sir Thomas & Lady Dixon Park',        near:'Dixon Park',        tags:['dixon park','sir thomas lady dixon','rose garden','south belfast','walks','upper malone','free parking','playground','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:'Entrance on Upper Malone Road with free Upper and Lower car parks. Famous rose garden, walled garden, children\'s playground and the mile-long Garden Trail. Home to Rose Week each July.', lat:54.5340, lng:-5.9620, by:'DixonParkLocal', votes:66, photo:'https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=600&h=400&fit=crop', price:null, spaces:120 },
-  { id:63, name:'Victoria Park (East Belfast)',        near:'Victoria Park',     tags:['victoria park','east belfast','walks','free parking','lagan','airport road','dog walk','cycling'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:'Free car park off the Sydenham bypass. Flat lakeside loop popular with runners, cyclists and families — watch the planes land at George Best City Airport. Links to the Comber Greenway.', lat:54.6030, lng:-5.8780, by:'VicParkLocal', votes:39, photo:'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=600&h=400&fit=crop', price:null, spaces:60 },
-  { id:64, name:'Cave Hill Country Park (Upper Cavehill Rd)', near:'Cave Hill', tags:['cave hill','cavehill','country park','walks','hiking','napoleons nose','free parking','north belfast','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — dawn to dusk', notes:'Alternative free car park higher up on Upper Cavehill Road — quicker route to the summit and Napoleon\'s Nose than the castle. Stunning views over the city and lough. Less crowded on busy weekends.', lat:54.6420, lng:-5.9560, by:'CaveHillHiker', votes:54, photo:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop', price:null, spaces:40 },
+  { id:55, name:'Stormont Estate car park',            near:'Stormont Estate',   tags:['stormont','stormont estate','east belfast','walks','parliament buildings','free parking','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — open dawn to dusk', notes:'Free car park at Parliament Buildings. Walk the 4km Long Woodland Walk (orange arrows), the 2km loop or the 1.6km fitness trail. Tree-lined avenue up to Stormont — great for families and dog walkers.', lat:54.6038, lng:-5.8345, by:'StormontWalker', votes:74, photo:null, price:null, spaces:200 },
+  { id:56, name:'Ormeau Park car park',                near:'Ormeau Park',       tags:['ormeau park','south belfast','east belfast','walks','free parking','oldest park','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:"Belfast's oldest park (1871). Free car park by the Recreation Centre — toilets and refreshments on site. Walks through mature woodland, formal gardens and a wildflower meadow overlooking the Lagan.", lat:54.5905, lng:-5.9105, by:'OrmeauParkLocal', votes:61, photo:null, price:null, spaces:120 },
+  { id:57, name:'Colin Glen Forest Park',              near:'Colin Glen',        tags:['colin glen','west belfast','forest park','walks','stewartstown road','free parking','waterfall','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — park hours', notes:"The green lungs of West Belfast off Stewartstown Road. Car park, toilets and café on site. Surfaced riverside paths through the Colin valley with views of Black Mountain — also home to the Gruffalo Trail and zipline.", lat:54.5680, lng:-6.0010, by:'ColinGlenLocal', votes:69, photo:null, price:null, spaces:150 },
+  { id:58, name:'Lagan Meadows',                       near:'Lagan Meadows',     tags:['lagan meadows','south belfast','walks','lagan','riverside','free parking','dog walk'], badge:'hidden_gem', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:'Rolling riverside meadows south of the city, hugging the River Lagan. Few amenities — just wild, quiet walking and wildlife. Locals love it. Connect onto the towpath towards Shaws Bridge.', lat:54.5650, lng:-5.9230, by:'MeadowsWalker', votes:38, photo:null, price:null, spaces:30 },
+  { id:59, name:'Divis & Black Mountain (NT) upper car park', near:'Divis Mountain', tags:['divis','black mountain','belfast hills','national trust','walks','hiking','free parking','summit','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — dawn to dusk', notes:'National Trust upper car park at the Divis Coffee Barn. Free parking and the start of the Summit Trail (1.5mi), Ridge Trail and longer loops — the best panoramic views over Belfast and Belfast Lough. Coffee Barn on site.', lat:54.6090, lng:-6.0260, by:'DivisHiker', votes:91, photo:null, price:null, spaces:60 },
+  { id:60, name:'Minnowburn car park',                 near:'Minnowburn',        tags:['minnowburn','lagan valley','south belfast','walks','national trust','free parking','terrace hill','dog walk'], badge:'hidden_gem', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:'Green oasis in the Lagan Valley Regional Park. Free car park, then trails along the Lagan and through woodland and farmland. Chainsaw sculptures, a wildlife pond, and Terrace Hill views over the valley. Walk to the Giant\'s Ring nearby.', lat:54.5360, lng:-5.9410, by:'MinnowburnLocal', votes:47, photo:null, price:null, spaces:40 },
+  { id:61, name:'Barnett Demesne / Malone House',      near:'Barnett Demesne',   tags:['barnett demesne','malone house','south belfast','walks','lagan valley','free parking','mary peters track','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — park hours', notes:'Open lawns, woodland and marsh bordered by the River Lagan. Free parking at Malone House (restaurant & café on site). Easy walks and links to the towpath and Mary Peters Track.', lat:54.5520, lng:-5.9430, by:'MaloneLocal', votes:42, photo:null, price:null, spaces:80 },
+  { id:62, name:'Sir Thomas & Lady Dixon Park',        near:'Dixon Park',        tags:['dixon park','sir thomas lady dixon','rose garden','south belfast','walks','upper malone','free parking','playground','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:'Entrance on Upper Malone Road with free Upper and Lower car parks. Famous rose garden, walled garden, children\'s playground and the mile-long Garden Trail. Home to Rose Week each July.', lat:54.5340, lng:-5.9620, by:'DixonParkLocal', votes:66, photo:null, price:null, spaces:120 },
+  { id:63, name:'Victoria Park (East Belfast)',        near:'Victoria Park',     tags:['victoria park','east belfast','walks','free parking','lagan','airport road','dog walk','cycling'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:'Free car park off the Sydenham bypass. Flat lakeside loop popular with runners, cyclists and families — watch the planes land at George Best City Airport. Links to the Comber Greenway.', lat:54.6030, lng:-5.8780, by:'VicParkLocal', votes:39, photo:null, price:null, spaces:60 },
+  { id:64, name:'Cave Hill Country Park (Upper Cavehill Rd)', near:'Cave Hill', tags:['cave hill','cavehill','country park','walks','hiking','napoleons nose','free parking','north belfast','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — dawn to dusk', notes:'Alternative free car park higher up on Upper Cavehill Road — quicker route to the summit and Napoleon\'s Nose than the castle. Stunning views over the city and lough. Less crowded on busy weekends.', lat:54.6420, lng:-5.9560, by:'CaveHillHiker', votes:54, photo:null, price:null, spaces:40 },
 ];
+
+// ── Cities (Northern Ireland) ────────────────────────────────────────────────
+// Belfast has full community-sourced spot data. Other towns are listed so
+// people can pick their area and be the first to add local spots.
+const CITIES = [
+  { id:'belfast',      name:'Belfast',           center:[54.5973,-5.9301] },
+  { id:'derry',        name:'Derry~Londonderry', center:[54.9966,-7.3086] },
+  { id:'lisburn',      name:'Lisburn',           center:[54.5162,-6.0581] },
+  { id:'newtownabbey', name:'Newtownabbey',      center:[54.6601,-5.9094] },
+  { id:'bangor',       name:'Bangor',            center:[54.6604,-5.6694] },
+  { id:'newry',        name:'Newry',             center:[54.1751,-6.3402] },
+  { id:'antrim',       name:'Antrim',            center:[54.7140,-6.2110] },
+];
+
+const getCitySpots = (cityId) => cityId === 'belfast' ? SPOTS : [];
 
 const BUSINESSES = [
   { id:1,  name:"Tommy's Barber",       area:'Glen Road',         addr:'245 Glen Road, West Belfast BT11',    cat:'Barber',         icon:'✂️',  key:'glen road barber',   lat:54.5935, lng:-6.0012 },
@@ -156,6 +189,14 @@ const BUSINESSES = [
   { id:11, name:'W5 Science Centre',    area:'Titanic Quarter',   addr:"2 Queen's Road, Belfast BT3 9QQ",     cat:'Attraction',     icon:'🔬',  key:'titanic quarter',    lat:54.6080, lng:-5.9105 },
   { id:12, name:'Castle Court',         area:'City Centre',       addr:'Royal Avenue, Belfast BT1 1DD',       cat:'Shopping',       icon:'🏬',  key:'castle court',       lat:54.5995, lng:-5.9348 },
   { id:13, name:'Botanic Gardens',      area:'South Belfast',     addr:'Stranmillis Road, Belfast BT9 5AB',   cat:'Park',           icon:'🌿',  key:'botanic gardens',    lat:54.5840, lng:-5.9330 },
+  { id:14, name:'Lyric Theatre',        area:'Stranmillis',       addr:'55 Ridgeway Street, Belfast BT9 5FB', cat:'Theatre',        icon:'🎭',  key:'stranmillis',        lat:54.5825, lng:-5.9357 },
+  { id:15, name:'Ulster Museum',        area:'Botanic Gardens',   addr:'Botanic Gardens, Belfast BT9 5AB',    cat:'Museum',         icon:'🏛️',  key:'botanic gardens',    lat:54.5837, lng:-5.9322 },
+  { id:16, name:'SSE Arena Belfast',    area:'Titanic Quarter',   addr:'2 Queens Quay, Belfast BT3 9QQ',      cat:'Arena',          icon:'🎤',  key:'titanic quarter',    lat:54.6037, lng:-5.9170 },
+  { id:17, name:'Belfast City Hall',    area:'City Centre',       addr:'Donegall Square, Belfast BT1 5GS',    cat:'Landmark',       icon:'🏛️',  key:'city hall',          lat:54.5965, lng:-5.9301 },
+  { id:18, name:'Parliament Buildings (Stormont)', area:'Stormont', addr:'Stormont Estate, Belfast BT4 3XX',  cat:'Landmark',       icon:'🏛️',  key:'stormont',           lat:54.6038, lng:-5.8345 },
+  { id:19, name:'Ulster Hall',          area:'City Centre',       addr:'34 Bedford Street, Belfast BT2 7FF',  cat:'Concert Hall',   icon:'🎵',  key:'ulster hall',        lat:54.5955, lng:-5.9295 },
+  { id:20, name:'Grand Opera House',    area:'City Centre',       addr:'2 Great Victoria Street, Belfast BT2 7HR', cat:'Theatre',    icon:'🎭',  key:'grand opera house',  lat:54.5950, lng:-5.9338 },
+  { id:21, name:"Queen's University Belfast", area:'South Belfast', addr:'University Road, Belfast BT7 1NN', cat:'University',     icon:'🎓',  key:'queens university',  lat:54.5840, lng:-5.9330 },
 ];
 
 // Quick-search keyword chips (replaces basic area chips)
@@ -164,6 +205,7 @@ const SEARCH_KEYWORDS = [
   'Titanic Quarter', 'Park & Ride', 'Cathedral Quarter', 'Hidden gems',
   'Cave Hill', 'Black Mountain', 'Lagan Towpath', 'South Belfast',
   'Botanic', 'Ormeau Road', 'West Belfast', 'East Belfast',
+  'Lyric Theatre', 'City Hall', 'Stormont', 'Ulster Hall', 'Grand Opera House',
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -173,6 +215,16 @@ const haversine = (lat1, lng1, lat2, lng2) => {
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+};
+
+// Pick the NI town/city whose centre is closest to a given location.
+const nearestCity = (lat, lng) => {
+  let best = CITIES[0], bestDist = Infinity;
+  for (const c of CITIES) {
+    const d = haversine(lat, lng, c.center[0], c.center[1]);
+    if (d < bestDist) { bestDist = d; best = c; }
+  }
+  return best;
 };
 
 const isFreeNow = (spot) => {
@@ -453,7 +505,16 @@ const BusinessModal = ({ onClose }) => {
 };
 
 // ── Pricing / Premium Modal ───────────────────────────────────────────────────
-const PricingModal = ({ isPremium, onClose }) => {
+const PricingModal = ({ isPremium, onClose, onRedeem }) => {
+  const [showCodeBox, setShowCodeBox] = useState(false);
+  const [code,        setCode]        = useState('');
+  const [codeError,   setCodeError]   = useState(false);
+
+  const submitCode = () => {
+    const ok = onRedeem?.(code);
+    if (ok) { onClose(); } else { setCodeError(true); }
+  };
+
   if (isPremium) return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
@@ -511,6 +572,22 @@ const PricingModal = ({ isPremium, onClose }) => {
             </a>
           </div>
           <p className="text-center text-xs text-gray-400">Secure payment via Stripe · Cancel any time</p>
+
+          {!showCodeBox ? (
+            <button onClick={()=>setShowCodeBox(true)} className="block w-full text-center text-xs text-gray-400 underline hover:text-gray-600">
+              Have a VIP code?
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input value={code} onChange={e=>{ setCode(e.target.value); setCodeError(false); }}
+                  placeholder="Enter VIP code" autoFocus
+                  className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#4a9eff]"/>
+                <button onClick={submitCode} className="bg-[#1a2332] text-white px-4 rounded-xl text-sm font-bold hover:bg-[#243447] transition">Redeem</button>
+              </div>
+              {codeError && <p className="text-center text-xs text-red-500">That code isn't valid. Check it and try again.</p>}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -560,12 +637,13 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }
 );
 
 // ── SpotCard ──────────────────────────────────────────────────────────────────
-const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }) => {
+const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, onViewMap }) => {
   const [shareDone, setShareDone] = useState(false);
   const [imgErr,    setImgErr]    = useState(false);
   const isOfficial = ['NCP Belfast','Q-Park Belfast','Belfast City Council','Official'].includes(spot.by);
   const freeNow = isFreeNow(spot);
   const avail = getAvailability(spot);
+  const kerb = KERB[spot.badge] || KERB.free;
 
   const svUrl = !spot.photo && !imgErr ? spotImageUrl(spot.lat, spot.lng) : null;
   const photoSrc = spot.photo || svUrl;
@@ -583,7 +661,8 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
+      style={{borderLeft: `${kerb.width}px ${kerb.style} ${kerb.color}`}}>
       <div
         className="relative h-40 overflow-hidden flex items-center justify-center"
         style={{ background: photoSrc ? undefined : 'linear-gradient(135deg,#1a2332 0%,#243447 100%)' }}
@@ -665,6 +744,12 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook }
             }`}>
             {shareDone ? <><Check size={11}/>Copied!</> : <><Share2 size={11}/>Share</>}
           </button>
+          {onViewMap && (
+            <button onClick={()=>onViewMap(spot)}
+              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold border border-gray-200 text-gray-600 hover:border-[#4a9eff] hover:text-[#4a9eff] active:scale-95 transition-all">
+              <Map size={11}/>Map
+            </button>
+          )}
           <div className="ml-auto text-xs text-gray-400">
             {isOfficial
               ? <span className="font-semibold text-blue-700">{spot.by}</span>
@@ -761,7 +846,7 @@ const spotImageUrl = (lat, lng) =>
     ? `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=0&key=${GOOGLE_MAPS_KEY}`
     : `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=17&size=600x300&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade, citySpots, cityCenter, cityName }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -769,9 +854,20 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
   const [showSort,    setShowSort]    = useState(false);
   const [evOnly,      setEvOnly]      = useState(false);
   const [userLoc,     setUserLoc]     = useState(null);
+  const [focusSpot,   setFocusSpot]   = useState(null);
   const inputRef = useRef(null);
+  const mapRef = useRef(null);
 
   const SORT_OPTIONS = isPremium ? SORT_OPTIONS_PREMIUM : SORT_OPTIONS_FREE;
+
+  // Reset map focus when switching city or search criteria
+  useEffect(() => { setFocusSpot(null); }, [cityCenter, query, badgeFilter, evOnly]);
+
+  const viewOnMap = (spot) => {
+    setFocusSpot(spot);
+    setShowMap(true);
+    setTimeout(() => mapRef.current?.scrollIntoView({behavior:'smooth', block:'center'}), 50);
+  };
 
   // Grab location when distance sort is chosen
   useEffect(() => {
@@ -784,15 +880,26 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
   }, [sortBy]);
 
   const filtered = useMemo(() => {
-    let spots = SPOTS;
+    let spots = citySpots;
 
     if (query.trim()) {
       const lq = query.toLowerCase().trim();
+      // A search can also be a venue name (e.g. "Lyric Theatre") or a street
+      // address (e.g. "Ridgeway Street") rather than wording used in a spot's
+      // own name/notes — match those via the business directory and pull in
+      // spots tagged for that business too.
+      const matchedBizKeys = BUSINESSES.filter(b =>
+        b.name.toLowerCase().includes(lq) ||
+        b.area.toLowerCase().includes(lq) ||
+        b.addr.toLowerCase().includes(lq)
+      ).map(b => b.key);
+
       spots = spots.filter(s =>
         s.name.toLowerCase().includes(lq) ||
         s.near.toLowerCase().includes(lq) ||
         s.tags.some(t => t.includes(lq)) ||
-        s.notes.toLowerCase().includes(lq)
+        s.notes.toLowerCase().includes(lq) ||
+        matchedBizKeys.some(k => s.tags.includes(k))
       );
     }
 
@@ -817,21 +924,21 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
       if (sortBy === 'alpha') return a.name.localeCompare(b.name);
       return 0;
     });
-  }, [query, badgeFilter, sortBy, evOnly, userLoc]);
+  }, [citySpots, query, badgeFilter, sortBy, evOnly, userLoc]);
 
   const visibleSpots = isPremium ? filtered : filtered.slice(0, FREE_RESULTS_LIMIT);
   const hiddenCount  = isPremium ? 0 : Math.max(0, filtered.length - FREE_RESULTS_LIMIT);
 
   const isSearching = query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
-  const mapCenter = visibleSpots.length ? [visibleSpots[0].lat, visibleSpots[0].lng] : BELFAST_CENTER;
-  const mapZoom = isSearching ? 13 : 12;
+  const mapCenter = focusSpot ? [focusSpot.lat, focusSpot.lng] : visibleSpots.length ? [visibleSpots[0].lat, visibleSpots[0].lng] : cityCenter;
+  const mapZoom = focusSpot ? 16 : isSearching ? 13 : 12;
 
   const doSearch = (q) => {
     setQuery(q);
     inputRef.current?.blur();
   };
 
-  const freeCount = SPOTS.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
+  const freeCount = citySpots.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
 
   return (
     <div className="p-4 space-y-4">
@@ -843,7 +950,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           value={query}
           onChange={e=>setQuery(e.target.value)}
           onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
-          placeholder={`Search ${SPOTS.length} Belfast parking spots…`}
+          placeholder={citySpots.length ? `Search ${citySpots.length} ${cityName} parking spots…` : `Search ${cityName} parking spots…`}
           className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
         />
         {query && (
@@ -913,7 +1020,9 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
 
       {/* Map */}
       {showMap && (
-        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
+        <div ref={mapRef}>
+          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
+        </div>
       )}
 
       {/* Keyword chips (when not searching) */}
@@ -937,14 +1046,23 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Search size={24} className="text-gray-300"/>
           </div>
-          <p className="font-bold text-gray-700">No spots found</p>
-          <p className="text-sm text-gray-400 mt-1">Try searching "City Centre" or "Cathedral Quarter"</p>
-          <button onClick={()=>{setQuery('');setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#4a9eff] font-semibold underline">Clear filters</button>
+          {citySpots.length === 0 ? (
+            <>
+              <p className="font-bold text-gray-700">No spots in {cityName} yet</p>
+              <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto leading-relaxed">Be the first to share a great parking spot in {cityName} — tap "Add Spot" below.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-bold text-gray-700">No spots found</p>
+              <p className="text-sm text-gray-400 mt-1">Try searching "City Centre" or "Cathedral Quarter"</p>
+              <button onClick={()=>{setQuery('');setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#4a9eff] font-semibold underline">Clear filters</button>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
           {visibleSpots.map(s=>(
-            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
+            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap}/>
           ))}
           {hiddenCount > 0 && (
             <div onClick={onUpgrade}
@@ -962,20 +1080,25 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
 };
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
-const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
+const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, cityName, onCityDetected }) => {
   const [loc,     setLoc]     = useState(null);
   const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
   const [err,     setErr]     = useState('');
+  const [focusSpot, setFocusSpot] = useState(null);
+  const mapRef = useRef(null);
 
   const buildNearby = useCallback((lat, lng) => {
-    const sorted = SPOTS
+    // Detect which NI town/city the user is closest to and switch to it.
+    const city = nearestCity(lat, lng);
+    onCityDetected?.(city.id);
+    const sorted = getCitySpots(city.id)
       .map(s => ({...s, realDist: haversine(lat, lng, s.lat, s.lng)}))
       .sort((a,b) => a.realDist - b.realDist)
       .slice(0, 12);
     setNearby(sorted);
     setLoading(false);
-  }, []);
+  }, [onCityDetected]);
 
   const findNearby = () => {
     setLoading(true); setErr('');
@@ -983,6 +1106,11 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
       ({coords:{latitude:lat,longitude:lng}}) => { setLoc([lat,lng]); buildNearby(lat,lng); },
       () => { const lat=54.5973,lng=-5.9301; setLoc([lat,lng]); buildNearby(lat,lng); setErr('Location access denied — showing spots from Belfast city centre.'); }
     );
+  };
+
+  const viewOnMap = (spot) => {
+    setFocusSpot(spot);
+    setTimeout(() => mapRef.current?.scrollIntoView({behavior:'smooth', block:'center'}), 50);
   };
 
   if (!loc) return (
@@ -993,7 +1121,7 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
       <div>
         <h3 className="text-xl font-bold text-gray-900">Parking Near You</h3>
         <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
-          See the closest community-verified spots to your current location in Belfast.
+          See the closest community-verified spots to your current location — we'll find your town automatically.
         </p>
       </div>
       <button onClick={findNearby} disabled={loading}
@@ -1010,15 +1138,22 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) =>
           <Info size={14} className="mt-0.5 flex-shrink-0"/><span>{err}</span>
         </div>
       )}
-      <ParkingMap spots={nearby} center={loc} zoom={13} height={240}/>
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-gray-900">{nearby.length} closest spots</p>
-        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
+      <div ref={mapRef}>
+        <ParkingMap spots={nearby} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240}/>
       </div>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-gray-900">{nearby.length ? `${nearby.length} closest spots in ${cityName}` : `No spots near you yet`}</p>
+        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
+      </div>
+      {nearby.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-sm text-gray-400 max-w-xs mx-auto leading-relaxed">No community spots in {cityName} yet — be the first to add one from the "Add Spot" tab!</p>
+        </div>
+      )}
       <div className="space-y-4">
         {nearby.map(s=>(
           <SpotCard key={s.id} spot={{...s, dist:Math.round(s.realDist*10)/10}}
-            saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
+            saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap}/>
         ))}
       </div>
     </div>
@@ -1036,7 +1171,8 @@ const BusinessesTab = ({ onGetListed }) => {
     return BUSINESSES.filter(b =>
       b.name.toLowerCase().includes(lq) ||
       b.area.toLowerCase().includes(lq) ||
-      b.cat.toLowerCase().includes(lq)
+      b.cat.toLowerCase().includes(lq) ||
+      b.addr.toLowerCase().includes(lq)
     );
   }, [bizSearch]);
 
@@ -1130,6 +1266,13 @@ const BusinessesTab = ({ onGetListed }) => {
 // ── SavedTab ──────────────────────────────────────────────────────────────────
 const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
   const spots = SPOTS.filter(s => saved.has(s.id));
+  const [focusSpot, setFocusSpot] = useState(null);
+  const mapRef = useRef(null);
+
+  const viewOnMap = (spot) => {
+    setFocusSpot(spot);
+    setTimeout(() => mapRef.current?.scrollIntoView({behavior:'smooth', block:'center'}), 50);
+  };
 
   if (!spots.length) return (
     <div className="p-8 flex flex-col items-center text-center space-y-4">
@@ -1151,12 +1294,14 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => 
         <p className="text-sm font-bold text-gray-900">{spots.length} saved spot{spots.length!==1?'s':''}</p>
         <span className="text-xs text-gray-400">Tap bookmark to remove</span>
       </div>
-      {spots.length > 1 && (
-        <ParkingMap spots={spots} center={[spots[0].lat, spots[0].lng]} zoom={12} height={200}/>
+      {(spots.length > 1 || focusSpot) && (
+        <div ref={mapRef}>
+          <ParkingMap spots={spots} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : [spots[0].lat, spots[0].lng]} zoom={focusSpot ? 16 : 12} height={200}/>
+        </div>
       )}
       <div className="space-y-4">
         {spots.map(s=>(
-          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook}/>
+          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap}/>
         ))}
       </div>
     </div>
@@ -1470,7 +1615,6 @@ const TABS = [
   { id:'search',     label:'Search',     Icon:Search    },
   { id:'nearby',     label:'Nearby',     Icon:Crosshair },
   { id:'businesses', label:'Local',      Icon:Building2 },
-  { id:'saved',      label:'Saved',      Icon:Bookmark  },
   { id:'bookings',   label:'Bookings',   Icon:Receipt   },
   { id:'add',        label:'Add Spot',   Icon:Plus      },
 ];
@@ -1494,9 +1638,20 @@ export default function App() {
   const [bookingSpot,    setBookingSpot]    = useState(null);
   const [parkingTimer,   setParkingTimer]   = useState(()=>ls.get('pe_timer', null));
   const [timerRemaining, setTimerRemaining] = useState(null);
+  const [city,           setCity]           = useState(()=>ls.get('pe_city', 'belfast'));
+  const [showCityPicker, setShowCityPicker] = useState(false);
 
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
+
+  const currentCity = CITIES.find(c => c.id === city) || CITIES[0];
+  const citySpots   = getCitySpots(currentCity.id);
+
+  const changeCity = (id) => {
+    setCity(id);
+    ls.set('pe_city', id);
+    setShowCityPicker(false);
+  };
 
   // Real accounts: restore any existing session and react to login/logout.
   useEffect(() => {
@@ -1523,6 +1678,21 @@ export default function App() {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  // VIP emails (e.g. the owner's own account) are always Premium, on any device.
+  useEffect(() => {
+    const email = user?.email?.trim().toLowerCase();
+    if (email && VIP_EMAILS.some(v => v.toLowerCase() === email)) {
+      setIsPremium(true);
+      ls.set('pe_premium', true);
+    }
+  }, [user]);
+
+  const redeemVipCode = (code) => {
+    const ok = code?.trim().toUpperCase() === VIP_CODE;
+    if (ok) { setIsPremium(true); ls.set('pe_premium', true); }
+    return ok;
+  };
 
   useEffect(() => {
     if (isStandalone) return;
@@ -1633,7 +1803,7 @@ export default function App() {
       {/* ── Modals ── */}
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
-      {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)}/>}
+      {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)} onRedeem={redeemVipCode}/>}
       {showIOSGuide && <IOSGuide onClose={()=>setShowIOSGuide(false)}/>}
       {bookingSpot  && <BookingModal spot={bookingSpot} onClose={()=>setBookingSpot(null)} onConfirm={confirmBooking}/>}
       {showUserMenu && (
@@ -1649,7 +1819,7 @@ export default function App() {
           <div className="w-9 h-9 bg-[#4a9eff] rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
             <MapPin size={20} className="text-white" strokeWidth={2.5}/>
           </div>
-          <div>
+          <div className="relative">
             <h1 className="text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
             {timerRemaining != null && timerRemaining > 0
               ? (
@@ -1658,11 +1828,43 @@ export default function App() {
                   {`${Math.floor(timerRemaining/60000).toString().padStart(2,'0')}:${Math.floor((timerRemaining%60000)/1000).toString().padStart(2,'0')} remaining`}
                 </p>
               )
-              : <p className="text-blue-400 text-[10px] font-medium">Belfast · {SPOTS.length} spots</p>
+              : (
+                <button onClick={()=>setShowCityPicker(v=>!v)}
+                  className="text-blue-400 text-[10px] font-medium flex items-center gap-0.5 hover:text-blue-300 active:scale-95 transition">
+                  {currentCity.name} · {citySpots.length} spot{citySpots.length!==1?'s':''}
+                  <ChevronRight size={10} className={`transition-transform ${showCityPicker?'rotate-90':''}`}/>
+                </button>
+              )
             }
+            {showCityPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={()=>setShowCityPicker(false)}/>
+                <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 w-48 max-h-72 overflow-y-auto">
+                  <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 bg-gray-50">Northern Ireland</p>
+                  {CITIES.map(c=>(
+                    <button key={c.id} onClick={()=>changeCity(c.id)}
+                      className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${c.id===currentCity.id?'text-[#4a9eff] font-bold':'text-gray-700'}`}>
+                      {c.name}
+                      {c.id===currentCity.id && <Check size={12}/>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <button onClick={()=>setTab('saved')}
+              className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/20 ${
+                tab==='saved' ? 'bg-[#4a9eff] text-white' : 'bg-white/10 text-white hover:bg-white/20'
+              }`}>
+              <Bookmark size={16} fill={tab==='saved' ? 'white' : 'none'}/>
+              {saved.size > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-yellow-400 text-yellow-900 text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                  {saved.size}
+                </span>
+              )}
+            </button>
             {!isStandalone && (
               <button onClick={()=>isIOS ? setShowIOSGuide(true) : handleInstall()}
                 className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/20 flex items-center gap-1">
@@ -1698,8 +1900,8 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
-        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name}/>}
+        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
         {tab==='bookings'   && <BookingHistoryTab bookings={bookings}/>}
@@ -1711,7 +1913,7 @@ export default function App() {
         <div className="flex" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
           {TABS.map(({id,label,Icon})=>{
             const active = tab===id;
-            const pill   = id==='saved' && saved.size>0 ? saved.size : id==='bookings' && bookings.length>0 ? bookings.length : null;
+            const pill   = id==='bookings' && bookings.length>0 ? bookings.length : null;
             return (
               <button key={id} onClick={()=>setTab(id)}
                 className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors active:bg-gray-50 ${
