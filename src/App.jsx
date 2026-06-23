@@ -191,10 +191,37 @@ const PERTH_SPOTS = [
   { id:106, name:'Goderich Street Car Park',         near:'East Perth',             tags:['goderich street','east perth','royal perth hospital','perth cbd'],                badge:'official', dist:0, walk:'5 min', restriction:'Open 24/7',         notes:'Large CPP car park on Goderich St, East Perth — handy for Royal Perth Hospital and the eastern CBD. Usually has space on weekdays.', lat:-31.9558, lng:115.8703, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
 ];
 
-const getCitySpots = (cityId) =>
-  cityId === 'belfast' ? SPOTS :
-  cityId === 'perth'   ? PERTH_SPOTS :
-  [];
+// ── Lisburn — starter set of real, well-known car parks (owner to verify) ─────
+const LISBURN_SPOTS = [
+  { id:201, name:'Bow Street Mall Car Park',   near:'Bow Street Mall',  tags:['lisburn','bow street','city centre','shopping','bow street mall'], badge:'official', dist:0, walk:'2 min', restriction:'Mall hours', notes:'Multi-storey at Bow Street Mall in the centre of Lisburn — the main shopping car park. Easy access to Bow St and Market Square.', lat:54.5101, lng:-6.0407, by:'Bow Street Mall', votes:0, photo:null, price:null, spaces:null },
+  { id:202, name:'Lisburn Square Car Park',     near:'Lisburn Square',   tags:['lisburn','lisburn square','city centre','shopping'],               badge:'official', dist:0, walk:'2 min', restriction:'Mon–Sat 8am–6pm', notes:'Central car park beside Lisburn Square shops and restaurants. Handy for the city centre and Market Square.', lat:54.5108, lng:-6.0388, by:'Official', votes:0, photo:null, price:null, spaces:null },
+  { id:203, name:'Smithfield Street Car Park',  near:'Lisburn centre',   tags:['lisburn','smithfield street','city centre'],                       badge:'timed',    dist:0, walk:'3 min', restriction:'Mon–Sat 8am–6pm', notes:'On-street/surface parking on Smithfield St. Free evenings and Sundays — short walk to the centre.', lat:54.5119, lng:-6.0412, by:'NorthAntrimLocal', votes:0, photo:null, price:null, spaces:null },
+  { id:204, name:'Wallace Park',                near:'Wallace Park',     tags:['lisburn','wallace park','walks','free parking','dog walk'],         badge:'free',     dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Wallace Park — Victorian park with walks, sports pitches and a duck pond. Great for families and dog walkers.', lat:54.5180, lng:-6.0360, by:'LisburnLocal', votes:0, photo:null, price:null, spaces:null },
+];
+
+// ── Bangor — starter set of real, well-known car parks (owner to verify) ──────
+const BANGOR_SPOTS = [
+  { id:301, name:'Flagship Centre Car Park',    near:'Flagship Centre',  tags:['bangor','flagship centre','main street','town centre','shopping'], badge:'official', dist:0, walk:'1 min', restriction:'Centre hours', notes:'Car park at the Flagship Shopping Centre on Main St — central Bangor. Best for the town centre and seafront.', lat:54.6585, lng:-5.6705, by:'Flagship Centre', votes:0, photo:null, price:null, spaces:null },
+  { id:302, name:'Quay Street Car Park',        near:'Bangor seafront',  tags:['bangor','quay street','seafront','marina','town centre'],          badge:'timed',    dist:0, walk:'2 min', restriction:'Mon–Sat 8am–6pm', notes:'Surface car park by the seafront and marina. Free evenings and Sundays — ideal for a walk along the front or Pickie Fun Park.', lat:54.6618, lng:-5.6690, by:'Official', votes:0, photo:null, price:null, spaces:null },
+  { id:303, name:'Bangor Marina Car Park',      near:'Bangor Marina',    tags:['bangor','marina','seafront','eisenhower pier'],                    badge:'official', dist:0, walk:'1 min', restriction:'Open daily', notes:'Parking right at Bangor Marina and Eisenhower Pier. Great for the coastal path and waterfront restaurants.', lat:54.6640, lng:-5.6675, by:'Official', votes:0, photo:null, price:null, spaces:null },
+  { id:304, name:'Marine Gardens / Seacliff Rd',near:'Ballyholme',       tags:['bangor','marine gardens','seacliff road','ballyholme','seafront','free parking'], badge:'free', dist:0, walk:'On the road', restriction:'Free — no restrictions', notes:'Free on-street parking along Seacliff Rd towards Ballyholme. Lovely bay views and an easy coastal walk.', lat:54.6600, lng:-5.6620, by:'BangorLocal', votes:0, photo:null, price:null, spaces:null },
+];
+
+// ── Newtownabbey — starter set of real, well-known car parks (owner to verify) ─
+const NEWTOWNABBEY_SPOTS = [
+  { id:401, name:'Abbeycentre Car Park',        near:'Abbeycentre',      tags:['newtownabbey','abbeycentre','shopping','free parking','retail park'], badge:'free',  dist:0, walk:'Right there', restriction:'Free — centre hours', notes:'Large free car park at the Abbeycentre shopping centre — always plenty of space. Use as a base for the area.', lat:54.6855, lng:-5.9160, by:'Abbeycentre', votes:0, photo:null, price:null, spaces:null },
+  { id:402, name:'Valley Leisure Centre',       near:'Valley Park',      tags:['newtownabbey','valley park','valley leisure centre','walks','free parking','dog walk'], badge:'free', dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Valley Leisure Centre and the Valley Park — walking trails, playing fields and the leisure centre.', lat:54.6760, lng:-5.9300, by:'NewtownabbeyLocal', votes:0, photo:null, price:null, spaces:null },
+];
+
+const CITY_SPOTS = {
+  belfast:      SPOTS,
+  perth:        PERTH_SPOTS,
+  lisburn:      LISBURN_SPOTS,
+  bangor:       BANGOR_SPOTS,
+  newtownabbey: NEWTOWNABBEY_SPOTS,
+};
+
+const getCitySpots = (cityId) => CITY_SPOTS[cityId] || [];
 
 // Welcome-screen stats — derived from SPOTS so they never go stale as spots are added.
 const WELCOME_STATS = [
