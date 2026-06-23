@@ -178,7 +178,23 @@ const CITIES = [
 // Region groupings for the city picker, in display order.
 const CITY_REGIONS = [...new Set(CITIES.map(c => c.region))];
 
-const getCitySpots = (cityId) => cityId === 'belfast' ? SPOTS : [];
+// ── Perth, Australia — starter set of real City of Perth (CPP) car parks ──────
+// Well-known public car parks to seed the city so it isn't empty. Coordinates
+// are best-effort CBD locations; live rates/bays are in the CPP app. Owner to
+// verify/refine over time as the community adds spots.
+const PERTH_SPOTS = [
+  { id:101, name:"His Majesty's Car Park",          near:"His Majesty's Theatre", tags:['perth cbd','his majesty','hay street','murray street','city centre','shopping'], badge:'official', dist:0, walk:'2 min', restriction:'Open 24/7',         notes:"City of Perth (CPP) car park at 25 Murray St, beside His Majesty's Theatre. Handy for the Hay St Mall and a show. Live bays and rates in the CPP app.", lat:-31.9522, lng:115.8556, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:102, name:'Elizabeth Quay Car Park',          near:'Elizabeth Quay',        tags:['elizabeth quay','the esplanade','riverside','perth cbd','waterfront'],            badge:'official', dist:0, walk:'3 min', restriction:'Open 24/7',         notes:'CPP car park serving Elizabeth Quay and the riverfront — bars, restaurants and the ferry. Great weekend spot. Rates in the CPP app.', lat:-31.9591, lng:115.8588, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:103, name:'Convention Centre Car Park',       near:'Perth Convention Centre',tags:['pcec','convention centre','mounts bay road','perth cbd','events'],                badge:'official', dist:0, walk:'2 min', restriction:'Open 24/7',         notes:'CPP car park at 21 Mounts Bay Rd under the Perth Convention & Exhibition Centre. Best for events and the western end of the CBD.', lat:-31.9573, lng:115.8533, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:104, name:'State Library / Cultural Centre',  near:'Northbridge',            tags:['cultural centre','state library','art gallery','northbridge','roe street','perth cbd'], badge:'official', dist:0, walk:'3 min', restriction:'Open 24/7',     notes:'CPP car park off Roe St for the Perth Cultural Centre — State Library, Art Gallery, WA Museum Boola Bardip and Northbridge nightlife.', lat:-31.9486, lng:115.8601, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:105, name:'Terrace Road Car Park',            near:'Langley Park',           tags:['terrace road','langley park','riverside','perth cbd','swan river'],               badge:'official', dist:0, walk:'On the road', restriction:'Open 24/7',     notes:'CPP car park on Terrace Rd overlooking Langley Park and the Swan River. Quieter eastern-CBD option with easy freeway access.', lat:-31.9560, lng:115.8642, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:106, name:'Goderich Street Car Park',         near:'East Perth',             tags:['goderich street','east perth','royal perth hospital','perth cbd'],                badge:'official', dist:0, walk:'5 min', restriction:'Open 24/7',         notes:'Large CPP car park on Goderich St, East Perth — handy for Royal Perth Hospital and the eastern CBD. Usually has space on weekdays.', lat:-31.9558, lng:115.8703, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+];
+
+const getCitySpots = (cityId) =>
+  cityId === 'belfast' ? SPOTS :
+  cityId === 'perth'   ? PERTH_SPOTS :
+  [];
 
 // Welcome-screen stats — derived from SPOTS so they never go stale as spots are added.
 const WELCOME_STATS = [
@@ -498,7 +514,7 @@ const BusinessModal = ({ onClose }) => {
             <h2 className="text-lg font-bold text-gray-900">List Your Business Free</h2>
             <p className="text-xs text-gray-400">Customers see exactly where to park</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><X size={16}/></button>
+          <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><X size={16}/></button>
         </div>
         <div className="p-6">
           <form onSubmit={submit} className="space-y-3">
@@ -544,7 +560,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
         <div style={{ background: 'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)' }} className="p-6 text-center relative">
-          <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition"><X size={16}/></button>
+          <button aria-label="Close" onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition"><X size={16}/></button>
           <div className="w-14 h-14 bg-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
             <Star size={28} fill="currentColor" className="text-yellow-900"/>
           </div>
@@ -695,6 +711,7 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, 
         </div>
 
         <button
+          aria-label={saved ? 'Remove from saved spots' : 'Save this spot'}
           onClick={()=>onSave(spot.id)}
           className={`absolute top-2.5 right-2.5 w-9 h-9 rounded-full shadow-md flex items-center justify-center transition-all active:scale-90 ${
             saved ? 'bg-[#4a9eff]' : 'bg-white/90 backdrop-blur-sm'
@@ -968,7 +985,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
         />
         {query && (
-          <button onClick={()=>setQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-300 transition">
+          <button aria-label="Clear search" onClick={()=>setQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-300 transition">
             <X size={12}/>
           </button>
         )}
@@ -1647,7 +1664,7 @@ const BookingModal = ({ spot, onClose, onConfirm }) => {
             <h2 className="text-white font-bold text-base leading-snug">{spot.name}</h2>
             <p className="text-blue-300 text-xs mt-0.5">Booking ref: {ref}</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30">
+          <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30">
             <X size={16}/>
           </button>
         </div>
@@ -1997,7 +2014,7 @@ export default function App() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={()=>setTab('saved')}
+            <button aria-label="Saved spots" onClick={()=>setTab('saved')}
               className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/20 ${
                 tab==='saved' ? 'bg-[#4a9eff] text-white' : 'bg-white/10 text-white hover:bg-white/20'
               }`}>
