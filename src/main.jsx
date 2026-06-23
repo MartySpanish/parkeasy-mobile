@@ -13,7 +13,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 if ('serviceWorker' in navigator && !window.Capacitor) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/parkeasy-mobile/sw.js')
+      .register('/sw.js')
       .catch(() => {})
   })
 }
