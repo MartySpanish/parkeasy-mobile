@@ -168,7 +168,7 @@ const CITIES = [
   { id:'belfast',      name:'Belfast',           center:[54.5973,-5.9301], region:'Northern Ireland' },
   { id:'derry',        name:'Derry~Londonderry', center:[54.9966,-7.3086], region:'Northern Ireland' },
   { id:'lisburn',      name:'Lisburn',           center:[54.5162,-6.0581], region:'Northern Ireland' },
-  { id:'newtownabbey', name:'Newtownabbey',      center:[54.6601,-5.9094], region:'Northern Ireland' },
+  { id:'newtownabbey', name:'Newtownabbey',      center:[54.6800,-5.9200], region:'Northern Ireland' },
   { id:'bangor',       name:'Bangor',            center:[54.6604,-5.6694], region:'Northern Ireland' },
   { id:'newry',        name:'Newry',             center:[54.1751,-6.3402], region:'Northern Ireland' },
   { id:'antrim',       name:'Antrim',            center:[54.7140,-6.2110], region:'Northern Ireland' },
@@ -316,7 +316,20 @@ const getAvailability = (spot) => {
 };
 
 const ls = {
-  get: (k, fb) => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; } catch { return fb; } },
+  get: (k, fb) => {
+    try {
+      const v = localStorage.getItem(k);
+      if (v == null) return fb;
+      const parsed = JSON.parse(v);
+      // Guard against corrupt/wrong-shape values so a bad localStorage entry
+      // can't white-screen the app: if the fallback is an array, require an
+      // array; if it's a plain object, require a plain object.
+      if (Array.isArray(fb) && !Array.isArray(parsed)) return fb;
+      if (fb && typeof fb === 'object' && !Array.isArray(fb) &&
+          (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))) return fb;
+      return parsed ?? fb;
+    } catch { return fb; }
+  },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 
@@ -929,7 +942,10 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
   // Grab location when distance sort is chosen
   useEffect(() => {
     if (sortBy === 'distance' && !userLoc) {
-      navigator.geolocation?.getCurrentPosition(
+      // If geolocation isn't available, don't leave the list silently unsorted
+      // under a "Nearest" label — fall back to popularity.
+      if (!navigator.geolocation) { setSortBy('popular'); return; }
+      navigator.geolocation.getCurrentPosition(
         ({coords:{latitude:lat,longitude:lng}}) => setUserLoc([lat,lng]),
         () => setSortBy('popular'),
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
@@ -1005,6 +1021,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
         <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
         <input
           ref={inputRef}
+          aria-label="Search parking spots"
           value={query}
           onChange={e=>setQuery(e.target.value)}
           onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
@@ -1157,7 +1174,11 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
     // so they still see something useful — rather than an empty screen.
     const hasLocalSpots = spotsFor(detected.id).length > 0;
     const sourceCity = hasLocalSpots ? detected : (CITIES.find(c => c.id === 'belfast') || CITIES[0]);
-    onCityDetected?.(sourceCity.id);
+    // Only switch (and persist) the app's city when the detected town actually
+    // has spots. On a Belfast fallback we leave the user's chosen city intact —
+    // the blue note explains we're showing Belfast — so their pick isn't silently
+    // overwritten.
+    if (hasLocalSpots) onCityDetected?.(sourceCity.id);
     setFallback(hasLocalSpots ? null : detected.name);
     const sorted = spotsFor(sourceCity.id)
       .map(s => ({...s, realDist: haversine(lat, lng, s.lat, s.lng)}))
@@ -1824,7 +1845,12 @@ export default function App() {
   const [showIOSGuide,   setShowIOSGuide]   = useState(false);
   const [bookings,       setBookings]       = useState(()=>ls.get('pe_bookings', []));
   const [bookingSpot,    setBookingSpot]    = useState(null);
-  const [parkingTimer,   setParkingTimer]   = useState(()=>ls.get('pe_timer', null));
+  const [parkingTimer,   setParkingTimer]   = useState(()=>{
+    // Drop an already-expired or malformed timer on load so it can't fire a
+    // blocking "expired" alert the instant the app reopens.
+    const t = ls.get('pe_timer', null);
+    return t && typeof t.endsAt === 'number' && t.endsAt > Date.now() ? t : null;
+  });
   const [timerRemaining, setTimerRemaining] = useState(null);
   const [city,           setCity]           = useState(()=>ls.get('pe_city', 'belfast'));
   const [showCityPicker, setShowCityPicker] = useState(false);
@@ -1840,7 +1866,7 @@ export default function App() {
     [userSpots, currentCity.id]
   );
   // Everything addressable by id (used by Saved, which can hold community spots too).
-  const allSpots    = useMemo(() => [...userSpots, ...SPOTS], [userSpots]);
+  const allSpots    = useMemo(() => [...userSpots, ...Object.values(CITY_SPOTS).flat()], [userSpots]);
 
   const changeCity = (id) => {
     setCity(id);
@@ -1997,6 +2023,9 @@ export default function App() {
       const next = [newSpot, ...userSpots];
       setUserSpots(next);
       ls.set('pe_user_spots', next);
+      // Make sure the contributor can actually see their new spot: switch to the
+      // city it was pinned in (otherwise Search keeps showing the old city).
+      if (newSpot.city && newSpot.city !== city) { setCity(newSpot.city); ls.set('pe_city', newSpot.city); }
     }
     // Premium is NOT granted here — only after you review and approve the spot.
     // You email the user a unique link: parkeasy.uk/?premium=success
