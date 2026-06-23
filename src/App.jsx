@@ -160,20 +160,75 @@ const SPOTS = [
   { id:64, name:'Cave Hill Country Park (Upper Cavehill Rd)', near:'Cave Hill', tags:['cave hill','cavehill','country park','walks','hiking','napoleons nose','free parking','north belfast','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — dawn to dusk', notes:'Alternative free car park higher up on Upper Cavehill Road — quicker route to the summit and Napoleon\'s Nose than the castle. Stunning views over the city and lough. Less crowded on busy weekends.', lat:54.6420, lng:-5.9560, by:'CaveHillHiker', votes:54, photo:null, price:null, spaces:40 },
 ];
 
-// ── Cities (Northern Ireland) ────────────────────────────────────────────────
-// Belfast has full community-sourced spot data. Other towns are listed so
-// people can pick their area and be the first to add local spots.
+// ── Cities ───────────────────────────────────────────────────────────────────
+// Belfast has full community-sourced spot data. Other towns/cities are listed so
+// people can pick their area and be the first to add local spots. Each city has a
+// region so the picker can group them (Northern Ireland, Scotland, …).
 const CITIES = [
-  { id:'belfast',      name:'Belfast',           center:[54.5973,-5.9301] },
-  { id:'derry',        name:'Derry~Londonderry', center:[54.9966,-7.3086] },
-  { id:'lisburn',      name:'Lisburn',           center:[54.5162,-6.0581] },
-  { id:'newtownabbey', name:'Newtownabbey',      center:[54.6601,-5.9094] },
-  { id:'bangor',       name:'Bangor',            center:[54.6604,-5.6694] },
-  { id:'newry',        name:'Newry',             center:[54.1751,-6.3402] },
-  { id:'antrim',       name:'Antrim',            center:[54.7140,-6.2110] },
+  { id:'belfast',      name:'Belfast',           center:[54.5973,-5.9301], region:'Northern Ireland' },
+  { id:'derry',        name:'Derry~Londonderry', center:[54.9966,-7.3086], region:'Northern Ireland' },
+  { id:'lisburn',      name:'Lisburn',           center:[54.5162,-6.0581], region:'Northern Ireland' },
+  { id:'newtownabbey', name:'Newtownabbey',      center:[54.6601,-5.9094], region:'Northern Ireland' },
+  { id:'bangor',       name:'Bangor',            center:[54.6604,-5.6694], region:'Northern Ireland' },
+  { id:'newry',        name:'Newry',             center:[54.1751,-6.3402], region:'Northern Ireland' },
+  { id:'antrim',       name:'Antrim',            center:[54.7140,-6.2110], region:'Northern Ireland' },
+  { id:'perth',        name:'Perth',             center:[-31.9523,115.8613], region:'Australia' },
 ];
 
-const getCitySpots = (cityId) => cityId === 'belfast' ? SPOTS : [];
+// Region groupings for the city picker, in display order.
+const CITY_REGIONS = [...new Set(CITIES.map(c => c.region))];
+
+// ── Perth, Australia — starter set of real City of Perth (CPP) car parks ──────
+// Well-known public car parks to seed the city so it isn't empty. Coordinates
+// are best-effort CBD locations; live rates/bays are in the CPP app. Owner to
+// verify/refine over time as the community adds spots.
+const PERTH_SPOTS = [
+  { id:101, name:"His Majesty's Car Park",          near:"His Majesty's Theatre", tags:['perth cbd','his majesty','hay street','murray street','city centre','shopping'], badge:'official', dist:0, walk:'2 min', restriction:'Open 24/7',         notes:"City of Perth (CPP) car park at 25 Murray St, beside His Majesty's Theatre. Handy for the Hay St Mall and a show. Live bays and rates in the CPP app.", lat:-31.9522, lng:115.8556, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:102, name:'Elizabeth Quay Car Park',          near:'Elizabeth Quay',        tags:['elizabeth quay','the esplanade','riverside','perth cbd','waterfront'],            badge:'official', dist:0, walk:'3 min', restriction:'Open 24/7',         notes:'CPP car park serving Elizabeth Quay and the riverfront — bars, restaurants and the ferry. Great weekend spot. Rates in the CPP app.', lat:-31.9591, lng:115.8588, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:103, name:'Convention Centre Car Park',       near:'Perth Convention Centre',tags:['pcec','convention centre','mounts bay road','perth cbd','events'],                badge:'official', dist:0, walk:'2 min', restriction:'Open 24/7',         notes:'CPP car park at 21 Mounts Bay Rd under the Perth Convention & Exhibition Centre. Best for events and the western end of the CBD.', lat:-31.9573, lng:115.8533, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:104, name:'State Library / Cultural Centre',  near:'Northbridge',            tags:['cultural centre','state library','art gallery','northbridge','roe street','perth cbd'], badge:'official', dist:0, walk:'3 min', restriction:'Open 24/7',     notes:'CPP car park off Roe St for the Perth Cultural Centre — State Library, Art Gallery, WA Museum Boola Bardip and Northbridge nightlife.', lat:-31.9486, lng:115.8601, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:105, name:'Terrace Road Car Park',            near:'Langley Park',           tags:['terrace road','langley park','riverside','perth cbd','swan river'],               badge:'official', dist:0, walk:'On the road', restriction:'Open 24/7',     notes:'CPP car park on Terrace Rd overlooking Langley Park and the Swan River. Quieter eastern-CBD option with easy freeway access.', lat:-31.9560, lng:115.8642, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+  { id:106, name:'Goderich Street Car Park',         near:'East Perth',             tags:['goderich street','east perth','royal perth hospital','perth cbd'],                badge:'official', dist:0, walk:'5 min', restriction:'Open 24/7',         notes:'Large CPP car park on Goderich St, East Perth — handy for Royal Perth Hospital and the eastern CBD. Usually has space on weekdays.', lat:-31.9558, lng:115.8703, by:'City of Perth Parking', votes:0, photo:null, price:null, spaces:null },
+];
+
+// ── Lisburn — starter set of real, well-known car parks (owner to verify) ─────
+const LISBURN_SPOTS = [
+  { id:201, name:'Bow Street Mall Car Park',   near:'Bow Street Mall',  tags:['lisburn','bow street','city centre','shopping','bow street mall'], badge:'official', dist:0, walk:'2 min', restriction:'Mall hours', notes:'Multi-storey at Bow Street Mall in the centre of Lisburn — the main shopping car park. Easy access to Bow St and Market Square.', lat:54.5101, lng:-6.0407, by:'Bow Street Mall', votes:0, photo:null, price:null, spaces:null },
+  { id:202, name:'Lisburn Square Car Park',     near:'Lisburn Square',   tags:['lisburn','lisburn square','city centre','shopping'],               badge:'official', dist:0, walk:'2 min', restriction:'Mon–Sat 8am–6pm', notes:'Central car park beside Lisburn Square shops and restaurants. Handy for the city centre and Market Square.', lat:54.5108, lng:-6.0388, by:'Official', votes:0, photo:null, price:null, spaces:null },
+  { id:203, name:'Smithfield Street Car Park',  near:'Lisburn centre',   tags:['lisburn','smithfield street','city centre'],                       badge:'timed',    dist:0, walk:'3 min', restriction:'Mon–Sat 8am–6pm', notes:'On-street/surface parking on Smithfield St. Free evenings and Sundays — short walk to the centre.', lat:54.5119, lng:-6.0412, by:'NorthAntrimLocal', votes:0, photo:null, price:null, spaces:null },
+  { id:204, name:'Wallace Park',                near:'Wallace Park',     tags:['lisburn','wallace park','walks','free parking','dog walk'],         badge:'free',     dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Wallace Park — Victorian park with walks, sports pitches and a duck pond. Great for families and dog walkers.', lat:54.5180, lng:-6.0360, by:'LisburnLocal', votes:0, photo:null, price:null, spaces:null },
+];
+
+// ── Bangor — starter set of real, well-known car parks (owner to verify) ──────
+const BANGOR_SPOTS = [
+  { id:301, name:'Flagship Centre Car Park',    near:'Flagship Centre',  tags:['bangor','flagship centre','main street','town centre','shopping'], badge:'official', dist:0, walk:'1 min', restriction:'Centre hours', notes:'Car park at the Flagship Shopping Centre on Main St — central Bangor. Best for the town centre and seafront.', lat:54.6585, lng:-5.6705, by:'Flagship Centre', votes:0, photo:null, price:null, spaces:null },
+  { id:302, name:'Quay Street Car Park',        near:'Bangor seafront',  tags:['bangor','quay street','seafront','marina','town centre'],          badge:'timed',    dist:0, walk:'2 min', restriction:'Mon–Sat 8am–6pm', notes:'Surface car park by the seafront and marina. Free evenings and Sundays — ideal for a walk along the front or Pickie Fun Park.', lat:54.6618, lng:-5.6690, by:'Official', votes:0, photo:null, price:null, spaces:null },
+  { id:303, name:'Bangor Marina Car Park',      near:'Bangor Marina',    tags:['bangor','marina','seafront','eisenhower pier'],                    badge:'official', dist:0, walk:'1 min', restriction:'Open daily', notes:'Parking right at Bangor Marina and Eisenhower Pier. Great for the coastal path and waterfront restaurants.', lat:54.6640, lng:-5.6675, by:'Official', votes:0, photo:null, price:null, spaces:null },
+  { id:304, name:'Marine Gardens / Seacliff Rd',near:'Ballyholme',       tags:['bangor','marine gardens','seacliff road','ballyholme','seafront','free parking'], badge:'free', dist:0, walk:'On the road', restriction:'Free — no restrictions', notes:'Free on-street parking along Seacliff Rd towards Ballyholme. Lovely bay views and an easy coastal walk.', lat:54.6600, lng:-5.6620, by:'BangorLocal', votes:0, photo:null, price:null, spaces:null },
+];
+
+// ── Newtownabbey — starter set of real, well-known car parks (owner to verify) ─
+const NEWTOWNABBEY_SPOTS = [
+  { id:401, name:'Abbeycentre Car Park',        near:'Abbeycentre',      tags:['newtownabbey','abbeycentre','shopping','free parking','retail park'], badge:'free',  dist:0, walk:'Right there', restriction:'Free — centre hours', notes:'Large free car park at the Abbeycentre shopping centre — always plenty of space. Use as a base for the area.', lat:54.6855, lng:-5.9160, by:'Abbeycentre', votes:0, photo:null, price:null, spaces:null },
+  { id:402, name:'Valley Leisure Centre',       near:'Valley Park',      tags:['newtownabbey','valley park','valley leisure centre','walks','free parking','dog walk'], badge:'free', dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Valley Leisure Centre and the Valley Park — walking trails, playing fields and the leisure centre.', lat:54.6760, lng:-5.9300, by:'NewtownabbeyLocal', votes:0, photo:null, price:null, spaces:null },
+];
+
+const CITY_SPOTS = {
+  belfast:      SPOTS,
+  perth:        PERTH_SPOTS,
+  lisburn:      LISBURN_SPOTS,
+  bangor:       BANGOR_SPOTS,
+  newtownabbey: NEWTOWNABBEY_SPOTS,
+};
+
+const getCitySpots = (cityId) => CITY_SPOTS[cityId] || [];
+
+// Welcome-screen stats — derived from SPOTS so they never go stale as spots are added.
+const WELCOME_STATS = [
+  ['🟢', SPOTS.length, 'Spots'],
+  ['💎', SPOTS.filter(s => s.badge === 'hidden_gem').length, 'Hidden Gems'],
+  ['🅿', SPOTS.filter(s => s.badge === 'official').length, 'Car Parks'],
+];
 
 const BUSINESSES = [
   { id:1,  name:"Tommy's Barber",       area:'Glen Road',         addr:'245 Glen Road, West Belfast BT11',    cat:'Barber',         icon:'✂️',  key:'glen road barber',   lat:54.5935, lng:-6.0012 },
@@ -369,7 +424,7 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
 
         <div className="p-6 space-y-5">
           <div className="grid grid-cols-3 gap-2 text-center">
-            {[['🟢','54','Spots'],['💎','12','Hidden Gems'],['🅿','9','Car Parks']].map(([e,n,l])=>(
+            {WELCOME_STATS.map(([e,n,l])=>(
               <div key={l} className="bg-gray-50 rounded-xl py-2.5">
                 <p className="text-lg">{e}</p>
                 <p className="font-extrabold text-gray-900 text-sm">{n}</p>
@@ -486,7 +541,7 @@ const BusinessModal = ({ onClose }) => {
             <h2 className="text-lg font-bold text-gray-900">List Your Business Free</h2>
             <p className="text-xs text-gray-400">Customers see exactly where to park</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><X size={16}/></button>
+          <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><X size={16}/></button>
         </div>
         <div className="p-6">
           <form onSubmit={submit} className="space-y-3">
@@ -532,7 +587,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
         <div style={{ background: 'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)' }} className="p-6 text-center relative">
-          <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition"><X size={16}/></button>
+          <button aria-label="Close" onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition"><X size={16}/></button>
           <div className="w-14 h-14 bg-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
             <Star size={28} fill="currentColor" className="text-yellow-900"/>
           </div>
@@ -683,6 +738,7 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, 
         </div>
 
         <button
+          aria-label={saved ? 'Remove from saved spots' : 'Save this spot'}
           onClick={()=>onSave(spot.id)}
           className={`absolute top-2.5 right-2.5 w-9 h-9 rounded-full shadow-md flex items-center justify-center transition-all active:scale-90 ${
             saved ? 'bg-[#4a9eff]' : 'bg-white/90 backdrop-blur-sm'
@@ -820,6 +876,7 @@ const BADGE_FILTERS = [
   { id:'hidden_gem',label:'💎 Hidden', color:'#7e22ce', bg:'#f3e8ff' },
   { id:'official',  label:'🅿 Official',color:'#1e3a5f', bg:'#dbeafe' },
   { id:'timed',     label:'⏱ Timed',   color:'#9a3412', bg:'#fff7ed' },
+  { id:'paid',      label:'£ Paid',    color:'#92400e', bg:'#fef9c3' },
 ];
 
 const SORT_OPTIONS_FREE    = [
@@ -874,7 +931,8 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
     if (sortBy === 'distance' && !userLoc) {
       navigator.geolocation?.getCurrentPosition(
         ({coords:{latitude:lat,longitude:lng}}) => setUserLoc([lat,lng]),
-        () => setSortBy('popular')
+        () => setSortBy('popular'),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     }
   }, [sortBy]);
@@ -954,7 +1012,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
         />
         {query && (
-          <button onClick={()=>setQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-300 transition">
+          <button aria-label="Clear search" onClick={()=>setQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-300 transition">
             <X size={12}/>
           </button>
         )}
@@ -1080,31 +1138,53 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
 };
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
-const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, cityName, onCityDetected }) => {
+const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, cityName, onCityDetected, userSpots = [] }) => {
   const [loc,     setLoc]     = useState(null);
   const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
   const [err,     setErr]     = useState('');
   const [focusSpot, setFocusSpot] = useState(null);
+  const [fallback,  setFallback]  = useState(null); // name of the town we detected when it has no spots yet
   const mapRef = useRef(null);
 
   const buildNearby = useCallback((lat, lng) => {
-    // Detect which NI town/city the user is closest to and switch to it.
-    const city = nearestCity(lat, lng);
-    onCityDetected?.(city.id);
-    const sorted = getCitySpots(city.id)
+    // Detect which NI town/city the user is closest to. Community-submitted
+    // spots are merged in alongside the seeded ones for each town.
+    const detected = nearestCity(lat, lng);
+    const spotsFor = (cid) => [...userSpots.filter(s => s.city === cid), ...getCitySpots(cid)];
+    // Only Belfast has seeded data so far. If the user's nearest town has no
+    // spots yet (seeded or community), fall back to the closest Belfast spots
+    // so they still see something useful — rather than an empty screen.
+    const hasLocalSpots = spotsFor(detected.id).length > 0;
+    const sourceCity = hasLocalSpots ? detected : (CITIES.find(c => c.id === 'belfast') || CITIES[0]);
+    onCityDetected?.(sourceCity.id);
+    setFallback(hasLocalSpots ? null : detected.name);
+    const sorted = spotsFor(sourceCity.id)
       .map(s => ({...s, realDist: haversine(lat, lng, s.lat, s.lng)}))
       .sort((a,b) => a.realDist - b.realDist)
       .slice(0, 12);
     setNearby(sorted);
     setLoading(false);
-  }, [onCityDetected]);
+  }, [onCityDetected, userSpots]);
 
   const findNearby = () => {
     setLoading(true); setErr('');
+    const fallbackToBelfast = (msg) => {
+      const lat = 54.5973, lng = -5.9301;
+      setLoc([lat,lng]); buildNearby(lat,lng); setErr(msg);
+    };
+    if (!navigator.geolocation) {
+      fallbackToBelfast('Location isn’t supported on this device — showing spots from Belfast city centre.');
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       ({coords:{latitude:lat,longitude:lng}}) => { setLoc([lat,lng]); buildNearby(lat,lng); },
-      () => { const lat=54.5973,lng=-5.9301; setLoc([lat,lng]); buildNearby(lat,lng); setErr('Location access denied — showing spots from Belfast city centre.'); }
+      (e) => fallbackToBelfast(
+        e?.code === 1
+          ? 'Location access denied — showing spots from Belfast city centre. Enable location to see spots near you.'
+          : 'Couldn’t get your location (timed out) — showing spots from Belfast city centre. Tap Refresh to try again.'
+      ),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   };
 
@@ -1138,12 +1218,18 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
           <Info size={14} className="mt-0.5 flex-shrink-0"/><span>{err}</span>
         </div>
       )}
+      {fallback && (
+        <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3.5 py-3 rounded-xl">
+          <Info size={14} className="mt-0.5 flex-shrink-0"/>
+          <span>No community spots in <strong>{fallback}</strong> yet — showing the closest spots in Belfast. Know a good spot near you? Add it from the "Add Spot" tab and be the first!</span>
+        </div>
+      )}
       <div ref={mapRef}>
         <ParkingMap spots={nearby} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240}/>
       </div>
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold text-gray-900">{nearby.length ? `${nearby.length} closest spots in ${cityName}` : `No spots near you yet`}</p>
-        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
+        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);setFallback(null);}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
       </div>
       {nearby.length === 0 && (
         <div className="text-center py-8">
@@ -1161,7 +1247,7 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
 };
 
 // ── BusinessesTab ─────────────────────────────────────────────────────────────
-const BusinessesTab = ({ onGetListed }) => {
+const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
   const [open,      setOpen]      = useState(null);
   const [bizSearch, setBizSearch] = useState('');
 
@@ -1205,7 +1291,13 @@ const BusinessesTab = ({ onGetListed }) => {
       <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold">{filtered.length} businesses · Belfast</p>
 
       {filtered.map(b => {
-        const spots = SPOTS.filter(s => s.tags.some(t => t.includes(b.key)));
+        // Match parking to a business by tag OR geographic proximity (within
+        // ~0.2 mi), so community-added spots near a venue show up too. Nearest first.
+        const spots = allSpots
+          .filter(s => s.tags.some(t => t.includes(b.key)) || haversine(b.lat, b.lng, s.lat, s.lng) <= 0.2)
+          .map(s => ({ ...s, _bizDist: haversine(b.lat, b.lng, s.lat, s.lng) }))
+          .sort((a, c) => a._bizDist - c._bizDist)
+          .slice(0, 8);
         const isOpen = open === b.id;
         return (
           <div key={b.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -1264,14 +1356,30 @@ const BusinessesTab = ({ onGetListed }) => {
 };
 
 // ── SavedTab ──────────────────────────────────────────────────────────────────
-const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
-  const spots = SPOTS.filter(s => saved.has(s.id));
+const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, allSpots = SPOTS }) => {
+  const spots = allSpots.filter(s => saved.has(s.id));
   const [focusSpot, setFocusSpot] = useState(null);
+  const [shared, setShared] = useState(false);
   const mapRef = useRef(null);
 
   const viewOnMap = (spot) => {
     setFocusSpot(spot);
     setTimeout(() => mapRef.current?.scrollIntoView({behavior:'smooth', block:'center'}), 50);
+  };
+
+  // Share the whole saved list — names, restrictions and a directions link each —
+  // via the native share sheet, falling back to copying to the clipboard.
+  const shareList = async () => {
+    const lines = spots.map(s => `📍 ${s.name} — ${s.restriction}\n${directionsUrl(s.lat, s.lng)}`);
+    const text = `My ParkEasy saved spots:\n\n${lines.join('\n\n')}`;
+    const url = 'https://parkeasy.uk/';
+    if (navigator.share) {
+      try { await navigator.share({ title: 'My ParkEasy saved spots', text, url }); } catch {}
+    } else {
+      navigator.clipboard?.writeText(`${text}\n\n${url}`);
+      setShared(true);
+      setTimeout(() => setShared(false), 2200);
+    }
   };
 
   if (!spots.length) return (
@@ -1290,9 +1398,14 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => 
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-bold text-gray-900">{spots.length} saved spot{spots.length!==1?'s':''}</p>
-        <span className="text-xs text-gray-400">Tap bookmark to remove</span>
+        <button onClick={shareList} aria-label="Share my saved spots"
+          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold border transition-all active:scale-95 ${
+            shared ? 'bg-green-50 border-green-300 text-green-700' : 'border-gray-200 text-gray-600 hover:border-[#4a9eff] hover:text-[#4a9eff]'
+          }`}>
+          {shared ? <><Check size={12}/>Copied!</> : <><Share2 size={12}/>Share list</>}
+        </button>
       </div>
       {(spots.length > 1 || focusSpot) && (
         <div ref={mapRef}>
@@ -1314,16 +1427,71 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   const [preview, setPreview] = useState(null);
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [coords, setCoords] = useState(null);   // [lat, lng] captured from GPS
+  const [locating, setLocating] = useState(false);
+  const [locErr, setLocErr] = useState('');
   const fileRef = useRef(null);
 
   const SPOT_TYPES   = ['Street parking','Lay-by','Car park','Side road','Grass verge','Private (shared)'];
   const RESTRICTIONS = ['Free all day','Time limited','Evenings free','Weekends free','No restrictions'];
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
 
+  // Restriction → map-pin/badge category for the live map.
+  const RESTRICTION_TO_BADGE = {
+    'Free all day':   'free',
+    'No restrictions':'free',
+    'Time limited':   'timed',
+    'Evenings free':  'timed',
+    'Weekends free':  'timed',
+  };
+
+  const captureLocation = () => {
+    setLocErr('');
+    if (!navigator.geolocation) { setLocErr('Location isn’t supported on this device.'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      ({coords:{latitude,longitude}}) => { setCoords([latitude, longitude]); setLocating(false); },
+      () => { setLocErr('Couldn’t get your location — you can still submit, but the spot won’t show on the map yet.'); setLocating(false); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // Turn the form + captured GPS into a spot the live map/lists can render.
+  // Returns null when no location was captured (we then just email it for review).
+  const buildSpot = () => {
+    if (!coords) return null;
+    const [lat, lng] = coords;
+    const city = nearestCity(lat, lng);
+    const name = (form.street || form.near || 'Community spot').trim();
+    const tags = Array.from(new Set(
+      `${form.near} ${form.street}`.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2)
+    ));
+    return {
+      id: Date.now(),
+      name,
+      near: form.near.trim() || name,
+      tags,
+      badge: RESTRICTION_TO_BADGE[form.restriction] || 'free',
+      dist: 0,
+      walk: 'Your spot',
+      restriction: form.restriction,
+      notes: form.notes.trim() || `${form.type} added by ${user.name}.`,
+      lat, lng,
+      by: user.name,
+      votes: 0,
+      photo: null,
+      price: null,
+      spaces: null,
+      city: city.id,
+      mine: true,
+    };
+  };
+
   const submitSpot = async (e) => {
     e.preventDefault();
     if (!form.type || !form.restriction) return;
     setSubmitting(true);
+    const newSpot = buildSpot();
     try {
       await fetch('https://formsubmit.co/ajax/martinrooney250@gmail.com', {
         method: 'POST',
@@ -1337,13 +1505,14 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
           'Spot type': form.type,
           'Restrictions': form.restriction,
           'Notes': form.notes || 'None',
+          'Coordinates': coords ? `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}` : 'Not captured',
           _honey: '',
           _captcha: 'false',
         }),
       });
     } catch { /* silent fail */ }
     setDone(true);
-    onSpotAdded();
+    onSpotAdded(newSpot);
   };
 
   if (!user) return (
@@ -1372,14 +1541,16 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
       <div>
         <h3 className="text-2xl font-bold text-gray-900">Spot Submitted!</h3>
         <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
-          Your spot will appear after a quick community review. Thanks for helping Belfast drivers!
+          {coords
+            ? "It's already on your map — and it'll be added for everyone after a quick community review. Thanks for helping Belfast drivers!"
+            : 'Your spot will appear after a quick community review. Thanks for helping Belfast drivers!'}
         </p>
       </div>
       <div className="w-full bg-gradient-to-r from-[#1a2332] to-[#243447] text-white px-6 py-4 rounded-2xl text-center space-y-1">
         <p className="font-bold text-base">🏆 1 month Premium on the way!</p>
         <p className="text-blue-300 text-xs leading-relaxed">We'll review your spot within 24 hours. Once approved we'll email you a link to activate your free Premium month.</p>
       </div>
-      <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);}}
+      <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);setCoords(null);setLocErr('');}}
         className="text-[#4a9eff] text-sm font-bold underline">Submit another spot</button>
     </div>
   );
@@ -1414,6 +1585,23 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
             onChange={e=>{const f=e.target.files[0];if(f)setPreview(URL.createObjectURL(f));}}/>
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-800 mb-2">Pin the location</label>
+          <button type="button" onClick={captureLocation} disabled={locating}
+            className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-60 ${
+              coords ? 'border-green-400 bg-green-50 text-green-700' : 'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff] hover:bg-blue-50'
+            }`}>
+            {locating
+              ? '⏳ Getting your location…'
+              : coords
+                ? <><Check size={16}/>Location captured — your spot shows on the map</>
+                : <><Crosshair size={16}/>Use my current location</>}
+          </button>
+          {locErr
+            ? <p className="text-xs text-amber-600 mt-1.5">{locErr}</p>
+            : !coords && <p className="text-xs text-gray-400 mt-1.5">Stand at the spot and tap this so other drivers can find it on the map. Optional — you can submit without it.</p>}
         </div>
 
         <div>
@@ -1513,7 +1701,7 @@ const BookingModal = ({ spot, onClose, onConfirm }) => {
   const [hours, setHours] = useState(2);
   if (!spot) return null;
   const total = spot.pricing?.free ? 'FREE' : spot.price
-    ? `£${(parseFloat(spot.price) * hours).toFixed(2)}`
+    ? `£${(parseFloat(spot.price.replace(/[^0-9.]/g, '')) * hours).toFixed(2)}`
     : (spot.badge === 'free' || spot.badge === 'hidden_gem') ? 'FREE' : null;
   const ref = `PE-${Date.now().toString().slice(-6)}`;
   return (
@@ -1524,7 +1712,7 @@ const BookingModal = ({ spot, onClose, onConfirm }) => {
             <h2 className="text-white font-bold text-base leading-snug">{spot.name}</h2>
             <p className="text-blue-300 text-xs mt-0.5">Booking ref: {ref}</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30">
+          <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30">
             <X size={16}/>
           </button>
         </div>
@@ -1640,12 +1828,19 @@ export default function App() {
   const [timerRemaining, setTimerRemaining] = useState(null);
   const [city,           setCity]           = useState(()=>ls.get('pe_city', 'belfast'));
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [userSpots,      setUserSpots]      = useState(()=>ls.get('pe_user_spots', []));
 
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
 
   const currentCity = CITIES.find(c => c.id === city) || CITIES[0];
-  const citySpots   = getCitySpots(currentCity.id);
+  // Seeded spots for the city + any community spots the user has added there.
+  const citySpots   = useMemo(
+    () => [...userSpots.filter(s => s.city === currentCity.id), ...getCitySpots(currentCity.id)],
+    [userSpots, currentCity.id]
+  );
+  // Everything addressable by id (used by Saved, which can hold community spots too).
+  const allSpots    = useMemo(() => [...userSpots, ...SPOTS], [userSpots]);
 
   const changeCity = (id) => {
     setCity(id);
@@ -1789,11 +1984,20 @@ export default function App() {
     setTab('bookings');
   };
 
-  const handleSpotAdded = () => {
-    if (!user) return;
-    const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
-    setUser(updated);
-    ls.set('pe_user', updated);
+  const handleSpotAdded = (newSpot) => {
+    if (user) {
+      const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
+      setUser(updated);
+      ls.set('pe_user', updated);
+    }
+    // If the user pinned a location, show their spot on the map straight away
+    // and persist it between sessions. It's still emailed for the official
+    // community review (which is what unlocks their free Premium month).
+    if (newSpot) {
+      const next = [newSpot, ...userSpots];
+      setUserSpots(next);
+      ls.set('pe_user_spots', next);
+    }
     // Premium is NOT granted here — only after you review and approve the spot.
     // You email the user a unique link: parkeasy.uk/?premium=success
   };
@@ -1840,13 +2044,17 @@ export default function App() {
               <>
                 <div className="fixed inset-0 z-40" onClick={()=>setShowCityPicker(false)}/>
                 <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 w-48 max-h-72 overflow-y-auto">
-                  <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 bg-gray-50">Northern Ireland</p>
-                  {CITIES.map(c=>(
-                    <button key={c.id} onClick={()=>changeCity(c.id)}
-                      className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${c.id===currentCity.id?'text-[#4a9eff] font-bold':'text-gray-700'}`}>
-                      {c.name}
-                      {c.id===currentCity.id && <Check size={12}/>}
-                    </button>
+                  {CITY_REGIONS.map(region=>(
+                    <div key={region}>
+                      <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 bg-gray-50">{region}</p>
+                      {CITIES.filter(c=>c.region===region).map(c=>(
+                        <button key={c.id} onClick={()=>changeCity(c.id)}
+                          className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${c.id===currentCity.id?'text-[#4a9eff] font-bold':'text-gray-700'}`}>
+                          {c.name}
+                          {c.id===currentCity.id && <Check size={12}/>}
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </>
@@ -1854,7 +2062,7 @@ export default function App() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={()=>setTab('saved')}
+            <button aria-label="Saved spots" onClick={()=>setTab('saved')}
               className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/20 ${
                 tab==='saved' ? 'bg-[#4a9eff] text-white' : 'bg-white/10 text-white hover:bg-white/20'
               }`}>
@@ -1901,9 +2109,9 @@ export default function App() {
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
         {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name}/>}
-        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity}/>}
-        {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
-        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
+        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots}/>}
+        {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)} allSpots={allSpots}/>}
+        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} allSpots={allSpots}/>}
         {tab==='bookings'   && <BookingHistoryTab bookings={bookings}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
       </main>

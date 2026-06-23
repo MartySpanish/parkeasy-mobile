@@ -1,0 +1,58 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1a2332"/>
+      <stop offset="1" stop-color="#2d4a6e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Subtle map-grid motif -->
+  <g stroke="#ffffff" stroke-opacity="0.05" stroke-width="2">
+    <path d="M0 160 H1200 M0 320 H1200 M0 480 H1200"/>
+    <path d="M240 0 V630 M480 0 V630 M720 0 V630 M960 0 V630"/>
+  </g>
+
+  <!-- Logo tile with map pin -->
+  <g transform="translate(110 150)">
+    <rect width="120" height="120" rx="28" fill="#4a9eff"/>
+    <path d="M60 28 C44 28 31 41 31 57 c0 21 29 53 29 53 s29 -32 29 -53 C89 41 76 28 60 28 z"
+      fill="#ffffff"/>
+    <circle cx="60" cy="56" r="12" fill="#4a9eff"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="262" y="210" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="92" font-weight="800" fill="#ffffff" letter-spacing="-2">ParkEasy</text>
+  <text x="266" y="262" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="30" font-weight="600" fill="#9ec5ff">Belfast Parking Finder</text>
+
+  <!-- Tagline -->
+  <text x="110" y="380" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="48" font-weight="700" fill="#ffffff">Find where locals actually park.</text>
+  <text x="110" y="438" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="32" font-weight="400" fill="#c9d6e5">Street spots, hidden gems &amp; official car parks — community-powered.</text>
+
+  <!-- Category pills -->
+  <g font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="26" font-weight="700">
+    <g transform="translate(110 500)">
+      <rect width="190" height="58" rx="29" fill="#dcfce7"/>
+      <text x="95" y="38" text-anchor="middle" fill="#15803d">🟢 Free</text>
+    </g>
+    <g transform="translate(320 500)">
+      <rect width="240" height="58" rx="29" fill="#f3e8ff"/>
+      <text x="120" y="38" text-anchor="middle" fill="#7e22ce">💎 Hidden Gems</text>
+    </g>
+    <g transform="translate(580 500)">
+      <rect width="220" height="58" rx="29" fill="#dbeafe"/>
+      <text x="110" y="38" text-anchor="middle" fill="#1e3a5f">🅿 Official</text>
+    </g>
+  </g>
+
+  <!-- URL -->
+  <text x="1090" y="560" text-anchor="end"
+    font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="30" font-weight="700" fill="#4a9eff">parkeasy.uk</text>
+</svg>
