@@ -1087,7 +1087,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
 };
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
-const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, cityName, onCityDetected }) => {
+const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, cityName, onCityDetected, userSpots = [] }) => {
   const [loc,     setLoc]     = useState(null);
   const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1097,22 +1097,24 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
   const mapRef = useRef(null);
 
   const buildNearby = useCallback((lat, lng) => {
-    // Detect which NI town/city the user is closest to.
+    // Detect which NI town/city the user is closest to. Community-submitted
+    // spots are merged in alongside the seeded ones for each town.
     const detected = nearestCity(lat, lng);
-    // Only Belfast has community data so far. If the user's nearest town has no
-    // spots yet, fall back to the closest Belfast spots so they still see
-    // something useful — rather than an empty screen that makes them bounce.
-    const hasLocalSpots = getCitySpots(detected.id).length > 0;
+    const spotsFor = (cid) => [...userSpots.filter(s => s.city === cid), ...getCitySpots(cid)];
+    // Only Belfast has seeded data so far. If the user's nearest town has no
+    // spots yet (seeded or community), fall back to the closest Belfast spots
+    // so they still see something useful — rather than an empty screen.
+    const hasLocalSpots = spotsFor(detected.id).length > 0;
     const sourceCity = hasLocalSpots ? detected : (CITIES.find(c => c.id === 'belfast') || CITIES[0]);
     onCityDetected?.(sourceCity.id);
     setFallback(hasLocalSpots ? null : detected.name);
-    const sorted = getCitySpots(sourceCity.id)
+    const sorted = spotsFor(sourceCity.id)
       .map(s => ({...s, realDist: haversine(lat, lng, s.lat, s.lng)}))
       .sort((a,b) => a.realDist - b.realDist)
       .slice(0, 12);
     setNearby(sorted);
     setLoading(false);
-  }, [onCityDetected]);
+  }, [onCityDetected, userSpots]);
 
   const findNearby = () => {
     setLoading(true); setErr('');
@@ -1284,8 +1286,8 @@ const BusinessesTab = ({ onGetListed }) => {
 };
 
 // ── SavedTab ──────────────────────────────────────────────────────────────────
-const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook }) => {
-  const spots = SPOTS.filter(s => saved.has(s.id));
+const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, allSpots = SPOTS }) => {
+  const spots = allSpots.filter(s => saved.has(s.id));
   const [focusSpot, setFocusSpot] = useState(null);
   const mapRef = useRef(null);
 
@@ -1334,16 +1336,71 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   const [preview, setPreview] = useState(null);
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [coords, setCoords] = useState(null);   // [lat, lng] captured from GPS
+  const [locating, setLocating] = useState(false);
+  const [locErr, setLocErr] = useState('');
   const fileRef = useRef(null);
 
   const SPOT_TYPES   = ['Street parking','Lay-by','Car park','Side road','Grass verge','Private (shared)'];
   const RESTRICTIONS = ['Free all day','Time limited','Evenings free','Weekends free','No restrictions'];
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
 
+  // Restriction → map-pin/badge category for the live map.
+  const RESTRICTION_TO_BADGE = {
+    'Free all day':   'free',
+    'No restrictions':'free',
+    'Time limited':   'timed',
+    'Evenings free':  'timed',
+    'Weekends free':  'timed',
+  };
+
+  const captureLocation = () => {
+    setLocErr('');
+    if (!navigator.geolocation) { setLocErr('Location isn’t supported on this device.'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      ({coords:{latitude,longitude}}) => { setCoords([latitude, longitude]); setLocating(false); },
+      () => { setLocErr('Couldn’t get your location — you can still submit, but the spot won’t show on the map yet.'); setLocating(false); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // Turn the form + captured GPS into a spot the live map/lists can render.
+  // Returns null when no location was captured (we then just email it for review).
+  const buildSpot = () => {
+    if (!coords) return null;
+    const [lat, lng] = coords;
+    const city = nearestCity(lat, lng);
+    const name = (form.street || form.near || 'Community spot').trim();
+    const tags = Array.from(new Set(
+      `${form.near} ${form.street}`.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2)
+    ));
+    return {
+      id: Date.now(),
+      name,
+      near: form.near.trim() || name,
+      tags,
+      badge: RESTRICTION_TO_BADGE[form.restriction] || 'free',
+      dist: 0,
+      walk: 'Your spot',
+      restriction: form.restriction,
+      notes: form.notes.trim() || `${form.type} added by ${user.name}.`,
+      lat, lng,
+      by: user.name,
+      votes: 0,
+      photo: null,
+      price: null,
+      spaces: null,
+      city: city.id,
+      mine: true,
+    };
+  };
+
   const submitSpot = async (e) => {
     e.preventDefault();
     if (!form.type || !form.restriction) return;
     setSubmitting(true);
+    const newSpot = buildSpot();
     try {
       await fetch('https://formsubmit.co/ajax/martinrooney250@gmail.com', {
         method: 'POST',
@@ -1357,13 +1414,14 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
           'Spot type': form.type,
           'Restrictions': form.restriction,
           'Notes': form.notes || 'None',
+          'Coordinates': coords ? `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}` : 'Not captured',
           _honey: '',
           _captcha: 'false',
         }),
       });
     } catch { /* silent fail */ }
     setDone(true);
-    onSpotAdded();
+    onSpotAdded(newSpot);
   };
 
   if (!user) return (
@@ -1392,14 +1450,16 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
       <div>
         <h3 className="text-2xl font-bold text-gray-900">Spot Submitted!</h3>
         <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
-          Your spot will appear after a quick community review. Thanks for helping Belfast drivers!
+          {coords
+            ? "It's already on your map — and it'll be added for everyone after a quick community review. Thanks for helping Belfast drivers!"
+            : 'Your spot will appear after a quick community review. Thanks for helping Belfast drivers!'}
         </p>
       </div>
       <div className="w-full bg-gradient-to-r from-[#1a2332] to-[#243447] text-white px-6 py-4 rounded-2xl text-center space-y-1">
         <p className="font-bold text-base">🏆 1 month Premium on the way!</p>
         <p className="text-blue-300 text-xs leading-relaxed">We'll review your spot within 24 hours. Once approved we'll email you a link to activate your free Premium month.</p>
       </div>
-      <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);}}
+      <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);setCoords(null);setLocErr('');}}
         className="text-[#4a9eff] text-sm font-bold underline">Submit another spot</button>
     </div>
   );
@@ -1434,6 +1494,23 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
             onChange={e=>{const f=e.target.files[0];if(f)setPreview(URL.createObjectURL(f));}}/>
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-800 mb-2">Pin the location</label>
+          <button type="button" onClick={captureLocation} disabled={locating}
+            className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-60 ${
+              coords ? 'border-green-400 bg-green-50 text-green-700' : 'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff] hover:bg-blue-50'
+            }`}>
+            {locating
+              ? '⏳ Getting your location…'
+              : coords
+                ? <><Check size={16}/>Location captured — your spot shows on the map</>
+                : <><Crosshair size={16}/>Use my current location</>}
+          </button>
+          {locErr
+            ? <p className="text-xs text-amber-600 mt-1.5">{locErr}</p>
+            : !coords && <p className="text-xs text-gray-400 mt-1.5">Stand at the spot and tap this so other drivers can find it on the map. Optional — you can submit without it.</p>}
         </div>
 
         <div>
@@ -1660,12 +1737,19 @@ export default function App() {
   const [timerRemaining, setTimerRemaining] = useState(null);
   const [city,           setCity]           = useState(()=>ls.get('pe_city', 'belfast'));
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [userSpots,      setUserSpots]      = useState(()=>ls.get('pe_user_spots', []));
 
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
 
   const currentCity = CITIES.find(c => c.id === city) || CITIES[0];
-  const citySpots   = getCitySpots(currentCity.id);
+  // Seeded spots for the city + any community spots the user has added there.
+  const citySpots   = useMemo(
+    () => [...userSpots.filter(s => s.city === currentCity.id), ...getCitySpots(currentCity.id)],
+    [userSpots, currentCity.id]
+  );
+  // Everything addressable by id (used by Saved, which can hold community spots too).
+  const allSpots    = useMemo(() => [...userSpots, ...SPOTS], [userSpots]);
 
   const changeCity = (id) => {
     setCity(id);
@@ -1809,11 +1893,20 @@ export default function App() {
     setTab('bookings');
   };
 
-  const handleSpotAdded = () => {
-    if (!user) return;
-    const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
-    setUser(updated);
-    ls.set('pe_user', updated);
+  const handleSpotAdded = (newSpot) => {
+    if (user) {
+      const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
+      setUser(updated);
+      ls.set('pe_user', updated);
+    }
+    // If the user pinned a location, show their spot on the map straight away
+    // and persist it between sessions. It's still emailed for the official
+    // community review (which is what unlocks their free Premium month).
+    if (newSpot) {
+      const next = [newSpot, ...userSpots];
+      setUserSpots(next);
+      ls.set('pe_user_spots', next);
+    }
     // Premium is NOT granted here — only after you review and approve the spot.
     // You email the user a unique link: parkeasy.uk/?premium=success
   };
@@ -1921,9 +2014,9 @@ export default function App() {
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
         {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name}/>}
-        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity}/>}
+        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
-        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook}/>}
+        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} allSpots={allSpots}/>}
         {tab==='bookings'   && <BookingHistoryTab bookings={bookings}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
       </main>
