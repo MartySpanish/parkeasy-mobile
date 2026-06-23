@@ -172,7 +172,7 @@ const CITIES = [
   { id:'bangor',       name:'Bangor',            center:[54.6604,-5.6694], region:'Northern Ireland' },
   { id:'newry',        name:'Newry',             center:[54.1751,-6.3402], region:'Northern Ireland' },
   { id:'antrim',       name:'Antrim',            center:[54.7140,-6.2110], region:'Northern Ireland' },
-  { id:'perth',        name:'Perth',             center:[56.3950,-3.4308], region:'Scotland' },
+  { id:'perth',        name:'Perth',             center:[-31.9523,115.8613], region:'Australia' },
 ];
 
 // Region groupings for the city picker, in display order.
@@ -1203,7 +1203,7 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
 };
 
 // ── BusinessesTab ─────────────────────────────────────────────────────────────
-const BusinessesTab = ({ onGetListed }) => {
+const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
   const [open,      setOpen]      = useState(null);
   const [bizSearch, setBizSearch] = useState('');
 
@@ -1247,7 +1247,13 @@ const BusinessesTab = ({ onGetListed }) => {
       <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold">{filtered.length} businesses · Belfast</p>
 
       {filtered.map(b => {
-        const spots = SPOTS.filter(s => s.tags.some(t => t.includes(b.key)));
+        // Match parking to a business by tag OR geographic proximity (within
+        // ~0.2 mi), so community-added spots near a venue show up too. Nearest first.
+        const spots = allSpots
+          .filter(s => s.tags.some(t => t.includes(b.key)) || haversine(b.lat, b.lng, s.lat, s.lng) <= 0.2)
+          .map(s => ({ ...s, _bizDist: haversine(b.lat, b.lng, s.lat, s.lng) }))
+          .sort((a, c) => a._bizDist - c._bizDist)
+          .slice(0, 8);
         const isOpen = open === b.id;
         return (
           <div key={b.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -2039,7 +2045,7 @@ export default function App() {
         )}
         {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots}/>}
-        {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)}/>}
+        {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)} allSpots={allSpots}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} allSpots={allSpots}/>}
         {tab==='bookings'   && <BookingHistoryTab bookings={bookings}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
