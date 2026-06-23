@@ -160,18 +160,23 @@ const SPOTS = [
   { id:64, name:'Cave Hill Country Park (Upper Cavehill Rd)', near:'Cave Hill', tags:['cave hill','cavehill','country park','walks','hiking','napoleons nose','free parking','north belfast','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — dawn to dusk', notes:'Alternative free car park higher up on Upper Cavehill Road — quicker route to the summit and Napoleon\'s Nose than the castle. Stunning views over the city and lough. Less crowded on busy weekends.', lat:54.6420, lng:-5.9560, by:'CaveHillHiker', votes:54, photo:null, price:null, spaces:40 },
 ];
 
-// ── Cities (Northern Ireland) ────────────────────────────────────────────────
-// Belfast has full community-sourced spot data. Other towns are listed so
-// people can pick their area and be the first to add local spots.
+// ── Cities ───────────────────────────────────────────────────────────────────
+// Belfast has full community-sourced spot data. Other towns/cities are listed so
+// people can pick their area and be the first to add local spots. Each city has a
+// region so the picker can group them (Northern Ireland, Scotland, …).
 const CITIES = [
-  { id:'belfast',      name:'Belfast',           center:[54.5973,-5.9301] },
-  { id:'derry',        name:'Derry~Londonderry', center:[54.9966,-7.3086] },
-  { id:'lisburn',      name:'Lisburn',           center:[54.5162,-6.0581] },
-  { id:'newtownabbey', name:'Newtownabbey',      center:[54.6601,-5.9094] },
-  { id:'bangor',       name:'Bangor',            center:[54.6604,-5.6694] },
-  { id:'newry',        name:'Newry',             center:[54.1751,-6.3402] },
-  { id:'antrim',       name:'Antrim',            center:[54.7140,-6.2110] },
+  { id:'belfast',      name:'Belfast',           center:[54.5973,-5.9301], region:'Northern Ireland' },
+  { id:'derry',        name:'Derry~Londonderry', center:[54.9966,-7.3086], region:'Northern Ireland' },
+  { id:'lisburn',      name:'Lisburn',           center:[54.5162,-6.0581], region:'Northern Ireland' },
+  { id:'newtownabbey', name:'Newtownabbey',      center:[54.6601,-5.9094], region:'Northern Ireland' },
+  { id:'bangor',       name:'Bangor',            center:[54.6604,-5.6694], region:'Northern Ireland' },
+  { id:'newry',        name:'Newry',             center:[54.1751,-6.3402], region:'Northern Ireland' },
+  { id:'antrim',       name:'Antrim',            center:[54.7140,-6.2110], region:'Northern Ireland' },
+  { id:'perth',        name:'Perth',             center:[56.3950,-3.4308], region:'Scotland' },
 ];
+
+// Region groupings for the city picker, in display order.
+const CITY_REGIONS = [...new Set(CITIES.map(c => c.region))];
 
 const getCitySpots = (cityId) => cityId === 'belfast' ? SPOTS : [];
 
@@ -1953,13 +1958,17 @@ export default function App() {
               <>
                 <div className="fixed inset-0 z-40" onClick={()=>setShowCityPicker(false)}/>
                 <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 w-48 max-h-72 overflow-y-auto">
-                  <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 bg-gray-50">Northern Ireland</p>
-                  {CITIES.map(c=>(
-                    <button key={c.id} onClick={()=>changeCity(c.id)}
-                      className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${c.id===currentCity.id?'text-[#4a9eff] font-bold':'text-gray-700'}`}>
-                      {c.name}
-                      {c.id===currentCity.id && <Check size={12}/>}
-                    </button>
+                  {CITY_REGIONS.map(region=>(
+                    <div key={region}>
+                      <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 bg-gray-50">{region}</p>
+                      {CITIES.filter(c=>c.region===region).map(c=>(
+                        <button key={c.id} onClick={()=>changeCity(c.id)}
+                          className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${c.id===currentCity.id?'text-[#4a9eff] font-bold':'text-gray-700'}`}>
+                          {c.name}
+                          {c.id===currentCity.id && <Check size={12}/>}
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </>
