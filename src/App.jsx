@@ -1332,11 +1332,27 @@ const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
 const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, allSpots = SPOTS }) => {
   const spots = allSpots.filter(s => saved.has(s.id));
   const [focusSpot, setFocusSpot] = useState(null);
+  const [shared, setShared] = useState(false);
   const mapRef = useRef(null);
 
   const viewOnMap = (spot) => {
     setFocusSpot(spot);
     setTimeout(() => mapRef.current?.scrollIntoView({behavior:'smooth', block:'center'}), 50);
+  };
+
+  // Share the whole saved list — names, restrictions and a directions link each —
+  // via the native share sheet, falling back to copying to the clipboard.
+  const shareList = async () => {
+    const lines = spots.map(s => `📍 ${s.name} — ${s.restriction}\n${directionsUrl(s.lat, s.lng)}`);
+    const text = `My ParkEasy saved spots:\n\n${lines.join('\n\n')}`;
+    const url = 'https://parkeasy.uk/';
+    if (navigator.share) {
+      try { await navigator.share({ title: 'My ParkEasy saved spots', text, url }); } catch {}
+    } else {
+      navigator.clipboard?.writeText(`${text}\n\n${url}`);
+      setShared(true);
+      setTimeout(() => setShared(false), 2200);
+    }
   };
 
   if (!spots.length) return (
@@ -1355,9 +1371,14 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, allSp
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-bold text-gray-900">{spots.length} saved spot{spots.length!==1?'s':''}</p>
-        <span className="text-xs text-gray-400">Tap bookmark to remove</span>
+        <button onClick={shareList} aria-label="Share my saved spots"
+          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold border transition-all active:scale-95 ${
+            shared ? 'bg-green-50 border-green-300 text-green-700' : 'border-gray-200 text-gray-600 hover:border-[#4a9eff] hover:text-[#4a9eff]'
+          }`}>
+          {shared ? <><Check size={12}/>Copied!</> : <><Share2 size={12}/>Share list</>}
+        </button>
       </div>
       {(spots.length > 1 || focusSpot) && (
         <div ref={mapRef}>
