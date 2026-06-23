@@ -1093,13 +1093,20 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
   const [loading, setLoading] = useState(false);
   const [err,     setErr]     = useState('');
   const [focusSpot, setFocusSpot] = useState(null);
+  const [fallback,  setFallback]  = useState(null); // name of the town we detected when it has no spots yet
   const mapRef = useRef(null);
 
   const buildNearby = useCallback((lat, lng) => {
-    // Detect which NI town/city the user is closest to and switch to it.
-    const city = nearestCity(lat, lng);
-    onCityDetected?.(city.id);
-    const sorted = getCitySpots(city.id)
+    // Detect which NI town/city the user is closest to.
+    const detected = nearestCity(lat, lng);
+    // Only Belfast has community data so far. If the user's nearest town has no
+    // spots yet, fall back to the closest Belfast spots so they still see
+    // something useful — rather than an empty screen that makes them bounce.
+    const hasLocalSpots = getCitySpots(detected.id).length > 0;
+    const sourceCity = hasLocalSpots ? detected : (CITIES.find(c => c.id === 'belfast') || CITIES[0]);
+    onCityDetected?.(sourceCity.id);
+    setFallback(hasLocalSpots ? null : detected.name);
+    const sorted = getCitySpots(sourceCity.id)
       .map(s => ({...s, realDist: haversine(lat, lng, s.lat, s.lng)}))
       .sort((a,b) => a.realDist - b.realDist)
       .slice(0, 12);
@@ -1145,12 +1152,18 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
           <Info size={14} className="mt-0.5 flex-shrink-0"/><span>{err}</span>
         </div>
       )}
+      {fallback && (
+        <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3.5 py-3 rounded-xl">
+          <Info size={14} className="mt-0.5 flex-shrink-0"/>
+          <span>No community spots in <strong>{fallback}</strong> yet — showing the closest spots in Belfast. Know a good spot near you? Add it from the "Add Spot" tab and be the first!</span>
+        </div>
+      )}
       <div ref={mapRef}>
         <ParkingMap spots={nearby} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240}/>
       </div>
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold text-gray-900">{nearby.length ? `${nearby.length} closest spots in ${cityName}` : `No spots near you yet`}</p>
-        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
+        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);setFallback(null);}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
       </div>
       {nearby.length === 0 && (
         <div className="text-center py-8">
