@@ -832,6 +832,7 @@ const BADGE_FILTERS = [
   { id:'hidden_gem',label:'💎 Hidden', color:'#7e22ce', bg:'#f3e8ff' },
   { id:'official',  label:'🅿 Official',color:'#1e3a5f', bg:'#dbeafe' },
   { id:'timed',     label:'⏱ Timed',   color:'#9a3412', bg:'#fff7ed' },
+  { id:'paid',      label:'£ Paid',    color:'#92400e', bg:'#fef9c3' },
 ];
 
 const SORT_OPTIONS_FREE    = [
