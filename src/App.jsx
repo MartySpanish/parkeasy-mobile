@@ -886,7 +886,8 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
     if (sortBy === 'distance' && !userLoc) {
       navigator.geolocation?.getCurrentPosition(
         ({coords:{latitude:lat,longitude:lng}}) => setUserLoc([lat,lng]),
-        () => setSortBy('popular')
+        () => setSortBy('popular'),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     }
   }, [sortBy]);
@@ -1123,9 +1124,22 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
 
   const findNearby = () => {
     setLoading(true); setErr('');
+    const fallbackToBelfast = (msg) => {
+      const lat = 54.5973, lng = -5.9301;
+      setLoc([lat,lng]); buildNearby(lat,lng); setErr(msg);
+    };
+    if (!navigator.geolocation) {
+      fallbackToBelfast('Location isn’t supported on this device — showing spots from Belfast city centre.');
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       ({coords:{latitude:lat,longitude:lng}}) => { setLoc([lat,lng]); buildNearby(lat,lng); },
-      () => { const lat=54.5973,lng=-5.9301; setLoc([lat,lng]); buildNearby(lat,lng); setErr('Location access denied — showing spots from Belfast city centre.'); }
+      (e) => fallbackToBelfast(
+        e?.code === 1
+          ? 'Location access denied — showing spots from Belfast city centre. Enable location to see spots near you.'
+          : 'Couldn’t get your location (timed out) — showing spots from Belfast city centre. Tap Refresh to try again.'
+      ),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   };
 
