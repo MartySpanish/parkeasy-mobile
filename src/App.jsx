@@ -6,7 +6,7 @@ import {
   MapPin, Search, Crosshair, Plus, Building2, Navigation,
   Bookmark, Camera, Check, X, ChevronRight, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
-  Zap, Timer, Globe, Receipt,
+  Zap, Timer, Globe, Receipt, Key,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 
@@ -2155,11 +2155,356 @@ const InstallBanner = ({ onInstall, onDismiss, isIOS }) => (
   </div>
 );
 
+// ── Private Space Rental ──────────────────────────────────────────────────────
+const RENTAL_SPACE_TYPES = [
+  { id:'driveway', label:'Driveway', emoji:'🏠' },
+  { id:'garage',   label:'Garage',   emoji:'🚗' },
+  { id:'covered',  label:'Covered',  emoji:'🏢' },
+  { id:'open',     label:'Open Bay', emoji:'⬜' },
+];
+
+const RENTAL_AMENITIES = [
+  { id:'ev_charging',     label:'EV Charging' },
+  { id:'cctv',            label:'CCTV'        },
+  { id:'covered',         label:'Covered'     },
+  { id:'lighting',        label:'Lighting'    },
+  { id:'24_7',            label:'24/7 Access' },
+  { id:'height_limit',    label:'Height Limit'},
+];
+
+const ListingCard = ({ listing }) => {
+  const typeInfo = RENTAL_SPACE_TYPES.find(t => t.id === listing.space_type) || { emoji:'🅿️', label:'Space' };
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {listing.photos?.[0] ? (
+        <img src={listing.photos[0]} alt={listing.title} className="w-full h-36 object-cover"/>
+      ) : (
+        <div className="w-full h-36 bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center gap-1">
+          <span className="text-4xl">{typeInfo.emoji}</span>
+          <span className="text-xs text-indigo-400 font-semibold">{typeInfo.label}</span>
+        </div>
+      )}
+      <div className="p-4">
+        <div className="flex items-start justify-between mb-1 gap-2">
+          <h3 className="font-bold text-gray-800 text-sm leading-tight">{listing.title}</h3>
+          <span className="flex-shrink-0 text-xs bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-full">{typeInfo.label}</span>
+        </div>
+        <p className="text-xs text-gray-400 mb-2">{listing.address}</p>
+        <div className="flex gap-3 mb-3">
+          {listing.price_per_hour  && <span className="text-xs font-bold text-green-600">£{Number(listing.price_per_hour).toFixed(2)}/hr</span>}
+          {listing.price_per_day   && <span className="text-xs font-bold text-green-600">£{Number(listing.price_per_day).toFixed(2)}/day</span>}
+          {listing.price_per_month && <span className="text-xs font-bold text-green-600">£{Number(listing.price_per_month).toFixed(0)}/mo</span>}
+          {listing.spaces > 1 && <span className="text-xs text-gray-400">{listing.spaces} spaces</span>}
+        </div>
+        {listing.amenities?.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {listing.amenities.slice(0,3).map(a => (
+              <span key={a} className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                {RENTAL_AMENITIES.find(x => x.id === a)?.label || a}
+              </span>
+            ))}
+          </div>
+        )}
+        {listing.description && (
+          <p className="text-xs text-gray-500 mb-3 line-clamp-2">{listing.description}</p>
+        )}
+        <a href={`mailto:${listing.contact_email}?subject=Parking enquiry: ${encodeURIComponent(listing.title)}`}
+          className="block w-full bg-[#4a9eff] text-white text-xs font-bold py-2.5 rounded-xl text-center hover:bg-blue-600 transition">
+          Contact Owner
+        </a>
+      </div>
+    </div>
+  );
+};
+
+const ListSpaceForm = ({ user, onBack, onSuccess }) => {
+  const [form, setForm] = useState({
+    title:'', description:'', address:'', space_type:'driveway',
+    price_per_hour:'', price_per_day:'', price_per_month:'',
+    contact_email: user?.email || '', contact_phone:'',
+    amenities:[], photos:[''], spaces:1,
+  });
+  const [saving, setSaving] = useState(false);
+  const [err,    setErr]    = useState('');
+
+  const f = (key, val) => setForm(prev => ({...prev, [key]: val}));
+  const toggleAmenity = id => setForm(prev => ({
+    ...prev,
+    amenities: prev.amenities.includes(id)
+      ? prev.amenities.filter(a => a !== id)
+      : [...prev.amenities, id],
+  }));
+
+  const submit = async () => {
+    if (!form.title.trim() || !form.address.trim() || !form.contact_email.trim()) {
+      setErr('Title, address and contact email are required.');
+      return;
+    }
+    if (!form.price_per_hour && !form.price_per_day && !form.price_per_month) {
+      setErr('Please enter at least one price.');
+      return;
+    }
+    setSaving(true); setErr('');
+    try {
+      const payload = {
+        owner_id:        user?.id || null,
+        owner_email:     user?.email || form.contact_email,
+        title:           form.title.trim(),
+        description:     form.description.trim() || null,
+        address:         form.address.trim(),
+        space_type:      form.space_type,
+        price_per_hour:  form.price_per_hour  ? parseFloat(form.price_per_hour)  : null,
+        price_per_day:   form.price_per_day   ? parseFloat(form.price_per_day)   : null,
+        price_per_month: form.price_per_month ? parseFloat(form.price_per_month) : null,
+        spaces:          parseInt(form.spaces) || 1,
+        amenities:       form.amenities,
+        photos:          form.photos.filter(Boolean),
+        contact_email:   form.contact_email.trim(),
+        contact_phone:   form.contact_phone.trim() || null,
+        status:          'active',
+      };
+      if (isSupabaseEnabled) {
+        const { error } = await supabase.from('rental_listings').insert(payload);
+        if (error) throw error;
+      }
+      onSuccess();
+    } catch(e) {
+      setErr(e.message || 'Something went wrong. Please try again.');
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="p-4 pb-28">
+      <div className="flex items-center gap-3 mb-5">
+        <button onClick={onBack} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+          <X size={16} className="text-gray-600"/>
+        </button>
+        <h2 className="font-bold text-gray-800 text-lg">List Your Space</h2>
+      </div>
+
+      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Space Type</label>
+      <div className="grid grid-cols-4 gap-2 mb-5">
+        {RENTAL_SPACE_TYPES.map(t => (
+          <button key={t.id} onClick={() => f('space_type', t.id)}
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition text-xs font-semibold
+              ${form.space_type === t.id ? 'border-[#4a9eff] bg-blue-50 text-[#4a9eff]' : 'border-gray-200 text-gray-500'}`}>
+            <span className="text-2xl">{t.emoji}</span>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {[
+        { key:'title',   label:'Listing Title', placeholder:'e.g. Private Driveway near City Centre' },
+        { key:'address', label:'Full Address',   placeholder:'e.g. 12 Main Street, Belfast, BT1 1AA' },
+      ].map(({key, label, placeholder}) => (
+        <div key={key} className="mb-4">
+          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</label>
+          <input value={form[key]} onChange={e => f(key, e.target.value)} placeholder={placeholder}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+        </div>
+      ))}
+
+      <div className="mb-4">
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Description</label>
+        <textarea value={form.description} onChange={e => f('description', e.target.value)} rows={3}
+          placeholder="Access instructions, height restrictions, nearby landmarks..."
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"/>
+      </div>
+
+      <div className="mb-5">
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Number of Spaces</label>
+        <input type="number" min="1" max="20" value={form.spaces} onChange={e => f('spaces', e.target.value)}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+      </div>
+
+      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Pricing (£ — fill at least one)</label>
+      <div className="grid grid-cols-3 gap-2 mb-5">
+        {[
+          {key:'price_per_hour',  label:'Per Hour' },
+          {key:'price_per_day',   label:'Per Day'  },
+          {key:'price_per_month', label:'Per Month'},
+        ].map(({key, label}) => (
+          <div key={key}>
+            <label className="block text-[10px] text-gray-400 font-semibold mb-1">{label}</label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-2.5 text-gray-400 text-sm">£</span>
+              <input type="number" min="0" step="0.50" value={form[key]}
+                onChange={e => f(key, e.target.value)} placeholder="0.00"
+                className="w-full border border-gray-200 rounded-xl pl-6 pr-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Amenities</label>
+      <div className="flex flex-wrap gap-2 mb-5">
+        {RENTAL_AMENITIES.map(a => (
+          <button key={a.id} onClick={() => toggleAmenity(a.id)}
+            className={`text-xs px-3 py-1.5 rounded-full border-2 font-semibold transition
+              ${form.amenities.includes(a.id) ? 'border-[#4a9eff] bg-blue-50 text-[#4a9eff]' : 'border-gray-200 text-gray-500'}`}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Photo URL (optional)</label>
+        <input value={form.photos[0] || ''} onChange={e => f('photos', [e.target.value])} placeholder="https://..."
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+      </div>
+
+      {[
+        {key:'contact_email', label:'Contact Email',              type:'email', placeholder:'your@email.com'},
+        {key:'contact_phone', label:'Contact Phone (optional)',    type:'tel',   placeholder:'+44 7...'},
+      ].map(({key, label, type, placeholder}) => (
+        <div key={key} className="mb-4">
+          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</label>
+          <input type={type} value={form[key]} onChange={e => f(key, e.target.value)} placeholder={placeholder}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+        </div>
+      ))}
+
+      {err && <p className="text-red-500 text-xs mb-3 font-medium">{err}</p>}
+
+      <button onClick={submit} disabled={saving}
+        className="w-full bg-[#4a9eff] text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-60 hover:bg-blue-600 transition">
+        {saving ? 'Submitting...' : 'List My Space'}
+      </button>
+    </div>
+  );
+};
+
+const SpacesTab = ({ user, isPremium, onUpgrade }) => {
+  const [view,      setView]      = useState('browse');
+  const [listings,  setListings]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [submitted, setSubmitted] = useState(false);
+  const [filter,    setFilter]    = useState('all');
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!isSupabaseEnabled) { setLoading(false); return; }
+      const { data } = await supabase
+        .from('rental_listings')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (active) { setListings(data || []); setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [view]);
+
+  const filtered = filter === 'all' ? listings
+    : filter === 'ev'  ? listings.filter(l => l.amenities?.includes('ev_charging'))
+    : listings.filter(l => l.space_type === filter);
+
+  if (view === 'list') {
+    if (submitted) {
+      return (
+        <div className="p-6 flex flex-col items-center justify-center min-h-64 text-center pb-28">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+            <Check size={28} className="text-green-600"/>
+          </div>
+          <h3 className="font-bold text-gray-800 text-lg mb-2">Space Listed!</h3>
+          <p className="text-gray-500 text-sm mb-5">Your listing is now live. Renters can contact you directly by email.</p>
+          <button onClick={() => { setSubmitted(false); setView('browse'); }}
+            className="bg-[#4a9eff] text-white font-bold px-6 py-2.5 rounded-2xl text-sm hover:bg-blue-600 transition">
+            Browse Spaces
+          </button>
+        </div>
+      );
+    }
+    return <ListSpaceForm user={user} onBack={() => setView('browse')} onSuccess={() => setSubmitted(true)}/>;
+  }
+
+  const FILTERS = [
+    { id:'all',      label:'All'        },
+    { id:'driveway', label:'Driveways'  },
+    { id:'garage',   label:'Garages'    },
+    { id:'covered',  label:'Covered'    },
+    { id:'ev',       label:'EV Charging'},
+  ];
+
+  return (
+    <div className="p-4 pb-28">
+      <div className="bg-gradient-to-br from-[#4a9eff] to-indigo-600 rounded-2xl p-5 mb-5 text-white">
+        <div className="flex items-center gap-2 mb-1">
+          <Key size={18}/>
+          <h2 className="font-black text-xl">Private Spaces</h2>
+        </div>
+        <p className="text-blue-100 text-sm mb-4">Rent a driveway or garage from a local — cheaper than car parks, guaranteed spot.</p>
+        <div className="flex gap-2">
+          <button onClick={() => setView('list')}
+            className="bg-white text-[#4a9eff] font-bold text-sm px-4 py-2 rounded-xl hover:bg-blue-50 transition">
+            + List Your Space
+          </button>
+          <div className="flex-1 text-right">
+            <span className="text-blue-200 text-xs">{listings.length} {listings.length === 1 ? 'space' : 'spaces'} available</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
+        {FILTERS.map(({id, label}) => (
+          <button key={id} onClick={() => setFilter(id)}
+            className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition
+              ${filter === id ? 'bg-[#4a9eff] text-white border-[#4a9eff]' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-4">
+          {[1,2,3].map(i => (
+            <div key={i} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 animate-pulse">
+              <div className="h-36 bg-gray-200"/>
+              <div className="p-4 space-y-2">
+                <div className="h-4 bg-gray-200 rounded w-3/4"/>
+                <div className="h-3 bg-gray-200 rounded w-1/2"/>
+                <div className="h-8 bg-gray-200 rounded-xl mt-3"/>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">🅿️</span>
+          </div>
+          <h3 className="font-bold text-gray-700 mb-2">
+            {listings.length === 0 ? 'No listings yet' : 'No matches for this filter'}
+          </h3>
+          <p className="text-gray-400 text-sm mb-5">
+            {listings.length === 0
+              ? 'Be the first to list a space in your area!'
+              : 'Try a different filter above.'}
+          </p>
+          {listings.length === 0 && (
+            <button onClick={() => setView('list')}
+              className="bg-[#4a9eff] text-white font-bold px-6 py-2.5 rounded-2xl text-sm hover:bg-blue-600 transition">
+              List Your Space
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map(l => <ListingCard key={l.id} listing={l}/>)}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── TABS ──────────────────────────────────────────────────────────────────────
 const TABS = [
   { id:'search',     label:'Search',     Icon:Search    },
   { id:'nearby',     label:'Nearby',     Icon:Crosshair },
-  { id:'businesses', label:'Local',      Icon:Building2 },
+  { id:'spaces',     label:'Spaces',     Icon:Key       },
   { id:'bookings',   label:'Bookings',   Icon:Receipt   },
   { id:'add',        label:'Add Spot',   Icon:Plus      },
 ];
@@ -2475,6 +2820,7 @@ export default function App() {
         )}
         {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
+        {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)} allSpots={allSpots}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='bookings'   && <BookingHistoryTab bookings={bookings}/>}
