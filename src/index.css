@@ -75,6 +75,14 @@ h1, h2, h3 { letter-spacing: -0.02em; }
   color: rgba(234,241,248,0.5) !important;
 }
 .leaflet-control-attribution a { color: rgba(91,231,218,0.8) !important; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: #0e1a2c !important;
+  color: #EAF1F8 !important;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;
+}
+.leaflet-popup-content { color: #EAF1F8 !important; }
+.leaflet-popup-close-button { color: rgba(234,241,248,0.6) !important; }
 
 /* Horizontal chip rows */
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
