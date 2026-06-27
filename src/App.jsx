@@ -57,6 +57,16 @@ const KERB = {
   official:   { color: '#3b82f6', style: 'solid',  width: 4 },
 };
 
+// Badge-themed gradients for the card header when a spot has no real photo —
+// looks intentional and premium instead of relying on a flaky static-map image.
+const CARD_THEME = {
+  free:       { grad: 'linear-gradient(135deg,#34d399 0%,#059669 100%)' },
+  hidden_gem: { grad: 'linear-gradient(135deg,#c084fc 0%,#7c3aed 100%)' },
+  timed:      { grad: 'linear-gradient(135deg,#fbbf24 0%,#d97706 100%)' },
+  paid:       { grad: 'linear-gradient(135deg,#fcd34d 0%,#ca8a04 100%)' },
+  official:   { grad: 'linear-gradient(135deg,#60a5fa 0%,#2563eb 100%)' },
+};
+
 const BELFAST_CENTER = [54.5973, -5.9301];
 
 // ── Notification email (FormSubmit — free, no config needed) ──────────────────
@@ -1049,8 +1059,12 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, 
   const avail = getAvailability(spot);
   const kerb = KERB[spot.badge] || KERB.free;
 
-  const svUrl = !spot.photo && !imgErr ? spotImageUrl(spot.lat, spot.lng) : null;
+  // Only attempt a Street View image when a key is configured. The free OSM
+  // static-map service is unreliable, so without a key we show a designed
+  // badge-themed header instead of a broken/empty image.
+  const svUrl = !spot.photo && !imgErr && GOOGLE_MAPS_KEY ? spotImageUrl(spot.lat, spot.lng) : null;
   const photoSrc = spot.photo || svUrl;
+  const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
 
   const handleShare = async () => {
     const text = `${spot.name} — ${spot.notes.slice(0,100)}`;
@@ -1068,12 +1082,23 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, 
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
       style={{borderLeft: `${kerb.width}px ${kerb.style} ${kerb.color}`}}>
       <div
-        className="relative h-40 overflow-hidden flex items-center justify-center"
-        style={{ background: photoSrc ? undefined : 'linear-gradient(135deg,#1a2332 0%,#243447 100%)' }}
+        className="relative overflow-hidden flex items-center justify-center"
+        style={{ height: photoSrc ? 168 : 122, background: photoSrc ? undefined : theme.grad }}
       >
         {photoSrc
           ? <img src={photoSrc} alt={spot.name} className="w-full h-full object-cover" onError={()=>setImgErr(true)}/>
-          : <div className="flex flex-col items-center gap-2 opacity-20"><Car size={40} className="text-white"/></div>}
+          : (
+            <>
+              {/* subtle dotted texture + oversized icon for a designed, branded look */}
+              <div className="absolute inset-0 opacity-[0.18]"
+                style={{ backgroundImage:'radial-gradient(circle at 1px 1px, white 1.5px, transparent 0)', backgroundSize:'15px 15px' }}/>
+              <Car size={120} strokeWidth={1.1} className="absolute -right-5 -bottom-6 text-white opacity-20"/>
+              <div className="relative z-10 px-5 text-center">
+                <MapPin size={24} strokeWidth={2.4} className="text-white/95 mx-auto mb-1 drop-shadow"/>
+                <p className="text-white font-bold text-sm leading-tight drop-shadow-sm line-clamp-2">{spot.near}</p>
+              </div>
+            </>
+          )}
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none"/>
 
@@ -1436,17 +1461,20 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
         </div>
       )}
 
-      {/* Keyword chips (when not searching) */}
+      {/* Keyword chips (when not searching) — two tidy horizontal rows that
+          scroll, instead of a big wrapping wall of identical grey pills. */}
       {!isSearching && (
         <div>
           <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold mb-2">Quick search</p>
-          <div className="flex flex-wrap gap-2">
-            {SEARCH_KEYWORDS.map(a=>(
-              <button key={a} onClick={()=>doSearch(a)}
-                className="text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full hover:border-[#4a9eff] hover:text-[#4a9eff] transition-all shadow-sm">
-                {a}
-              </button>
-            ))}
+          <div className="-mx-4 px-4 overflow-x-auto no-scrollbar">
+            <div className="grid grid-flow-col auto-cols-max grid-rows-2 gap-2 w-max pb-1">
+              {SEARCH_KEYWORDS.map(a=>(
+                <button key={a} onClick={()=>doSearch(a)}
+                  className="text-xs font-semibold bg-white border border-gray-200/80 text-gray-700 px-3.5 py-2 rounded-xl shadow-sm hover:border-[#4a9eff] hover:text-[#4a9eff] hover:shadow active:scale-95 transition-all whitespace-nowrap">
+                  {a}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
