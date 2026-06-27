@@ -1,0 +1,56 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+# Deployment strategy:
+#   - GitHub Pages builds and publishes here (safety net / current live site).
+#   - Vercel deploys via its own Git integration (connect the repo at
+#     vercel.com/new). Vercel auto-builds on every push to main — no token,
+#     secret, or workflow step needed. Set the VITE_* env vars in the Vercel
+#     project dashboard. Once parkeasy.uk DNS points to Vercel, that becomes
+#     the live site; the GitHub Pages build below can then be removed.
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Generate PNG icons + social share image from SVG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 192 -h 192 public/icon.svg -o public/icon-192.png
+          rsvg-convert -w 512 -h 512 public/icon.svg -o public/icon-512.png
+          rsvg-convert -w 1200 -h 630 public/social-card.svg -o public/og-image.png
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_STRIPE_PREMIUM_LINK: ${{ secrets.VITE_STRIPE_PREMIUM_LINK }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_GOOGLE_MAPS_KEY: ${{ secrets.VITE_GOOGLE_MAPS_KEY }}
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          cname: parkeasy.uk
