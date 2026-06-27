@@ -1030,185 +1030,149 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }
 );
 
 // ── SpotCard ──────────────────────────────────────────────────────────────────
-const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, onViewMap, isPremium, onUpgrade }) => {
-  const [shareDone, setShareDone] = useState(false);
-  const [imgErr,    setImgErr]    = useState(false);
+// ── Occupancy / price helpers for the redesigned cards ────────────────────────
+const occupancyOf = (spot) => {
+  if (spot.available != null && spot.total) {
+    const ratio = spot.available / spot.total;
+    const good = ratio > 0.2;
+    return { label:`${spot.available} free`, pct: Math.max(0.05, Math.min(1, ratio)),
+      color: good ? '#6BEFB9' : '#FFD27A',
+      grad: good ? 'linear-gradient(90deg,#34E0A0,#5BE7DA)' : 'linear-gradient(90deg,#FFC24B,#FF9D4B)' };
+  }
+  const free = ['free','hidden_gem'].includes(spot.badge);
+  if (free) return { label: spot.spaces!=null ? `${spot.spaces} spaces` : 'Free',
+    pct:0.85, color:'#6BEFB9', grad:'linear-gradient(90deg,#34E0A0,#5BE7DA)' };
+  if (spot.spaces!=null) return { label:`${spot.spaces} spaces`, pct:0.6, color:'#5BE7DA',
+    grad:'linear-gradient(90deg,#34E0A0,#5BE7DA)' };
+  return { label: spot.badge==='timed' ? 'Timed' : 'Pay & display', pct:0.45, color:'#FFD27A',
+    grad:'linear-gradient(90deg,#FFC24B,#FF9D4B)' };
+};
 
+const priceParts = (spot) => {
+  if (!spot.price) return { big:'Free', small:'' };
+  const m = String(spot.price).match(/^([^/]+)\/(.+)$/);
+  return m ? { big:m[1].trim(), small:'/'+m[2].trim() } : { big:String(spot.price), small:'' };
+};
+
+const amenitiesOf = (spot) => {
+  const a=[]; const r=(spot.restriction||'').toLowerCase(); const n=(spot.notes||'').toLowerCase(); const nm=(spot.name||'').toLowerCase();
+  if (spot.ev?.available) a.push('EV charging');
+  if (n.includes('multi-storey')||n.includes('underground')||nm.includes('multi-storey')) a.push('Covered');
+  if (r.includes('24/7')||r.includes('24h')||n.includes('24/7')) a.push('Open 24h');
+  if (spot.badge==='official') a.push('Official');
+  return a;
+};
+
+// ── Compact spot card (tap to open detail) ────────────────────────────────────
+const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   if (spot.premium && !isPremium) {
     return (
-      <div className="glass rounded-2xl overflow-hidden"
-        style={{borderLeft:'4px solid #2ED3C6'}}>
-        <div className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30">
-            <span className="text-lg">&#x1F48E;</span>
-          </div>
-          <div className="flex-1">
-            <p className="font-bold text-[#EAF1F8] text-sm">Premium Spot</p>
-            <p className="text-xs text-[rgba(234,241,248,0.5)]">Upgrade to reveal this hidden gem</p>
-          </div>
-          <button onClick={onUpgrade}
-            className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition btn-teal">
-            Unlock ★
-          </button>
-        </div>
-      </div>
+      <button onClick={onUpgrade} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
+        <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">&#x1F48E;</div>
+        <div className="flex-1"><p className="font-bold text-[#EAF1F8] text-sm">Premium spot</p><p className="text-xs text-[rgba(234,241,248,0.5)]">Tap to unlock this hidden gem</p></div>
+        <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal">Unlock &#9733;</span>
+      </button>
     );
   }
-
-  const isOfficial = ['NCP Belfast','Q-Park Belfast','Belfast City Council','Official'].includes(spot.by);
-  const freeNow = isFreeNow(spot);
-  const avail = getAvailability(spot);
-  const kerb = KERB[spot.badge] || KERB.free;
-
-  // Only attempt a Street View image when a key is configured. The free OSM
-  // static-map service is unreliable, so without a key we show a designed
-  // badge-themed header instead of a broken/empty image.
-  const svUrl = !spot.photo && !imgErr && GOOGLE_MAPS_KEY ? spotImageUrl(spot.lat, spot.lng) : null;
-  const photoSrc = spot.photo || svUrl;
-  const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
-
-  const handleShare = async () => {
-    const text = `${spot.name} — ${spot.notes.slice(0,100)}`;
-    const url = 'https://parkeasy.uk/';
-    if (navigator.share) {
-      try { await navigator.share({ title:'ParkEasy Belfast', text, url }); } catch {}
-    } else {
-      navigator.clipboard?.writeText(`${spot.name}\n${text}\n${url}`);
-      setShareDone(true);
-      setTimeout(()=>setShareDone(false), 2200);
-    }
-  };
-
+  const occ = occupancyOf(spot); const pr = priceParts(spot);
+  const free = ['free','hidden_gem'].includes(spot.badge);
   return (
-    <div className="glass rounded-2xl overflow-hidden transition-shadow"
-      style={{borderLeft: `${kerb.width}px ${kerb.style} ${kerb.color}`}}>
-      <div
-        className="relative overflow-hidden flex items-center justify-center"
-        style={{ height: photoSrc ? 168 : 122, background: photoSrc ? undefined : theme.grad }}
-      >
-        {photoSrc
-          ? <img src={photoSrc} alt={spot.name} className="w-full h-full object-cover" onError={()=>setImgErr(true)}/>
-          : (
-            <>
-              {/* subtle dotted texture + oversized icon for a designed, branded look */}
-              <div className="absolute inset-0 opacity-[0.18]"
-                style={{ backgroundImage:'radial-gradient(circle at 1px 1px, white 1.5px, transparent 0)', backgroundSize:'15px 15px' }}/>
-              <Car size={120} strokeWidth={1.1} className="absolute -right-5 -bottom-6 text-white opacity-20"/>
-              <div className="relative z-10 px-5 text-center">
-                <MapPin size={24} strokeWidth={2.4} className="text-white/95 mx-auto mb-1 drop-shadow"/>
-                <p className="text-white font-bold text-sm leading-tight drop-shadow-sm line-clamp-2">{spot.near}</p>
-              </div>
-            </>
-          )}
-
-        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none"/>
-
-        <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
-          <Badge type={spot.badge}/>
-          {freeNow === true && (
-            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-[#34E0A0]/120 text-white animate-pulse shadow">
-              Free now ✓
-            </span>
-          )}
-        </div>
-
-        <button
-          aria-label={saved ? 'Remove from saved spots' : 'Save this spot'}
-          onClick={()=>onSave(spot.id)}
-          className={`absolute top-2.5 right-2.5 w-9 h-9 rounded-full shadow-md flex items-center justify-center transition-all active:scale-90 ${
-            saved ? 'teal-grad' : 'bg-black/40 backdrop-blur-sm border border-white/20'
-          }`}>
-          <Bookmark size={15} className={saved?'text-[#06231f]':'text-white'} fill={saved?'#06231f':'none'}/>
-        </button>
-      </div>
-
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-display font-bold text-[#EAF1F8] text-sm leading-snug flex-1">{spot.name}</h3>
-          <span className="text-xs text-[rgba(234,241,248,0.55)] whitespace-nowrap flex-shrink-0 bg-white/5 px-2 py-0.5 rounded-full">{spot.walk}</span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <span className="flex items-center gap-1 text-xs text-[rgba(234,241,248,0.55)]"><Clock size={11}/>{spot.restriction}</span>
-          {avail && (
-            <span style={{background:avail.bg,color:avail.color}}
-              className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{background:avail.color}}/>
-              {avail.label}
-            </span>
-          )}
-          {spot.spaces != null && !avail && (
-            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/8 text-[#cdd9e8] border border-white/10">
-              <Car size={10}/>{spot.spaces} spaces
-            </span>
-          )}
-          {spot.price && (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#FFC24B]/15 text-[#FFD27A] border border-[#FFC24B]/25">
-              {spot.price}
-            </span>
-          )}
-          {spot.ev?.available && (
-            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#5BE7DA]/12 text-[#5BE7DA] border border-[#5BE7DA]/25">
-              <Zap size={9}/>EV {spot.ev.ports} × {spot.ev.speed}
-            </span>
-          )}
-        </div>
-
-        <div className="border-l-[3px] border-[#2ED3C6] pl-3 mb-3 bg-[#2ED3C6]/8 py-2 rounded-r-lg">
-          <p className="text-xs text-[rgba(234,241,248,0.65)] italic leading-relaxed line-clamp-2">{spot.notes}</p>
-        </div>
-
-        <div className="flex items-center gap-2 mb-3">
-          <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs text-[#06231f] px-3 py-2 rounded-full font-bold active:scale-95 transition-all btn-teal">
-            <Navigation size={11}/>Directions
-          </a>
-          {onBook && (
-            <button onClick={()=>onBook(spot)}
-              className="flex items-center gap-1.5 text-xs bg-white/8 border border-white/15 text-[#EAF1F8] px-3 py-2 rounded-full font-semibold hover:bg-white/12 active:scale-95 transition-all">
-              <Receipt size={11}/>Book
-            </button>
-          )}
-          <button onClick={handleShare}
-            className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold border transition-all active:scale-95 ${
-              shareDone ? 'bg-[#34E0A0]/15 border-[#34E0A0]/40 text-[#6BEFB9]' : 'border-white/15 text-[#cdd9e8] hover:border-[#5BE7DA] hover:text-[#5BE7DA]'
-            }`}>
-            {shareDone ? <><Check size={11}/>Copied!</> : <><Share2 size={11}/>Share</>}
-          </button>
-          {onViewMap && (
-            <button onClick={()=>onViewMap(spot)}
-              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold border border-white/15 text-[#cdd9e8] hover:border-[#5BE7DA] hover:text-[#5BE7DA] active:scale-95 transition-all">
-              <Map size={11}/>Map
-            </button>
-          )}
-          <div className="ml-auto text-xs text-[rgba(234,241,248,0.5)]">
-            {isOfficial
-              ? <span className="font-semibold text-[#5BE7DA]">{spot.by}</span>
-              : (
-                <button onClick={() => onVote?.(spot.id)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-all active:scale-90 ${voted ? 'bg-[#FFC24B]/15 text-[#FFD27A]' : 'text-[rgba(234,241,248,0.5)] hover:text-[#FFC24B]'}`}>
-                  <Star size={11} fill={voted ? '#FFC24B' : 'none'} className={voted ? 'text-[#FFC24B]' : 'text-[rgba(234,241,248,0.4)]'}/>
-                  <span className="font-medium">{spot.votes + (voted ? 1 : 0)}</span>
-                </button>
-              )}
+    <button onClick={()=>onOpen?.(spot)} className="glass rounded-[22px] w-full text-left p-4 active:scale-[0.99] transition">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-display font-bold text-[#EAF1F8] text-[17px] leading-tight truncate">{spot.name}</h3>
+          <div className="flex items-center gap-1.5 mt-1 text-xs text-[rgba(234,241,248,0.55)]">
+            <Clock size={12}/>{spot.walk}{spot.dist?` · ${spot.dist} mi`:''}
           </div>
         </div>
+        <div className="text-right flex items-center gap-2 flex-shrink-0">
+          <div className="font-display font-bold text-[18px]" style={{color: free?'#5BE7DA':'#EAF1F8'}}>
+            {pr.big}<span className="text-[11px] font-semibold text-[rgba(234,241,248,0.5)]">{pr.small}</span>
+          </div>
+          <span role="button" onClick={(e)=>{e.stopPropagation();onSave(spot.id);}} className={`w-8 h-8 rounded-full flex items-center justify-center ${saved?'teal-grad':'bg-white/8 border border-white/12'}`}>
+            <Bookmark size={13} className={saved?'text-[#06231f]':'text-[rgba(234,241,248,0.6)]'} fill={saved?'#06231f':'none'}/>
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2.5 mt-3.5">
+        <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+          <div style={{width:`${Math.round(occ.pct*100)}%`, background:occ.grad}} className="h-full rounded-full"/>
+        </div>
+        <span className="text-xs font-bold whitespace-nowrap" style={{color:occ.color}}>{occ.label}</span>
+      </div>
+    </button>
+  );
+};
 
-        <div className="flex items-center gap-2 pt-2.5 border-t border-white/10">
-          <span className="text-[11px] text-[rgba(234,241,248,0.45)] flex-1">Still accurate?</span>
-          <button onClick={()=>onRate(spot.id,'accurate')}
-            className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-              rating==='accurate' ? 'bg-[#34E0A0]/15 border-[#34E0A0]/50 text-[#6BEFB9] font-bold' : 'border-white/15 text-[rgba(234,241,248,0.5)] hover:border-[#34E0A0]/40'
-            }`}>✓ Yes</button>
-          <button onClick={()=>onRate(spot.id,'changed')}
-            className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-              rating==='changed' ? 'bg-[#FFC24B]/15 border-[#FFC24B]/50 text-[#FFD27A] font-bold' : 'border-white/15 text-[rgba(234,241,248,0.5)] hover:border-[#FFC24B]/40'
-            }`}>⚠ Changed</button>
+// ── Spot detail sheet ─────────────────────────────────────────────────────────
+const SpotDetail = ({ spot, saved, onSave, onBook, rating, onRate, voted, onVote, onClose }) => {
+  const [shareDone,setShareDone]=useState(false);
+  if (!spot) return null;
+  const occ = occupancyOf(spot); const pr = priceParts(spot);
+  const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
+  const ring = spot.available!=null && spot.total ? spot.available/spot.total : occ.pct;
+  const C = 2*Math.PI*26; const off = C*(1-Math.max(0.05,Math.min(1,ring)));
+  const amen = amenitiesOf(spot);
+  const share=async()=>{ const url='https://parkeasy.uk/'; const text=`${spot.name} — ${(spot.notes||'').slice(0,90)}`; if(navigator.share){try{await navigator.share({title:'ParkEasy',text,url});}catch{}}else{navigator.clipboard?.writeText(`${spot.name}\n${url}`);setShareDone(true);setTimeout(()=>setShareDone(false),2000);} };
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.6)'}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] overflow-hidden animate-fade-in-up" style={{maxWidth:680,width:'100%',margin:'0 auto',maxHeight:'92vh',background:'rgba(13,20,33,0.97)',borderTop:'1px solid rgba(255,255,255,0.14)',boxShadow:'0 -12px 44px rgba(0,0,0,0.5)'}}>
+        <div className="relative h-28 flex items-end" style={{background:theme.grad}}>
+          <div className="absolute inset-0 opacity-[0.18]" style={{backgroundImage:'radial-gradient(circle at 1px 1px, white 1.5px, transparent 0)',backgroundSize:'15px 15px'}}/>
+          <button onClick={onClose} className="absolute top-3 left-3 w-9 h-9 rounded-full bg-black/30 border border-white/20 flex items-center justify-center text-white"><X size={16}/></button>
+          <button onClick={()=>onSave(spot.id)} className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center ${saved?'bg-white text-[#06231f]':'bg-black/30 border border-white/20 text-white'}`}><Bookmark size={15} fill={saved?'#06231f':'none'}/></button>
+        </div>
+        <div className="overflow-auto p-5" style={{maxHeight:'calc(92vh - 112px)'}}>
+          <h2 className="font-display font-bold text-2xl text-[#EAF1F8] leading-tight">{spot.name}</h2>
+          <div className="flex items-center gap-1.5 mt-1.5 text-sm text-[rgba(234,241,248,0.55)]"><MapPin size={14}/>{spot.near}</div>
+          <div className="flex items-center gap-4 mt-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+            <div className="relative w-16 h-16 flex-shrink-0">
+              <svg width="64" height="64" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6"/>
+                <circle cx="32" cy="32" r="26" fill="none" stroke={occ.color} strokeWidth="6" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off} transform="rotate(-90 32 32)"/>
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center font-display font-extrabold text-[#EAF1F8]">{spot.available!=null?spot.available:(spot.spaces!=null?spot.spaces:'✓')}</div>
+            </div>
+            <div className="flex-1">
+              <div className="font-bold text-[#EAF1F8]">{occ.label}{spot.total?` of ${spot.total}`:''}</div>
+              <div className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5">{spot.restriction}</div>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-3">
+            <div className="flex-1 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+              <div className="text-xs text-[rgba(234,241,248,0.5)] font-semibold">Price</div>
+              <div className="font-display font-bold text-lg text-[#EAF1F8] mt-0.5">{pr.big}<span className="text-xs text-[rgba(234,241,248,0.5)]">{pr.small}</span></div>
+            </div>
+            <div className="flex-1 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+              <div className="text-xs text-[rgba(234,241,248,0.5)] font-semibold">Walk</div>
+              <div className="font-display font-bold text-lg text-[#EAF1F8] mt-0.5">{spot.walk}</div>
+            </div>
+          </div>
+          {amen.length>0 && (
+            <div className="flex flex-wrap gap-2 mt-3.5">
+              {amen.map(a=>(<span key={a} className="text-xs font-semibold text-[#cdd9e8] bg-white/6 border border-white/10 px-3 py-1.5 rounded-full">{a}</span>))}
+            </div>
+          )}
+          {spot.notes && <p className="text-sm text-[rgba(234,241,248,0.65)] leading-relaxed mt-4 italic border-l-[3px] border-[#2ED3C6] pl-3">{spot.notes}</p>}
+          <div className="flex gap-3 mt-5">
+            <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer" className="flex-1 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[#06231f] btn-teal active:scale-95 transition">
+              <Navigation size={18}/>Get directions
+            </a>
+            <button onClick={share} className="w-[52px] rounded-2xl bg-white/8 border border-white/15 text-[#EAF1F8] flex items-center justify-center">{shareDone?<Check size={18}/>:<Share2 size={18}/>}</button>
+            {onBook && <button onClick={()=>onBook(spot)} className="w-[52px] rounded-2xl bg-white/8 border border-white/15 text-[#EAF1F8] flex items-center justify-center"><Receipt size={18}/></button>}
+          </div>
+          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/10">
+            <span className="text-xs text-[rgba(234,241,248,0.45)] flex-1">Still accurate?</span>
+            <button onClick={()=>onRate?.(spot.id,'accurate')} className={`text-xs px-2.5 py-1 rounded-full border ${rating==='accurate'?'bg-[#34E0A0]/15 border-[#34E0A0]/50 text-[#6BEFB9] font-bold':'border-white/15 text-[rgba(234,241,248,0.5)]'}`}>&#10003; Yes</button>
+            <button onClick={()=>onRate?.(spot.id,'changed')} className={`text-xs px-2.5 py-1 rounded-full border ${rating==='changed'?'bg-[#FFC24B]/15 border-[#FFC24B]/50 text-[#FFD27A] font-bold':'border-white/15 text-[rgba(234,241,248,0.5)]'}`}>&#9888; Changed</button>
+            <button onClick={()=>onVote?.(spot.id)} className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full ${voted?'bg-[#FFC24B]/15 text-[#FFD27A]':'text-[rgba(234,241,248,0.5)]'}`}><Star size={12} fill={voted?'#FFC24B':'none'}/>{(spot.votes||0)+(voted?1:0)}</button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
 
 // ── Map helpers ───────────────────────────────────────────────────────────────
 const RecenterMap = ({ center, zoom }) => {
@@ -1315,7 +1279,7 @@ const walkFromMiles = (mi) => {
   return mins >= 60 ? `${mi.toFixed(1)} mi away` : `~${mins} min walk`;
 };
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -1454,6 +1418,13 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
 
   return (
     <div className="p-4 space-y-4">
+      {/* Hero */}
+      {!isSearching && (
+        <div className="pt-1 pb-1">
+          <p className="text-[13px] font-bold tracking-[1.5px] text-[#5BE7DA] uppercase">{cityName}</p>
+          <h1 className="font-display font-extrabold text-[33px] leading-none tracking-tight text-[#EAF1F8] mt-1">Find parking</h1>
+        </div>
+      )}
       {/* Search bar */}
       <div className="relative">
         <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[rgba(234,241,248,0.5)] pointer-events-none"/>
@@ -1609,7 +1580,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
         <div className="space-y-4">
           {visibleSpots.map((s,i)=>(
             <React.Fragment key={s.id}>
-              <SpotCard spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap} isPremium={isPremium} onUpgrade={onUpgrade}/>
+              <SpotCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
               {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
             </React.Fragment>
           ))}
@@ -1629,7 +1600,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
 };
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
-const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, cityName, onCityDetected, userSpots = [], isPremium, onUpgrade }) => {
+const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, cityName, onCityDetected, userSpots = [], isPremium, onUpgrade, onOpenSpot }) => {
   const [loc,     setLoc]     = useState(null);
   const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1734,7 +1705,7 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
       <div className="space-y-4">
         {nearby.map(s=>(
           <SpotCard key={s.id} spot={{...s, dist:Math.round(s.realDist*10)/10}}
-            saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap} isPremium={isPremium} onUpgrade={onUpgrade}/>
+            saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
         ))}
       </div>
     </div>
@@ -1851,7 +1822,7 @@ const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
 };
 
 // ── SavedTab ──────────────────────────────────────────────────────────────────
-const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, allSpots = SPOTS, isPremium, onUpgrade }) => {
+const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, allSpots = SPOTS, isPremium, onUpgrade, onOpenSpot }) => {
   const spots = allSpots.filter(s => saved.has(s.id));
   const [focusSpot, setFocusSpot] = useState(null);
   const [shared, setShared] = useState(false);
@@ -1909,7 +1880,7 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, allSp
       )}
       <div className="space-y-4">
         {spots.map(s=>(
-          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap} isPremium={isPremium} onUpgrade={onUpgrade}/>
+          <SpotCard key={s.id} spot={s} saved={true} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
         ))}
       </div>
     </div>
@@ -2783,6 +2754,7 @@ export default function App() {
   const [showPricing,   setShowPricing]   = useState(false);
   const [infoPage,      setInfoPage]      = useState(null);
   const [cookieChoice,  setCookieChoice]  = useState(()=>ls.get('pe_cookie', null));
+  const [detailSpot,    setDetailSpot]    = useState(null);
   const [votes,          setVotes]          = useState(()=>ls.get('pe_votes', {}));
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstall,    setShowInstall]    = useState(false);
@@ -2978,6 +2950,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'linear-gradient(180deg, #0d1626 0%, #0a111e 60%)'}}>
       {/* ── Modals ── */}
+      {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} onBook={(s)=>{setDetailSpot(null);handleBook(s);}} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
       {!cookieChoice && <CookieBanner onChoice={(c)=>{ setCookieChoice(c); ls.set('pe_cookie', c); }}/>}
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
@@ -3083,11 +3056,11 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')}/>}
-        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot}/>}
+        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)} allSpots={allSpots}/>}
-        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
+        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='bookings'   && <BookingHistoryTab bookings={bookings}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
         <Footer onOpen={setInfoPage}/>
