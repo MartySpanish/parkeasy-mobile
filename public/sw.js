@@ -1,9 +1,10 @@
-const CACHE = 'parkeasy-v4';
+const CACHE = 'parkeasy-v5';
 const BASE = '/';
 
+// Only precache static assets that rarely change. The HTML shell is
+// deliberately NOT precached so navigations always fetch the latest build
+// (network-first below), preventing "deployed but users see the old version".
 const CORE = [
-  BASE,
-  BASE + 'index.html',
   BASE + 'manifest.json',
   BASE + 'icon.svg',
   BASE + 'icon-192.png',
@@ -25,16 +26,15 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network-first for API/tile requests, cache-first for app shell
   const url = new URL(e.request.url);
   const isAppShell = url.origin === self.location.origin;
+  if (!isAppShell) return; // OSM tiles, fonts, etc. pass through normally
 
-  if (isAppShell) {
-    e.respondWith(
-      fetch(e.request)
-        .then(r => { const clone = r.clone(); caches.open(CACHE).then(c => c.put(e.request, clone)); return r; })
-        .catch(() => caches.match(e.request))
-    );
-  }
-  // External requests (OSM tiles, Unsplash) pass through normally
+  // Always go network-first for navigations and hashed assets so a new
+  // deploy is picked up immediately; fall back to cache only when offline.
+  e.respondWith(
+    fetch(e.request)
+      .then(r => { const clone = r.clone(); caches.open(CACHE).then(c => c.put(e.request, clone)); return r; })
+      .catch(() => caches.match(e.request))
+  );
 });
