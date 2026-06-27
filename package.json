@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/prerender.mjs",
     "build:cap": "VITE_APP_CAPACITOR=true vite build",
     "preview": "vite preview"
   },
