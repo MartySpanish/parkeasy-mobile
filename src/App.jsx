@@ -9,6 +9,7 @@ import {
   Zap, Timer, Globe, Receipt, Key,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
+import { EXTRA_SPOTS } from './extraSpots';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -545,7 +546,7 @@ const CITY_SPOTS = {
   magherafelt:   MAGHERAFELT_SPOTS,
 };
 
-const getCitySpots = (cityId) => CITY_SPOTS[cityId] || [];
+const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []) ];
 
 // Welcome-screen stats — derived from SPOTS so they never go stale as spots are added.
 const WELCOME_STATS = [
