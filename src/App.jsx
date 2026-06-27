@@ -751,32 +751,32 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl my-auto">
-        <div style={{ background: 'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)' }} className="px-6 pt-8 pb-6 text-center">
-          <div className="w-16 h-16 bg-[#4a9eff] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+      <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl my-auto">
+        <div style={{ background: 'linear-gradient(135deg,#0e1a2c 0%,#2d4a6e 100%)' }} className="px-6 pt-8 pb-6 text-center">
+          <div className="w-16 h-16 bg-[#5BE7DA] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <MapPin size={30} className="text-white" strokeWidth={2.5}/>
           </div>
           <h2 className="text-white font-extrabold text-2xl tracking-tight">ParkEasy Belfast</h2>
-          <p className="text-blue-300 text-sm mt-1">Find where locals actually park</p>
+          <p className="text-[#5BE7DA] text-sm mt-1">Find where locals actually park</p>
         </div>
 
         <div className="p-6 space-y-5">
           <div className="grid grid-cols-3 gap-2 text-center">
             {WELCOME_STATS.map(([e,n,l])=>(
-              <div key={l} className="bg-gray-50 rounded-xl py-2.5">
+              <div key={l} className="bg-white/5 rounded-xl py-2.5">
                 <p className="text-lg">{e}</p>
-                <p className="font-extrabold text-gray-900 text-sm">{n}</p>
-                <p className="text-gray-400 text-[10px]">{l}</p>
+                <p className="font-extrabold text-[#EAF1F8] text-sm">{n}</p>
+                <p className="text-[#6b7d96] text-[10px]">{l}</p>
               </div>
             ))}
           </div>
 
           {isSupabaseEnabled && (
-            <div className="flex bg-gray-100 rounded-xl p-1 text-sm font-bold">
+            <div className="flex bg-white/8 rounded-xl p-1 text-sm font-bold">
               {[['signup','Sign up'],['login','Log in']].map(([m,label])=>(
                 <button key={m} type="button"
                   onClick={()=>{ setMode(m); setError(''); setNotice(''); }}
-                  className={`flex-1 py-2 rounded-lg transition-all ${mode===m ? 'bg-white text-[#1a2332] shadow-sm' : 'text-gray-400'}`}>
+                  className={`flex-1 py-2 rounded-lg transition-all ${mode===m ? 'bg-[#0e1a2c] text-[#0e1a2c] shadow-sm' : 'text-[#6b7d96]'}`}>
                   {label}
                 </button>
               ))}
@@ -788,40 +788,40 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
               <input
                 required value={name} onChange={e=>setName(e.target.value)}
                 placeholder="Your first name"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"
+                className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"
               />
             )}
             <input
               required type="email" value={email} onChange={e=>setEmail(e.target.value)}
               placeholder="Email address" autoComplete="email"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"
+              className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"
             />
             {isSupabaseEnabled && (
               <input
                 required type="password" value={password} onChange={e=>setPassword(e.target.value)}
                 placeholder={isSignup ? 'Create a password (min 6 characters)' : 'Password'}
                 autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={6}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"
+                className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"
               />
             )}
 
-            {error  && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
-            {notice && <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2">{notice}</p>}
+            {error  && <p className="text-xs text-red-300 bg-red-500/12 rounded-lg px-3 py-2">{error}</p>}
+            {notice && <p className="text-xs text-[#6BEFB9] bg-[#34E0A0]/12 rounded-lg px-3 py-2">{notice}</p>}
 
             <button type="submit" disabled={loading}
-              className="w-full bg-[#4a9eff] text-white py-3.5 rounded-xl font-bold text-sm hover:bg-blue-500 active:scale-[0.98] transition-all shadow-md disabled:opacity-60">
+              className="w-full bg-[#5BE7DA] text-[#06231f] py-3.5 rounded-xl font-bold text-sm hover:bg-[#2ED3C6]/100 active:scale-[0.98] transition-all shadow-md disabled:opacity-60">
               {submitLabel}
             </button>
           </form>
 
           {isSupabaseEnabled && !isSignup && (
             <button onClick={resetPassword} type="button"
-              className="w-full text-center text-xs text-[#4a9eff] hover:underline">
+              className="w-full text-center text-xs text-[#5BE7DA] hover:underline">
               Forgot your password?
             </button>
           )}
 
-          <button onClick={onSkip} className="w-full text-center text-xs text-gray-400 hover:text-gray-600 py-1 transition-colors">
+          <button onClick={onSkip} className="w-full text-center text-xs text-[#6b7d96] hover:text-[#aebfd4] py-1 transition-colors">
             Browse without an account
           </button>
         </div>
@@ -860,34 +860,34 @@ const BusinessModal = ({ onClose }) => {
 
   if (done) return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-          <Check size={32} className="text-green-600" strokeWidth={2.5}/>
+      <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
+        <div className="w-16 h-16 bg-[#34E0A0]/15 rounded-full flex items-center justify-center mx-auto">
+          <Check size={32} className="text-[#6BEFB9]" strokeWidth={2.5}/>
         </div>
-        <h3 className="text-xl font-bold text-gray-900">Request Received!</h3>
-        <p className="text-sm text-gray-500 leading-relaxed">We'll add your business to the directory and map your nearest parking spots within 24 hours.</p>
-        <button onClick={onClose} className="w-full bg-[#1a2332] text-white py-3 rounded-xl font-bold hover:bg-[#243447] transition">Done</button>
+        <h3 className="text-xl font-bold text-[#EAF1F8]">Request Received!</h3>
+        <p className="text-sm text-[#8da2bd] leading-relaxed">We'll add your business to the directory and map your nearest parking spots within 24 hours.</p>
+        <button onClick={onClose} className="w-full bg-[#0e1a2c] text-white py-3 rounded-xl font-bold hover:bg-[#16243a] transition">Done</button>
       </div>
     </div>
   );
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">List Your Business Free</h2>
-            <p className="text-xs text-gray-400">Customers see exactly where to park</p>
+            <h2 className="text-lg font-bold text-[#EAF1F8]">List Your Business Free</h2>
+            <p className="text-xs text-[#6b7d96]">Customers see exactly where to park</p>
           </div>
-          <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><X size={16}/></button>
+          <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center text-[#8da2bd] hover:bg-white/10 transition"><X size={16}/></button>
         </div>
         <div className="p-6">
           <form onSubmit={submit} className="space-y-3">
-            <input required value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Business name *" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
-            <input required value={form.address} onChange={e=>set('address',e.target.value)} placeholder="Full address *" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
-            <input required type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="Contact email *" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
-            <input value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="Phone (optional)" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
-            <button type="submit" disabled={submitting} className="w-full bg-[#4a9eff] text-white py-3.5 rounded-xl font-bold text-sm hover:bg-blue-500 transition shadow-md disabled:opacity-60">
+            <input required value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Business name *" className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"/>
+            <input required value={form.address} onChange={e=>set('address',e.target.value)} placeholder="Full address *" className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"/>
+            <input required type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="Contact email *" className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"/>
+            <input value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="Phone (optional)" className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"/>
+            <button type="submit" disabled={submitting} className="w-full bg-[#5BE7DA] text-[#06231f] py-3.5 rounded-xl font-bold text-sm hover:bg-[#2ED3C6]/100 transition shadow-md disabled:opacity-60">
               {submitting ? '⏳ Sending…' : 'Submit for free listing →'}
             </button>
           </form>
@@ -910,27 +910,27 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
 
   if (isPremium) return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
-        <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto">
+      <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
+        <div className="w-16 h-16 bg-[#FFC24B]/15 rounded-full flex items-center justify-center mx-auto">
           <Star size={32} className="text-yellow-500" fill="#eab308"/>
         </div>
-        <h3 className="text-xl font-bold text-gray-900">You're Premium ★</h3>
-        <p className="text-sm text-gray-500 leading-relaxed">Full access to all ParkEasy Premium features. Thanks for supporting Belfast's community!</p>
-        <button onClick={onClose} className="w-full bg-[#1a2332] text-white py-3 rounded-xl font-bold hover:bg-[#243447] transition">Done</button>
+        <h3 className="text-xl font-bold text-[#EAF1F8]">You're Premium ★</h3>
+        <p className="text-sm text-[#8da2bd] leading-relaxed">Full access to all ParkEasy Premium features. Thanks for supporting Belfast's community!</p>
+        <button onClick={onClose} className="w-full bg-[#0e1a2c] text-white py-3 rounded-xl font-bold hover:bg-[#16243a] transition">Done</button>
       </div>
     </div>
   );
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-        <div style={{ background: 'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)' }} className="p-6 text-center relative">
+      <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+        <div style={{ background: 'linear-gradient(135deg,#0e1a2c 0%,#2d4a6e 100%)' }} className="p-6 text-center relative">
           <button aria-label="Close" onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition"><X size={16}/></button>
           <div className="w-14 h-14 bg-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-            <Star size={28} fill="currentColor" className="text-yellow-900"/>
+            <Star size={28} fill="currentColor" className="text-[#FFD27A]"/>
           </div>
           <h2 className="text-white font-extrabold text-xl">ParkEasy Premium</h2>
-          <p className="text-blue-300 text-sm mt-1">Support Belfast's community parking finder</p>
+          <p className="text-[#5BE7DA] text-sm mt-1">Support Belfast's community parking finder</p>
         </div>
         <div className="p-6 space-y-4">
           <div className="space-y-2">
@@ -942,32 +942,32 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
               ['🔔','Notifications when spots free up'],
               ['💎','Premium badge on your profile'],
             ].map(([icon,text])=>(
-              <div key={text} className="flex items-center gap-3 text-sm text-gray-700">
+              <div key={text} className="flex items-center gap-3 text-sm text-[#cdd9e8]">
                 <span className="w-6 text-center text-base">{icon}</span><span>{text}</span>
               </div>
             ))}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <a href={STRIPE_MONTHLY} target="_blank" rel="noreferrer"
-              className="block rounded-2xl border-2 border-[#4a9eff] p-4 text-center hover:bg-blue-50 active:scale-[0.98] transition-all">
-              <p className="text-[10px] text-[#4a9eff] font-bold uppercase tracking-widest mb-1">Monthly</p>
-              <p className="text-3xl font-extrabold text-gray-900">£2.99</p>
-              <p className="text-xs text-gray-400 mb-3">per month</p>
-              <span className="block w-full bg-[#4a9eff] text-white py-2 rounded-xl text-xs font-bold">Subscribe</span>
+              className="block rounded-2xl border-2 border-[#5BE7DA] p-4 text-center hover:bg-[#2ED3C6]/10 active:scale-[0.98] transition-all">
+              <p className="text-[10px] text-[#5BE7DA] font-bold uppercase tracking-widest mb-1">Monthly</p>
+              <p className="text-3xl font-extrabold text-[#EAF1F8]">£2.99</p>
+              <p className="text-xs text-[#6b7d96] mb-3">per month</p>
+              <span className="block w-full bg-[#5BE7DA] text-[#06231f] py-2 rounded-xl text-xs font-bold">Subscribe</span>
             </a>
             <a href={STRIPE_ANNUAL} target="_blank" rel="noreferrer"
-              className="block rounded-2xl border-2 border-[#1a2332] p-4 text-center hover:bg-gray-50 active:scale-[0.98] transition-all relative">
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[9px] font-black px-3 py-1 rounded-full whitespace-nowrap shadow">BEST VALUE</span>
-              <p className="text-[10px] text-[#1a2332] font-bold uppercase tracking-widest mb-1 mt-1">Annual</p>
-              <p className="text-3xl font-extrabold text-gray-900">£20</p>
-              <p className="text-xs text-gray-400 mb-3">per year</p>
-              <span className="block w-full bg-[#1a2332] text-white py-2 rounded-xl text-xs font-bold">Subscribe</span>
+              className="block rounded-2xl border-2 border-[#0e1a2c] p-4 text-center hover:bg-white/5 active:scale-[0.98] transition-all relative">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-[#FFD27A] text-[9px] font-black px-3 py-1 rounded-full whitespace-nowrap shadow">BEST VALUE</span>
+              <p className="text-[10px] text-[#0e1a2c] font-bold uppercase tracking-widest mb-1 mt-1">Annual</p>
+              <p className="text-3xl font-extrabold text-[#EAF1F8]">£20</p>
+              <p className="text-xs text-[#6b7d96] mb-3">per year</p>
+              <span className="block w-full bg-[#0e1a2c] text-white py-2 rounded-xl text-xs font-bold">Subscribe</span>
             </a>
           </div>
-          <p className="text-center text-xs text-gray-400">Secure payment via Stripe · Cancel any time</p>
+          <p className="text-center text-xs text-[#6b7d96]">Secure payment via Stripe · Cancel any time</p>
 
           {!showCodeBox ? (
-            <button onClick={()=>setShowCodeBox(true)} className="block w-full text-center text-xs text-gray-400 underline hover:text-gray-600">
+            <button onClick={()=>setShowCodeBox(true)} className="block w-full text-center text-xs text-[#6b7d96] underline hover:text-[#aebfd4]">
               Have a VIP code?
             </button>
           ) : (
@@ -975,10 +975,10 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
               <div className="flex gap-2">
                 <input value={code} onChange={e=>{ setCode(e.target.value); setCodeError(false); }}
                   placeholder="Enter VIP code" autoFocus
-                  className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#4a9eff]"/>
-                <button onClick={submitCode} className="bg-[#1a2332] text-white px-4 rounded-xl text-sm font-bold hover:bg-[#243447] transition">Redeem</button>
+                  className="flex-1 border border-white/15 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#5BE7DA]"/>
+                <button onClick={submitCode} className="bg-[#0e1a2c] text-white px-4 rounded-xl text-sm font-bold hover:bg-[#16243a] transition">Redeem</button>
               </div>
-              {codeError && <p className="text-center text-xs text-red-500">That code isn't valid. Check it and try again.</p>}
+              {codeError && <p className="text-center text-xs text-red-300">That code isn't valid. Check it and try again.</p>}
             </div>
           )}
         </div>
@@ -990,37 +990,37 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
 // ── User Menu ─────────────────────────────────────────────────────────────────
 const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
-    <div className="absolute top-16 right-3 bg-white rounded-2xl shadow-2xl border border-gray-100 w-64 overflow-hidden" onClick={e=>e.stopPropagation()}>
-      <div style={{background:'#1a2332'}} className="p-4 flex items-center gap-3">
-        <div className="w-11 h-11 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0">
+    <div className="absolute top-16 right-3 bg-[#0e1a2c] rounded-2xl shadow-2xl border border-white/10 w-64 overflow-hidden" onClick={e=>e.stopPropagation()}>
+      <div style={{background:'#0e1a2c'}} className="p-4 flex items-center gap-3">
+        <div className="w-11 h-11 bg-[#5BE7DA] rounded-full flex items-center justify-center text-[#06231f] font-bold text-base flex-shrink-0">
           {user.name.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0">
           <p className="text-white font-bold text-sm truncate">{user.name}</p>
-          <p className="text-blue-300 text-xs truncate">{user.email}</p>
+          <p className="text-[#5BE7DA] text-xs truncate">{user.email}</p>
         </div>
         {isPremium && <Star size={16} className="text-yellow-400 flex-shrink-0 ml-auto" fill="#facc15"/>}
       </div>
       <div className="p-4 space-y-3">
         <div className="grid grid-cols-2 gap-2">
-          <div className="bg-gray-50 rounded-xl p-3 text-center">
-            <p className="text-xl font-extrabold text-gray-900">{spotsAdded}</p>
-            <p className="text-[10px] text-gray-400 font-medium">Spots Added</p>
+          <div className="bg-white/5 rounded-xl p-3 text-center">
+            <p className="text-xl font-extrabold text-[#EAF1F8]">{spotsAdded}</p>
+            <p className="text-[10px] text-[#6b7d96] font-medium">Spots Added</p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-3 text-center">
+          <div className="bg-white/5 rounded-xl p-3 text-center">
             {isPremium
-              ? <><p className="text-yellow-500 font-extrabold text-sm">★ PREMIUM</p><p className="text-[10px] text-gray-400 font-medium">Active</p></>
-              : <><p className="text-[#4a9eff] font-extrabold text-sm">FREE</p><p className="text-[10px] text-gray-400 font-medium">Upgrade →</p></>
+              ? <><p className="text-yellow-500 font-extrabold text-sm">★ PREMIUM</p><p className="text-[10px] text-[#6b7d96] font-medium">Active</p></>
+              : <><p className="text-[#5BE7DA] font-extrabold text-sm">FREE</p><p className="text-[10px] text-[#6b7d96] font-medium">Upgrade →</p></>
             }
           </div>
         </div>
         {!isPremium && (
-          <button onClick={onUpgrade} className="w-full bg-yellow-400 text-yellow-900 py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
+          <button onClick={onUpgrade} className="w-full bg-yellow-400 text-[#FFD27A] py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
             ★ Upgrade to Premium — £2.99/mo
           </button>
         )}
-        <div className="border-t border-gray-100 pt-2">
-          <button onClick={onSignOut} className="w-full flex items-center gap-2 text-sm text-red-500 hover:text-red-600 font-medium py-1 transition-colors">
+        <div className="border-t border-white/10 pt-2">
+          <button onClick={onSignOut} className="w-full flex items-center gap-2 text-sm text-red-300 hover:text-red-300 font-medium py-1 transition-colors">
             <LogOut size={15}/> Sign out
           </button>
         </div>
@@ -1036,18 +1036,18 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, 
 
   if (spot.premium && !isPremium) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
-        style={{borderLeft:'4px solid #9333ea'}}>
+      <div className="glass rounded-2xl overflow-hidden"
+        style={{borderLeft:'4px solid #2ED3C6'}}>
         <div className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-            <span className="text-purple-600 text-lg">&#x1F48E;</span>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30">
+            <span className="text-lg">&#x1F48E;</span>
           </div>
           <div className="flex-1">
-            <p className="font-bold text-gray-800 text-sm">Premium Spot</p>
-            <p className="text-xs text-gray-400">Upgrade to reveal this hidden gem</p>
+            <p className="font-bold text-[#EAF1F8] text-sm">Premium Spot</p>
+            <p className="text-xs text-[rgba(234,241,248,0.5)]">Upgrade to reveal this hidden gem</p>
           </div>
           <button onClick={onUpgrade}
-            className="bg-purple-600 text-white text-xs font-bold px-3 py-2 rounded-xl hover:bg-purple-700 transition">
+            className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition btn-teal">
             Unlock ★
           </button>
         </div>
@@ -1080,7 +1080,7 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, 
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
+    <div className="glass rounded-2xl overflow-hidden transition-shadow"
       style={{borderLeft: `${kerb.width}px ${kerb.style} ${kerb.color}`}}>
       <div
         className="relative overflow-hidden flex items-center justify-center"
@@ -1106,7 +1106,7 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, 
         <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
           <Badge type={spot.badge}/>
           {freeNow === true && (
-            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-green-500 text-white animate-pulse shadow">
+            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-[#34E0A0]/120 text-white animate-pulse shadow">
               Free now ✓
             </span>
           )}
@@ -1116,20 +1116,20 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, 
           aria-label={saved ? 'Remove from saved spots' : 'Save this spot'}
           onClick={()=>onSave(spot.id)}
           className={`absolute top-2.5 right-2.5 w-9 h-9 rounded-full shadow-md flex items-center justify-center transition-all active:scale-90 ${
-            saved ? 'bg-[#4a9eff]' : 'bg-white/90 backdrop-blur-sm'
+            saved ? 'teal-grad' : 'bg-black/40 backdrop-blur-sm border border-white/20'
           }`}>
-          <Bookmark size={15} className={saved?'text-white':'text-gray-500'} fill={saved?'white':'none'}/>
+          <Bookmark size={15} className={saved?'text-[#06231f]':'text-white'} fill={saved?'#06231f':'none'}/>
         </button>
       </div>
 
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{spot.name}</h3>
-          <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0 bg-gray-50 px-2 py-0.5 rounded-full">{spot.walk}</span>
+          <h3 className="font-display font-bold text-[#EAF1F8] text-sm leading-snug flex-1">{spot.name}</h3>
+          <span className="text-xs text-[rgba(234,241,248,0.55)] whitespace-nowrap flex-shrink-0 bg-white/5 px-2 py-0.5 rounded-full">{spot.walk}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <span className="flex items-center gap-1 text-xs text-gray-500"><Clock size={11}/>{spot.restriction}</span>
+          <span className="flex items-center gap-1 text-xs text-[rgba(234,241,248,0.55)]"><Clock size={11}/>{spot.restriction}</span>
           {avail && (
             <span style={{background:avail.bg,color:avail.color}}
               className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full">
@@ -1138,71 +1138,71 @@ const SpotCard = ({ spot, saved, onSave, rating, onRate, voted, onVote, onBook, 
             </span>
           )}
           {spot.spaces != null && !avail && (
-            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/8 text-[#cdd9e8] border border-white/10">
               <Car size={10}/>{spot.spaces} spaces
             </span>
           )}
           {spot.price && (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#FFC24B]/15 text-[#FFD27A] border border-[#FFC24B]/25">
               {spot.price}
             </span>
           )}
           {spot.ev?.available && (
-            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
+            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#5BE7DA]/12 text-[#5BE7DA] border border-[#5BE7DA]/25">
               <Zap size={9}/>EV {spot.ev.ports} × {spot.ev.speed}
             </span>
           )}
         </div>
 
-        <div className="border-l-[3px] border-[#4a9eff] pl-3 mb-3 bg-blue-50/50 py-2 rounded-r-lg">
-          <p className="text-xs text-gray-600 italic leading-relaxed line-clamp-2">{spot.notes}</p>
+        <div className="border-l-[3px] border-[#2ED3C6] pl-3 mb-3 bg-[#2ED3C6]/8 py-2 rounded-r-lg">
+          <p className="text-xs text-[rgba(234,241,248,0.65)] italic leading-relaxed line-clamp-2">{spot.notes}</p>
         </div>
 
         <div className="flex items-center gap-2 mb-3">
           <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs bg-[#1a2332] text-white px-3 py-2 rounded-full font-semibold hover:bg-[#243447] active:scale-95 transition-all">
+            className="flex items-center gap-1.5 text-xs text-[#06231f] px-3 py-2 rounded-full font-bold active:scale-95 transition-all btn-teal">
             <Navigation size={11}/>Directions
           </a>
           {onBook && (
             <button onClick={()=>onBook(spot)}
-              className="flex items-center gap-1.5 text-xs bg-green-600 text-white px-3 py-2 rounded-full font-semibold hover:bg-green-700 active:scale-95 transition-all">
+              className="flex items-center gap-1.5 text-xs bg-white/8 border border-white/15 text-[#EAF1F8] px-3 py-2 rounded-full font-semibold hover:bg-white/12 active:scale-95 transition-all">
               <Receipt size={11}/>Book
             </button>
           )}
           <button onClick={handleShare}
             className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold border transition-all active:scale-95 ${
-              shareDone ? 'bg-green-50 border-green-300 text-green-700' : 'border-gray-200 text-gray-600 hover:border-[#4a9eff] hover:text-[#4a9eff]'
+              shareDone ? 'bg-[#34E0A0]/15 border-[#34E0A0]/40 text-[#6BEFB9]' : 'border-white/15 text-[#cdd9e8] hover:border-[#5BE7DA] hover:text-[#5BE7DA]'
             }`}>
             {shareDone ? <><Check size={11}/>Copied!</> : <><Share2 size={11}/>Share</>}
           </button>
           {onViewMap && (
             <button onClick={()=>onViewMap(spot)}
-              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold border border-gray-200 text-gray-600 hover:border-[#4a9eff] hover:text-[#4a9eff] active:scale-95 transition-all">
+              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-full font-semibold border border-white/15 text-[#cdd9e8] hover:border-[#5BE7DA] hover:text-[#5BE7DA] active:scale-95 transition-all">
               <Map size={11}/>Map
             </button>
           )}
-          <div className="ml-auto text-xs text-gray-400">
+          <div className="ml-auto text-xs text-[rgba(234,241,248,0.5)]">
             {isOfficial
-              ? <span className="font-semibold text-blue-700">{spot.by}</span>
+              ? <span className="font-semibold text-[#5BE7DA]">{spot.by}</span>
               : (
                 <button onClick={() => onVote?.(spot.id)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-all active:scale-90 ${voted ? 'bg-amber-50 text-amber-600' : 'text-gray-500 hover:text-amber-500'}`}>
-                  <Star size={11} fill={voted ? '#fbbf24' : 'none'} className={voted ? 'text-amber-400' : 'text-gray-300'}/>
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-all active:scale-90 ${voted ? 'bg-[#FFC24B]/15 text-[#FFD27A]' : 'text-[rgba(234,241,248,0.5)] hover:text-[#FFC24B]'}`}>
+                  <Star size={11} fill={voted ? '#FFC24B' : 'none'} className={voted ? 'text-[#FFC24B]' : 'text-[rgba(234,241,248,0.4)]'}/>
                   <span className="font-medium">{spot.votes + (voted ? 1 : 0)}</span>
                 </button>
               )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 pt-2.5 border-t border-gray-100">
-          <span className="text-[11px] text-gray-400 flex-1">Still accurate?</span>
+        <div className="flex items-center gap-2 pt-2.5 border-t border-white/10">
+          <span className="text-[11px] text-[rgba(234,241,248,0.45)] flex-1">Still accurate?</span>
           <button onClick={()=>onRate(spot.id,'accurate')}
             className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-              rating==='accurate' ? 'bg-green-50 border-green-400 text-green-700 font-bold' : 'border-gray-200 text-gray-500 hover:border-green-300'
+              rating==='accurate' ? 'bg-[#34E0A0]/15 border-[#34E0A0]/50 text-[#6BEFB9] font-bold' : 'border-white/15 text-[rgba(234,241,248,0.5)] hover:border-[#34E0A0]/40'
             }`}>✓ Yes</button>
           <button onClick={()=>onRate(spot.id,'changed')}
             className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-              rating==='changed' ? 'bg-amber-50 border-amber-400 text-amber-700 font-bold' : 'border-gray-200 text-gray-500 hover:border-amber-300'
+              rating==='changed' ? 'bg-[#FFC24B]/15 border-[#FFC24B]/50 text-[#FFD27A] font-bold' : 'border-white/15 text-[rgba(234,241,248,0.5)] hover:border-[#FFC24B]/40'
             }`}>⚠ Changed</button>
         </div>
       </div>
@@ -1218,7 +1218,7 @@ const RecenterMap = ({ center, zoom }) => {
 };
 
 const ParkingMap = ({ spots, center, zoom=13, height=220 }) => (
-  <div style={{height}} className="rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+  <div style={{height}} className="rounded-2xl overflow-hidden border border-white/10 shadow-sm">
     <MapContainer center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -1230,10 +1230,10 @@ const ParkingMap = ({ spots, center, zoom=13, height=220 }) => (
             <div style={{minWidth:160}}>
               <p className="font-bold text-sm mb-1">{s.name}</p>
               <Badge type={s.badge} sm/>
-              {s.price && <p className="text-xs mt-1.5 font-semibold text-gray-700">{s.price}</p>}
-              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.notes.slice(0,80)}…</p>
+              {s.price && <p className="text-xs mt-1.5 font-semibold text-[#cdd9e8]">{s.price}</p>}
+              <p className="text-xs text-[#8da2bd] mt-1.5 leading-relaxed">{s.notes.slice(0,80)}…</p>
               <a href={directionsUrl(s.lat,s.lng)} target="_blank" rel="noreferrer"
-                className="mt-2 block text-center text-xs bg-[#4a9eff] text-white px-3 py-1.5 rounded-lg font-semibold">
+                className="mt-2 block text-center text-xs bg-[#5BE7DA] text-[#06231f] px-3 py-1.5 rounded-lg font-semibold">
                 Directions →
               </a>
             </div>
@@ -1456,7 +1456,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
     <div className="p-4 space-y-4">
       {/* Search bar */}
       <div className="relative">
-        <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+        <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[rgba(234,241,248,0.5)] pointer-events-none"/>
         <input
           ref={inputRef}
           aria-label="Search any address or place"
@@ -1464,13 +1464,13 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           onChange={e=>onQueryChange(e.target.value)}
           onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
           placeholder="Search any street, postcode or place…"
-          className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
+          className="w-full pl-10 pr-10 py-3.5 rounded-2xl border border-white/12 bg-white/[0.06] text-sm text-[#EAF1F8] placeholder-[rgba(234,241,248,0.5)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60 transition"
         />
         {geoBusy && (
-          <span className="absolute right-10 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-[#4a9eff] rounded-full animate-spin"/>
+          <span className="absolute right-10 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/20 border-t-[#5BE7DA] rounded-full animate-spin"/>
         )}
         {(query || geo) && (
-          <button aria-label="Clear search" onClick={clearSearch} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-300 transition">
+          <button aria-label="Clear search" onClick={clearSearch} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-white/10 rounded-full flex items-center justify-center text-[rgba(234,241,248,0.6)] hover:bg-white/20 transition">
             <X size={12}/>
           </button>
         )}
@@ -1479,35 +1479,35 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
       {/* Location search hint */}
       {!geo && !geoBusy && query.trim() && (
         <button onClick={()=>doSearch(query)}
-          className="w-full flex items-center gap-2 text-xs font-semibold text-[#4a9eff] bg-blue-50 border border-blue-100 px-3.5 py-2.5 rounded-xl hover:bg-blue-100 transition">
+          className="w-full flex items-center gap-2 text-xs font-semibold text-[#5BE7DA] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 px-3.5 py-2.5 rounded-xl hover:bg-[#2ED3C6]/15 transition">
           <Navigation size={13}/> Find parking near “{query.trim()}” — press Enter
         </button>
       )}
 
       {/* Active location-search banner */}
       {geo && (
-        <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3.5 py-3 rounded-xl">
-          <MapPin size={14} className="mt-0.5 flex-shrink-0"/>
-          <span className="flex-1">Showing the nearest parking to <strong>{geo.label}</strong>, closest first.</span>
-          <button onClick={clearSearch} className="font-bold underline whitespace-nowrap">Clear</button>
+        <div className="flex items-start gap-2 bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 text-[#cdeef0] text-xs px-3.5 py-3 rounded-xl">
+          <MapPin size={14} className="mt-0.5 flex-shrink-0 text-[#5BE7DA]"/>
+          <span className="flex-1">Showing the nearest parking to <strong className="text-[#EAF1F8]">{geo.label}</strong>, closest first.</span>
+          <button onClick={clearSearch} className="font-bold underline whitespace-nowrap text-[#5BE7DA]">Clear</button>
         </div>
       )}
 
       {/* Location not found */}
       {geoMiss && query.trim() && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3.5 py-3 rounded-xl">
+        <div className="flex items-start gap-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 text-[#FFD27A] text-xs px-3.5 py-3 rounded-xl">
           <Info size={14} className="mt-0.5 flex-shrink-0"/>
           <span>Couldn’t find “{query.trim()}”. Showing keyword matches instead — try a fuller address or postcode.</span>
         </div>
       )}
 
       {/* Badge filter row */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
         {BADGE_FILTERS.map(f => (
           <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
             style={badgeFilter===f.id ? {background:f.bg, color:f.color} : {}}
             className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap font-semibold flex-shrink-0 transition-all active:scale-95 ${
-              badgeFilter===f.id ? 'border-current shadow-sm' : 'border-gray-200 text-gray-500 bg-white hover:border-gray-300'
+              badgeFilter===f.id ? 'border-current shadow-sm' : 'border-white/12 text-[rgba(234,241,248,0.6)] bg-white/[0.06] hover:border-white/25'
             }`}>
             {f.label}
           </button>
@@ -1517,25 +1517,25 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
       {/* Results header + controls */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-bold text-gray-900">
+          <p className="text-sm font-bold text-[#EAF1F8]">
             {filtered.length} {geo ? 'nearby' : isSearching ? 'matching' : ''} spot{filtered.length!==1?'s':''}
-            {!geo && isSearching && query && <span className="text-[#4a9eff] font-normal"> for "{query}"</span>}
+            {!geo && isSearching && query && <span className="text-[#5BE7DA] font-normal"> for "{query}"</span>}
           </p>
           {geo
-            ? <p className="text-xs text-gray-400">closest to {geo.label}</p>
-            : !isSearching && <p className="text-xs text-gray-400">{freeCount} free or hidden gem spots</p>}
+            ? <p className="text-xs text-[rgba(234,241,248,0.45)]">closest to {geo.label}</p>
+            : !isSearching && <p className="text-xs text-[rgba(234,241,248,0.45)]">{freeCount} free or hidden gem spots</p>}
         </div>
         <div className="flex items-center gap-1.5">
           <div className="relative">
             <button onClick={()=>setShowSort(v=>!v)}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full border border-gray-200 bg-white text-gray-600 font-semibold hover:border-gray-300 transition">
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full border border-white/12 bg-white/[0.06] text-[#cdd9e8] font-semibold hover:border-white/25 transition">
               <Filter size={11}/>{SORT_OPTIONS.find(s=>s.id===sortBy)?.label}
             </button>
             {showSort && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden w-36">
+              <div className="absolute right-0 top-full mt-1 rounded-xl z-50 overflow-hidden w-36" style={{background:'#0e1a2c',border:'1px solid rgba(255,255,255,0.12)',boxShadow:'0 12px 40px rgba(0,0,0,0.5)'}}>
                 {SORT_OPTIONS.map(o=>(
                   <button key={o.id} onClick={()=>{setSortBy(o.id);setShowSort(false);}}
-                    className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50 ${sortBy===o.id?'text-[#4a9eff] font-bold':'text-gray-700'}`}>
+                    className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-white/5 ${sortBy===o.id?'text-[#5BE7DA] font-bold':'text-[#cdd9e8]'}`}>
                     {sortBy===o.id && '✓ '}{o.label}
                   </button>
                 ))}
@@ -1544,7 +1544,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           </div>
           <button onClick={()=>setShowMap(m=>!m)}
             className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border font-semibold transition-all ${
-              showMap ? 'bg-[#1a2332] text-white border-[#1a2332]' : 'bg-white text-gray-600 border-gray-200'
+              showMap ? 'teal-grad text-[#06231f] border-transparent' : 'bg-white/[0.06] text-[#cdd9e8] border-white/12'
             }`}>
             <Map size={11}/>{showMap?'Map':'Map'}
           </button>
@@ -1555,7 +1555,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
       {isPremium && (
         <button onClick={()=>setEvOnly(v=>!v)}
           className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border font-semibold transition-all ${
-            evOnly ? 'bg-yellow-400 text-yellow-900 border-yellow-400' : 'bg-white text-gray-600 border-gray-200 hover:border-yellow-400'
+            evOnly ? 'teal-grad text-[#06231f] border-transparent' : 'bg-white/[0.06] text-[#cdd9e8] border-white/12 hover:border-[#5BE7DA]/40'
           }`}>
           <Zap size={11}/> EV charging only
         </button>
@@ -1572,12 +1572,12 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           scroll, instead of a big wrapping wall of identical grey pills. */}
       {!isSearching && (
         <div>
-          <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold mb-2">Quick search</p>
+          <p className="text-[11px] text-[rgba(234,241,248,0.4)] uppercase tracking-widest font-bold mb-2">Quick search</p>
           <div className="-mx-4 px-4 overflow-x-auto no-scrollbar">
             <div className="grid grid-flow-col auto-cols-max grid-rows-2 gap-2 w-max pb-1">
               {SEARCH_KEYWORDS.map(a=>(
                 <button key={a} onClick={()=>doSearch(a)}
-                  className="text-xs font-semibold bg-white border border-gray-200/80 text-gray-700 px-3.5 py-2 rounded-xl shadow-sm hover:border-[#4a9eff] hover:text-[#4a9eff] hover:shadow active:scale-95 transition-all whitespace-nowrap">
+                  className="text-xs font-semibold bg-white/[0.06] border border-white/12 text-[#cdd9e8] px-3.5 py-2 rounded-xl hover:border-[#5BE7DA] hover:text-[#5BE7DA] active:scale-95 transition-all whitespace-nowrap">
                   {a}
                 </button>
               ))}
@@ -1589,19 +1589,19 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
       {/* Spot list */}
       {filtered.length === 0 ? (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Search size={24} className="text-gray-300"/>
+          <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Search size={24} className="text-[rgba(234,241,248,0.3)]"/>
           </div>
           {citySpots.length === 0 ? (
             <>
-              <p className="font-bold text-gray-700">No spots in {cityName} yet</p>
-              <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto leading-relaxed">Be the first to share a great parking spot in {cityName} — tap "Add Spot" below.</p>
+              <p className="font-bold text-[#EAF1F8]">No spots in {cityName} yet</p>
+              <p className="text-sm text-[rgba(234,241,248,0.5)] mt-1 max-w-xs mx-auto leading-relaxed">Be the first to share a great parking spot in {cityName} — tap "Add Spot" below.</p>
             </>
           ) : (
             <>
-              <p className="font-bold text-gray-700">No spots found</p>
-              <p className="text-sm text-gray-400 mt-1">Try searching "City Centre" or "Cathedral Quarter"</p>
-              <button onClick={()=>{setQuery('');setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#4a9eff] font-semibold underline">Clear filters</button>
+              <p className="font-bold text-[#EAF1F8]">No spots found</p>
+              <p className="text-sm text-[rgba(234,241,248,0.5)] mt-1">Try searching "City Centre" or "Cathedral Quarter"</p>
+              <button onClick={()=>{setQuery('');setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#5BE7DA] font-semibold underline">Clear filters</button>
             </>
           )}
         </div>
@@ -1612,11 +1612,11 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
           ))}
           {hiddenCount > 0 && (
             <div onClick={onUpgrade}
-              className="rounded-2xl border-2 border-dashed border-yellow-300 bg-yellow-50 p-5 text-center cursor-pointer hover:bg-yellow-100 transition-colors">
+              className="rounded-2xl border-2 border-dashed border-[#2ED3C6]/40 bg-[#2ED3C6]/8 p-5 text-center cursor-pointer hover:bg-[#2ED3C6]/12 transition-colors">
               <p className="text-2xl mb-1">🔒</p>
-              <p className="font-bold text-gray-900 text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available</p>
-              <p className="text-xs text-gray-500 mt-0.5 mb-3">Upgrade to Premium to see all {filtered.length} results, sort by distance, and more</p>
-              <span className="inline-block bg-yellow-400 text-yellow-900 text-xs font-bold px-4 py-2 rounded-full shadow">★ Unlock Premium</span>
+              <p className="font-bold text-[#EAF1F8] text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available</p>
+              <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">Upgrade to Premium to see all {filtered.length} results, sort by distance, and more</p>
+              <span className="inline-block text-[#06231f] text-xs font-bold px-4 py-2 rounded-full btn-teal">★ Unlock Premium</span>
             </div>
           )}
         </div>
@@ -1688,16 +1688,16 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
   if (!loc) return (
     <div className="p-8 flex flex-col items-center text-center space-y-5">
       <div className="w-24 h-24 bg-gradient-to-br from-[#eef5ff] to-[#dbeafe] rounded-full flex items-center justify-center shadow-inner">
-        <Crosshair size={42} className="text-[#4a9eff]"/>
+        <Crosshair size={42} className="text-[#5BE7DA]"/>
       </div>
       <div>
-        <h3 className="text-xl font-bold text-gray-900">Parking Near You</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
+        <h3 className="text-xl font-bold text-[#EAF1F8]">Parking Near You</h3>
+        <p className="text-sm text-[#8da2bd] mt-1 max-w-xs leading-relaxed">
           See the closest community-verified spots to your current location — we'll find your town automatically.
         </p>
       </div>
       <button onClick={findNearby} disabled={loading}
-        className="flex items-center gap-2 bg-[#4a9eff] text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-500 active:scale-95 transition-all disabled:opacity-60 shadow-md">
+        className="flex items-center gap-2 bg-[#5BE7DA] text-[#06231f] px-8 py-3.5 rounded-xl font-semibold hover:bg-[#2ED3C6]/100 active:scale-95 transition-all disabled:opacity-60 shadow-md">
         {loading ? '⏳ Locating…' : <><Crosshair size={18}/>Use My Location</>}
       </button>
     </div>
@@ -1706,12 +1706,12 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
   return (
     <div className="p-4 space-y-4">
       {err && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3.5 py-3 rounded-xl">
+        <div className="flex items-start gap-2 bg-[#FFC24B]/12 border border-[#FFC24B]/30 text-[#FFD27A] text-xs px-3.5 py-3 rounded-xl">
           <Info size={14} className="mt-0.5 flex-shrink-0"/><span>{err}</span>
         </div>
       )}
       {fallback && (
-        <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3.5 py-3 rounded-xl">
+        <div className="flex items-start gap-2 bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 text-[#5BE7DA] text-xs px-3.5 py-3 rounded-xl">
           <Info size={14} className="mt-0.5 flex-shrink-0"/>
           <span>No community spots in <strong>{fallback}</strong> yet — showing the closest spots in Belfast. Know a good spot near you? Add it from the "Add Spot" tab and be the first!</span>
         </div>
@@ -1720,12 +1720,12 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, city
         <ParkingMap spots={nearby} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240}/>
       </div>
       <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-gray-900">{nearby.length ? `${nearby.length} closest spots in ${cityName}` : `No spots near you yet`}</p>
-        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);setFallback(null);}} className="text-xs text-[#4a9eff] font-semibold">Refresh</button>
+        <p className="text-sm font-bold text-[#EAF1F8]">{nearby.length ? `${nearby.length} closest spots in ${cityName}` : `No spots near you yet`}</p>
+        <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);setFallback(null);}} className="text-xs text-[#5BE7DA] font-semibold">Refresh</button>
       </div>
       {nearby.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-sm text-gray-400 max-w-xs mx-auto leading-relaxed">No community spots in {cityName} yet — be the first to add one from the "Add Spot" tab!</p>
+          <p className="text-sm text-[#6b7d96] max-w-xs mx-auto leading-relaxed">No community spots in {cityName} yet — be the first to add one from the "Add Spot" tab!</p>
         </div>
       )}
       <div className="space-y-4">
@@ -1757,14 +1757,14 @@ const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
   return (
     <div className="p-4 space-y-3">
       {/* CTA */}
-      <div className="bg-gradient-to-r from-[#1a2332] to-[#2d4a6e] text-white p-4 rounded-2xl">
+      <div className="bg-gradient-to-r from-[#0e1a2c] to-[#2d4a6e] text-white p-4 rounded-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="font-bold">Own a business in Belfast?</p>
             <p className="text-xs text-blue-200 mt-0.5 leading-relaxed">Get listed free — customers see exactly where to park when they search for you.</p>
           </div>
           <button onClick={onGetListed}
-            className="flex-shrink-0 text-xs bg-[#4a9eff] text-white px-3 py-2 rounded-full font-semibold hover:bg-blue-400 active:scale-95 transition-all whitespace-nowrap">
+            className="flex-shrink-0 text-xs bg-[#5BE7DA] text-[#06231f] px-3 py-2 rounded-full font-semibold hover:bg-blue-400 active:scale-95 transition-all whitespace-nowrap">
             Get Listed →
           </button>
         </div>
@@ -1772,15 +1772,15 @@ const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
 
       {/* Search */}
       <div className="relative">
-        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7d96] pointer-events-none"/>
         <input
           value={bizSearch} onChange={e=>setBizSearch(e.target.value)}
           placeholder="Search businesses…"
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-white/12 bg-[#0e1a2c] text-sm text-[#EAF1F8] placeholder-[#6b7d96] focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] transition"
         />
       </div>
 
-      <p className="text-[11px] text-gray-400 uppercase tracking-widest font-bold">{filtered.length} businesses · Belfast</p>
+      <p className="text-[11px] text-[#6b7d96] uppercase tracking-widest font-bold">{filtered.length} businesses · Belfast</p>
 
       {filtered.map(b => {
         // Match parking to a business by tag OR geographic proximity (within
@@ -1792,25 +1792,25 @@ const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
           .slice(0, 8);
         const isOpen = open === b.id;
         return (
-          <div key={b.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div key={b.id} className="bg-[#0e1a2c] rounded-2xl shadow-sm border border-white/10 overflow-hidden">
             <button onClick={()=>setOpen(isOpen ? null : b.id)}
-              className="w-full p-4 flex items-center gap-3 text-left hover:bg-gray-50 active:bg-gray-100 transition-colors">
-              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
+              className="w-full p-4 flex items-center gap-3 text-left hover:bg-white/5 active:bg-white/8 transition-colors">
+              <div className="w-12 h-12 bg-white/8 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
                 {b.icon}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-gray-900 text-sm">{b.name}</p>
-                <p className="text-xs text-gray-400 truncate">{b.addr}</p>
+                <p className="font-bold text-[#EAF1F8] text-sm">{b.name}</p>
+                <p className="text-xs text-[#6b7d96] truncate">{b.addr}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-medium">{b.cat}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{spots.length} parking spots</span>
+                  <span className="text-[10px] text-[#6b7d96] bg-white/8 px-2 py-0.5 rounded-full font-medium">{b.cat}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#34E0A0]/15 text-[#6BEFB9]">{spots.length} parking spots</span>
                 </div>
               </div>
-              <ChevronRight size={16} className={`text-gray-300 transition-transform duration-200 flex-shrink-0 ${isOpen?'rotate-90':''}`}/>
+              <ChevronRight size={16} className={`text-[#55657d] transition-transform duration-200 flex-shrink-0 ${isOpen?'rotate-90':''}`}/>
             </button>
 
             {isOpen && (
-              <div className="border-t border-gray-100">
+              <div className="border-t border-white/10">
                 {spots.length > 0 && (
                   <div className="px-3 pt-3">
                     <ParkingMap spots={spots} center={[b.lat, b.lng]} zoom={15} height={180}/>
@@ -1818,20 +1818,20 @@ const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
                 )}
                 <div className="p-3 space-y-2">
                   {spots.length === 0
-                    ? <p className="text-sm text-gray-400 text-center py-6">No spots yet — be the first to add one!</p>
+                    ? <p className="text-sm text-[#6b7d96] text-center py-6">No spots yet — be the first to add one!</p>
                     : spots.map(s => (
-                      <div key={s.id} className="flex gap-3 p-3 bg-gray-50 rounded-xl">
+                      <div key={s.id} className="flex gap-3 p-3 bg-white/5 rounded-xl">
                         {s.photo && <img src={s.photo} alt={s.name} className="w-16 h-16 object-cover rounded-lg flex-shrink-0"/>}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            <span className="font-semibold text-xs text-gray-900 flex-1">{s.name}</span>
+                            <span className="font-semibold text-xs text-[#EAF1F8] flex-1">{s.name}</span>
                             <Badge type={s.badge} sm/>
                           </div>
-                          <p className="text-xs text-gray-500 line-clamp-2 italic leading-relaxed">{s.notes}</p>
+                          <p className="text-xs text-[#8da2bd] line-clamp-2 italic leading-relaxed">{s.notes}</p>
                           <div className="flex items-center gap-2 mt-1.5">
-                            <span className="text-[10px] text-gray-400">{s.walk} · {s.restriction}</span>
+                            <span className="text-[10px] text-[#6b7d96]">{s.walk} · {s.restriction}</span>
                             <a href={directionsUrl(s.lat,s.lng)} target="_blank" rel="noreferrer"
-                              className="text-[10px] text-[#4a9eff] font-bold">Directions →</a>
+                              className="text-[10px] text-[#5BE7DA] font-bold">Directions →</a>
                           </div>
                         </div>
                       </div>
@@ -1876,12 +1876,12 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, allSp
 
   if (!spots.length) return (
     <div className="p-8 flex flex-col items-center text-center space-y-4">
-      <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center">
-        <Bookmark size={38} className="text-gray-300"/>
+      <div className="w-24 h-24 bg-white/8 rounded-full flex items-center justify-center">
+        <Bookmark size={38} className="text-[#55657d]"/>
       </div>
       <div>
-        <h3 className="text-xl font-bold text-gray-900">No saved spots</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
+        <h3 className="text-xl font-bold text-[#EAF1F8]">No saved spots</h3>
+        <p className="text-sm text-[#8da2bd] mt-1 max-w-xs leading-relaxed">
           Tap the bookmark icon on any parking spot to save it here for quick access.
         </p>
       </div>
@@ -1891,10 +1891,10 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, allSp
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-gray-900">{spots.length} saved spot{spots.length!==1?'s':''}</p>
+        <p className="text-sm font-bold text-[#EAF1F8]">{spots.length} saved spot{spots.length!==1?'s':''}</p>
         <button onClick={shareList} aria-label="Share my saved spots"
           className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold border transition-all active:scale-95 ${
-            shared ? 'bg-green-50 border-green-300 text-green-700' : 'border-gray-200 text-gray-600 hover:border-[#4a9eff] hover:text-[#4a9eff]'
+            shared ? 'bg-[#34E0A0]/12 border-[#34E0A0]/40 text-[#6BEFB9]' : 'border-white/12 text-[#aebfd4] hover:border-[#5BE7DA] hover:text-[#5BE7DA]'
           }`}>
           {shared ? <><Check size={12}/>Copied!</> : <><Share2 size={12}/>Share list</>}
         </button>
@@ -2010,16 +2010,16 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   if (!user) return (
     <div className="p-8 flex flex-col items-center text-center space-y-5">
       <div className="w-24 h-24 bg-gradient-to-br from-[#eef5ff] to-[#dbeafe] rounded-full flex items-center justify-center shadow-inner">
-        <User size={42} className="text-[#4a9eff]"/>
+        <User size={42} className="text-[#5BE7DA]"/>
       </div>
       <div>
-        <h3 className="text-xl font-bold text-gray-900">Join to Add a Spot</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
+        <h3 className="text-xl font-bold text-[#EAF1F8]">Join to Add a Spot</h3>
+        <p className="text-sm text-[#8da2bd] mt-1 max-w-xs leading-relaxed">
           Sign up free to contribute spots. Earn 1 month of Premium for every verified spot you add.
         </p>
       </div>
       <button onClick={onJoinPrompt}
-        className="flex items-center gap-2 bg-[#4a9eff] text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-500 active:scale-95 transition-all shadow-md">
+        className="flex items-center gap-2 bg-[#5BE7DA] text-[#06231f] px-8 py-3.5 rounded-xl font-semibold hover:bg-[#2ED3C6]/100 active:scale-95 transition-all shadow-md">
         Join Free — 30 seconds →
       </button>
     </div>
@@ -2027,36 +2027,36 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
 
   if (done) return (
     <div className="p-8 flex flex-col items-center text-center space-y-5">
-      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center">
-        <Check size={42} className="text-green-600" strokeWidth={2.5}/>
+      <div className="w-24 h-24 bg-[#34E0A0]/15 rounded-full flex items-center justify-center">
+        <Check size={42} className="text-[#6BEFB9]" strokeWidth={2.5}/>
       </div>
       <div>
-        <h3 className="text-2xl font-bold text-gray-900">Spot Submitted!</h3>
-        <p className="text-sm text-gray-500 mt-1 max-w-xs leading-relaxed">
+        <h3 className="text-2xl font-bold text-[#EAF1F8]">Spot Submitted!</h3>
+        <p className="text-sm text-[#8da2bd] mt-1 max-w-xs leading-relaxed">
           {coords
             ? "It's already on your map — and it'll be added for everyone after a quick community review. Thanks for helping Belfast drivers!"
             : 'Your spot will appear after a quick community review. Thanks for helping Belfast drivers!'}
         </p>
       </div>
-      <div className="w-full bg-gradient-to-r from-[#1a2332] to-[#243447] text-white px-6 py-4 rounded-2xl text-center space-y-1">
+      <div className="w-full bg-gradient-to-r from-[#0e1a2c] to-[#16243a] text-white px-6 py-4 rounded-2xl text-center space-y-1">
         <p className="font-bold text-base">🏆 1 month Premium on the way!</p>
-        <p className="text-blue-300 text-xs leading-relaxed">We'll review your spot within 24 hours. Once approved we'll email you a link to activate your free Premium month.</p>
+        <p className="text-[#5BE7DA] text-xs leading-relaxed">We'll review your spot within 24 hours. Once approved we'll email you a link to activate your free Premium month.</p>
       </div>
       <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);setCoords(null);setLocErr('');}}
-        className="text-[#4a9eff] text-sm font-bold underline">Submit another spot</button>
+        className="text-[#5BE7DA] text-sm font-bold underline">Submit another spot</button>
     </div>
   );
 
   return (
     <div className="p-4 space-y-5">
-      <div className="bg-gradient-to-r from-[#1a2332] to-[#2d4a6e] text-white p-5 rounded-2xl shadow-md">
+      <div className="bg-gradient-to-r from-[#0e1a2c] to-[#2d4a6e] text-white p-5 rounded-2xl shadow-md">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 bg-yellow-400 rounded-xl flex items-center justify-center flex-shrink-0 shadow">
-            <Star size={20} fill="currentColor" className="text-yellow-900"/>
+            <Star size={20} fill="currentColor" className="text-[#FFD27A]"/>
           </div>
           <div>
             <p className="font-extrabold text-base leading-tight">Add a spot → get 1 month Premium FREE</p>
-            <p className="text-blue-300 text-xs mt-0.5">Activated after we review your spot (within 24hrs)</p>
+            <p className="text-[#5BE7DA] text-xs mt-0.5">Activated after we review your spot (within 24hrs)</p>
           </div>
         </div>
         <div className="flex gap-2 mt-3 text-xs text-blue-200">
@@ -2068,22 +2068,22 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
 
       <form onSubmit={submitSpot} className="space-y-5">
         <div>
-          <label className="block text-sm font-bold text-gray-800 mb-2">Photo (optional)</label>
+          <label className="block text-sm font-bold text-[#EAF1F8] mb-2">Photo (optional)</label>
           <button type="button" onClick={()=>fileRef.current.click()}
-            className="w-full border-2 border-dashed border-gray-300 rounded-xl p-5 flex flex-col items-center gap-2 text-gray-400 hover:border-[#4a9eff] hover:text-[#4a9eff] active:scale-[0.98] transition-all">
+            className="w-full border-2 border-dashed border-white/15 rounded-xl p-5 flex flex-col items-center gap-2 text-[#6b7d96] hover:border-[#5BE7DA] hover:text-[#5BE7DA] active:scale-[0.98] transition-all">
             {preview
               ? <img src={preview} alt="preview" className="w-full h-32 object-cover rounded-xl"/>
-              : <><Camera size={28}/><span className="text-sm font-medium">Tap to upload a photo</span><span className="text-xs text-gray-300">JPG, PNG, HEIC</span></>}
+              : <><Camera size={28}/><span className="text-sm font-medium">Tap to upload a photo</span><span className="text-xs text-[#55657d]">JPG, PNG, HEIC</span></>}
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
             onChange={e=>{const f=e.target.files[0];if(f)setPreview(URL.createObjectURL(f));}}/>
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-gray-800 mb-2">Pin the location</label>
+          <label className="block text-sm font-bold text-[#EAF1F8] mb-2">Pin the location</label>
           <button type="button" onClick={captureLocation} disabled={locating}
             className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-60 ${
-              coords ? 'border-green-400 bg-green-50 text-green-700' : 'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff] hover:bg-blue-50'
+              coords ? 'border-[#34E0A0]/50 bg-[#34E0A0]/12 text-[#6BEFB9]' : 'border-[#5BE7DA] bg-[#eef5ff] text-[#5BE7DA] hover:bg-[#2ED3C6]/10'
             }`}>
             {locating
               ? '⏳ Getting your location…'
@@ -2092,60 +2092,60 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
                 : <><Crosshair size={16}/>Use my current location</>}
           </button>
           {locErr
-            ? <p className="text-xs text-amber-600 mt-1.5">{locErr}</p>
-            : !coords && <p className="text-xs text-gray-400 mt-1.5">Stand at the spot and tap this so other drivers can find it on the map. Optional — you can submit without it.</p>}
+            ? <p className="text-xs text-[#FFD27A] mt-1.5">{locErr}</p>
+            : !coords && <p className="text-xs text-[#6b7d96] mt-1.5">Stand at the spot and tap this so other drivers can find it on the map. Optional — you can submit without it.</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-gray-800 mb-2">What's near this spot? *</label>
+          <label className="block text-sm font-bold text-[#EAF1F8] mb-2">What's near this spot? *</label>
           <input required value={form.near} onChange={e=>set('near',e.target.value)}
             placeholder="e.g. Victoria Square, Cathedral Quarter, Titanic Belfast"
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
+            className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"/>
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-gray-800 mb-2">Street or area *</label>
+          <label className="block text-sm font-bold text-[#EAF1F8] mb-2">Street or area *</label>
           <input required value={form.street} onChange={e=>set('street',e.target.value)}
             placeholder="e.g. Ann Street, beside Victoria Square"
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50"/>
+            className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"/>
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-gray-800 mb-2">Spot type *</label>
+          <label className="block text-sm font-bold text-[#EAF1F8] mb-2">Spot type *</label>
           <div className="flex flex-wrap gap-2">
             {SPOT_TYPES.map(t=>(
               <button type="button" key={t} onClick={()=>set('type',t)}
                 className={`text-xs px-3 py-2 rounded-full border-2 font-medium transition-all active:scale-95 ${
-                  form.type===t ? 'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff]' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-300'
+                  form.type===t ? 'border-[#5BE7DA] bg-[#eef5ff] text-[#5BE7DA]' : 'border-white/12 text-[#aebfd4] bg-[#0e1a2c] hover:border-white/15'
                 }`}>{t}</button>
             ))}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-gray-800 mb-2">Restrictions *</label>
+          <label className="block text-sm font-bold text-[#EAF1F8] mb-2">Restrictions *</label>
           <div className="flex flex-wrap gap-2">
             {RESTRICTIONS.map(r=>(
               <button type="button" key={r} onClick={()=>set('restriction',r)}
                 className={`text-xs px-3 py-2 rounded-full border-2 font-medium transition-all active:scale-95 ${
-                  form.restriction===r ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-300'
+                  form.restriction===r ? 'border-[#34E0A0]/50 bg-[#34E0A0]/12 text-[#6BEFB9]' : 'border-white/12 text-[#aebfd4] bg-[#0e1a2c] hover:border-white/15'
                 }`}>{r}</button>
             ))}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-gray-800 mb-2">Local knowledge (optional)</label>
+          <label className="block text-sm font-bold text-[#EAF1F8] mb-2">Local knowledge (optional)</label>
           <textarea value={form.notes} onChange={e=>set('notes',e.target.value)} rows={3}
             placeholder="What should other drivers know? Restrictions, best times, how many cars fit…"
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#4a9eff] bg-gray-50 resize-none"/>
+            className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5 resize-none"/>
         </div>
 
         {(!form.type || !form.restriction) && (
-          <p className="text-xs text-center text-amber-600 font-medium">Please select a spot type and restriction above</p>
+          <p className="text-xs text-center text-[#FFD27A] font-medium">Please select a spot type and restriction above</p>
         )}
         <button type="submit" disabled={submitting || !form.type || !form.restriction}
-          className="w-full bg-[#1a2332] text-white py-4 rounded-xl font-bold text-base hover:bg-[#243447] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
+          className="w-full bg-[#0e1a2c] text-white py-4 rounded-xl font-bold text-base hover:bg-[#16243a] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
           {submitting ? '⏳ Submitting…' : <><Plus size={20}/>Submit Parking Spot</>}
         </button>
       </form>
@@ -2156,13 +2156,13 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
 // ── iOS Install Guide Modal ───────────────────────────────────────────────────
 const IOSGuide = ({ onClose }) => (
   <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-end justify-center p-4">
-    <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl pb-2">
-      <div style={{background:'linear-gradient(135deg,#1a2332 0%,#2d4a6e 100%)'}} className="px-6 pt-7 pb-5 text-center">
-        <div className="w-14 h-14 bg-[#4a9eff] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+    <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl pb-2">
+      <div style={{background:'linear-gradient(135deg,#0e1a2c 0%,#2d4a6e 100%)'}} className="px-6 pt-7 pb-5 text-center">
+        <div className="w-14 h-14 bg-[#5BE7DA] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
           <Smartphone size={26} className="text-white"/>
         </div>
         <h2 className="text-white font-extrabold text-xl">Add to Home Screen</h2>
-        <p className="text-blue-300 text-sm mt-1">Install ParkEasy on your iPhone</p>
+        <p className="text-[#5BE7DA] text-sm mt-1">Install ParkEasy on your iPhone</p>
       </div>
       <div className="p-6 space-y-4">
         {[
@@ -2171,17 +2171,17 @@ const IOSGuide = ({ onClose }) => (
           ['3', '✅', 'Tap "Add"', 'ParkEasy appears on your home screen like any app'],
         ].map(([n, emoji, title, desc]) => (
           <div key={n} className="flex items-start gap-3">
-            <div className="w-7 h-7 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5">{n}</div>
+            <div className="w-7 h-7 bg-[#5BE7DA] rounded-full flex items-center justify-center text-[#06231f] font-bold text-xs flex-shrink-0 mt-0.5">{n}</div>
             <div>
-              <p className="font-bold text-gray-900 text-sm">{emoji} {title}</p>
-              <p className="text-gray-400 text-xs leading-relaxed">{desc}</p>
+              <p className="font-bold text-[#EAF1F8] text-sm">{emoji} {title}</p>
+              <p className="text-[#6b7d96] text-xs leading-relaxed">{desc}</p>
             </div>
           </div>
         ))}
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-center">
-          <p className="text-xs text-blue-700 font-medium">Works offline · No App Store needed · Free forever</p>
+        <div className="bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 rounded-2xl p-3 text-center">
+          <p className="text-xs text-[#5BE7DA] font-medium">Works offline · No App Store needed · Free forever</p>
         </div>
-        <button onClick={onClose} className="w-full bg-[#1a2332] text-white py-3 rounded-xl font-bold hover:bg-[#243447] transition">Got it</button>
+        <button onClick={onClose} className="w-full bg-[#0e1a2c] text-white py-3 rounded-xl font-bold hover:bg-[#16243a] transition">Got it</button>
       </div>
     </div>
   </div>
@@ -2198,11 +2198,11 @@ const BookingModal = ({ spot, onClose, onConfirm }) => {
   const ref = `PE-${Date.now().toString().slice(-6)}`;
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-        <div style={{background:'#1a2332'}} className="px-6 py-5 flex items-center justify-between">
+      <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+        <div style={{background:'#0e1a2c'}} className="px-6 py-5 flex items-center justify-between">
           <div>
             <h2 className="text-white font-bold text-base leading-snug">{spot.name}</h2>
-            <p className="text-blue-300 text-xs mt-0.5">Booking ref: {ref}</p>
+            <p className="text-[#5BE7DA] text-xs mt-0.5">Booking ref: {ref}</p>
           </div>
           <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30">
             <X size={16}/>
@@ -2210,22 +2210,22 @@ const BookingModal = ({ spot, onClose, onConfirm }) => {
         </div>
         <div className="p-6 space-y-5">
           <div>
-            <p className="text-sm font-bold text-gray-800 mb-2">Duration</p>
+            <p className="text-sm font-bold text-[#EAF1F8] mb-2">Duration</p>
             <div className="flex gap-2">
               {DURATIONS.map(h => (
                 <button key={h} onClick={()=>setHours(h)}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
-                    hours===h ? 'border-[#4a9eff] bg-[#eef5ff] text-[#4a9eff]' : 'border-gray-200 text-gray-600 bg-white hover:border-gray-300'
+                    hours===h ? 'border-[#5BE7DA] bg-[#eef5ff] text-[#5BE7DA]' : 'border-white/12 text-[#aebfd4] bg-[#0e1a2c] hover:border-white/15'
                   }`}>{h}h</button>
               ))}
             </div>
           </div>
-          <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Location</span><span className="font-semibold text-gray-800 text-right max-w-[55%] truncate">{spot.name}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Duration</span><span className="font-semibold text-gray-800">{hours} hour{hours>1?'s':''}</span></div>
-            <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
-              <span className="font-bold text-gray-800">Total</span>
-              <span className={`font-extrabold text-base ${total==='FREE'?'text-green-600':'text-gray-900'}`}>{total||'See on site'}</span>
+          <div className="bg-white/5 rounded-2xl p-4 space-y-2">
+            <div className="flex justify-between text-sm"><span className="text-[#8da2bd]">Location</span><span className="font-semibold text-[#EAF1F8] text-right max-w-[55%] truncate">{spot.name}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-[#8da2bd]">Duration</span><span className="font-semibold text-[#EAF1F8]">{hours} hour{hours>1?'s':''}</span></div>
+            <div className="flex justify-between text-sm border-t border-white/12 pt-2 mt-2">
+              <span className="font-bold text-[#EAF1F8]">Total</span>
+              <span className={`font-extrabold text-base ${total==='FREE'?'text-[#6BEFB9]':'text-[#EAF1F8]'}`}>{total||'See on site'}</span>
             </div>
           </div>
           <button onClick={()=>onConfirm({spot,hours,total,ref,date:new Date()})}
@@ -2242,25 +2242,25 @@ const BookingModal = ({ spot, onClose, onConfirm }) => {
 const BookingHistoryTab = ({ bookings }) => {
   if (!bookings.length) return (
     <div className="p-8 flex flex-col items-center text-center space-y-4">
-      <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center"><Receipt size={32} className="text-gray-300"/></div>
-      <h3 className="text-xl font-bold text-gray-900">No bookings yet</h3>
-      <p className="text-sm text-gray-500 max-w-xs leading-relaxed">Book a parking spot and your receipt will appear here.</p>
+      <div className="w-20 h-20 bg-white/8 rounded-full flex items-center justify-center"><Receipt size={32} className="text-[#55657d]"/></div>
+      <h3 className="text-xl font-bold text-[#EAF1F8]">No bookings yet</h3>
+      <p className="text-sm text-[#8da2bd] max-w-xs leading-relaxed">Book a parking spot and your receipt will appear here.</p>
     </div>
   );
   return (
     <div className="p-4 space-y-3">
-      <p className="text-sm font-bold text-gray-900">{bookings.length} booking{bookings.length!==1?'s':''}</p>
+      <p className="text-sm font-bold text-[#EAF1F8]">{bookings.length} booking{bookings.length!==1?'s':''}</p>
       {bookings.map(b=>(
-        <div key={b.ref} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-2">
+        <div key={b.ref} className="bg-[#0e1a2c] rounded-2xl border border-white/10 p-4 shadow-sm space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <p className="font-bold text-gray-900 text-sm leading-snug">{b.spot.name}</p>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 whitespace-nowrap">Confirmed</span>
+            <p className="font-bold text-[#EAF1F8] text-sm leading-snug">{b.spot.name}</p>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#34E0A0]/15 text-[#6BEFB9] whitespace-nowrap">Confirmed</span>
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
-            <span>Ref: <span className="font-semibold text-gray-700">{b.ref}</span></span>
-            <span>Duration: <span className="font-semibold text-gray-700">{b.hours}h</span></span>
-            <span>Date: <span className="font-semibold text-gray-700">{new Date(b.date).toLocaleDateString('en-GB')}</span></span>
-            <span>Total: <span className={`font-bold ${b.total==='FREE'?'text-green-600':'text-gray-900'}`}>{b.total||'—'}</span></span>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-[#8da2bd]">
+            <span>Ref: <span className="font-semibold text-[#cdd9e8]">{b.ref}</span></span>
+            <span>Duration: <span className="font-semibold text-[#cdd9e8]">{b.hours}h</span></span>
+            <span>Date: <span className="font-semibold text-[#cdd9e8]">{new Date(b.date).toLocaleDateString('en-GB')}</span></span>
+            <span>Total: <span className={`font-bold ${b.total==='FREE'?'text-[#6BEFB9]':'text-[#EAF1F8]'}`}>{b.total||'—'}</span></span>
           </div>
         </div>
       ))}
@@ -2270,18 +2270,18 @@ const BookingHistoryTab = ({ bookings }) => {
 
 // ── Install Banner ────────────────────────────────────────────────────────────
 const InstallBanner = ({ onInstall, onDismiss, isIOS }) => (
-  <div className="mx-3 mt-3 bg-gradient-to-r from-[#1a2332] to-[#2d4a6e] text-white px-4 py-3 rounded-2xl flex items-center gap-3 shadow-lg">
-    <div className="w-10 h-10 bg-[#4a9eff] rounded-xl flex items-center justify-center flex-shrink-0 shadow">
+  <div className="mx-3 mt-3 bg-gradient-to-r from-[#0e1a2c] to-[#2d4a6e] text-white px-4 py-3 rounded-2xl flex items-center gap-3 shadow-lg">
+    <div className="w-10 h-10 bg-[#5BE7DA] rounded-xl flex items-center justify-center flex-shrink-0 shadow">
       <Download size={18} className="text-white"/>
     </div>
     <div className="flex-1 min-w-0">
       <p className="font-bold text-sm leading-tight">Install ParkEasy</p>
-      <p className="text-blue-300 text-xs leading-tight mt-0.5">
+      <p className="text-[#5BE7DA] text-xs leading-tight mt-0.5">
         {isIOS ? 'Tap Share → Add to Home Screen' : 'Add to your home screen — works offline'}
       </p>
     </div>
     <button onClick={onInstall}
-      className="flex-shrink-0 bg-[#4a9eff] text-white text-xs px-3 py-1.5 rounded-full font-bold hover:bg-blue-400 active:scale-95 transition-all whitespace-nowrap">
+      className="flex-shrink-0 bg-[#5BE7DA] text-[#06231f] text-xs px-3 py-1.5 rounded-full font-bold hover:bg-blue-400 active:scale-95 transition-all whitespace-nowrap">
       {isIOS ? 'How?' : 'Install'}
     </button>
     <button onClick={onDismiss} className="flex-shrink-0 w-6 h-6 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition">
@@ -2310,7 +2310,7 @@ const RENTAL_AMENITIES = [
 const ListingCard = ({ listing }) => {
   const typeInfo = RENTAL_SPACE_TYPES.find(t => t.id === listing.space_type) || { emoji:'🅿️', label:'Space' };
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-[#0e1a2c] rounded-2xl shadow-sm border border-white/10 overflow-hidden">
       {listing.photos?.[0] ? (
         <img src={listing.photos[0]} alt={listing.title} className="w-full h-36 object-cover"/>
       ) : (
@@ -2321,30 +2321,30 @@ const ListingCard = ({ listing }) => {
       )}
       <div className="p-4">
         <div className="flex items-start justify-between mb-1 gap-2">
-          <h3 className="font-bold text-gray-800 text-sm leading-tight">{listing.title}</h3>
-          <span className="flex-shrink-0 text-xs bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-full">{typeInfo.label}</span>
+          <h3 className="font-bold text-[#EAF1F8] text-sm leading-tight">{listing.title}</h3>
+          <span className="flex-shrink-0 text-xs bg-[#2ED3C6]/10 text-[#5BE7DA] font-semibold px-2 py-0.5 rounded-full">{typeInfo.label}</span>
         </div>
-        <p className="text-xs text-gray-400 mb-2">{listing.address}</p>
+        <p className="text-xs text-[#6b7d96] mb-2">{listing.address}</p>
         <div className="flex gap-3 mb-3">
-          {listing.price_per_hour  && <span className="text-xs font-bold text-green-600">£{Number(listing.price_per_hour).toFixed(2)}/hr</span>}
-          {listing.price_per_day   && <span className="text-xs font-bold text-green-600">£{Number(listing.price_per_day).toFixed(2)}/day</span>}
-          {listing.price_per_month && <span className="text-xs font-bold text-green-600">£{Number(listing.price_per_month).toFixed(0)}/mo</span>}
-          {listing.spaces > 1 && <span className="text-xs text-gray-400">{listing.spaces} spaces</span>}
+          {listing.price_per_hour  && <span className="text-xs font-bold text-[#6BEFB9]">£{Number(listing.price_per_hour).toFixed(2)}/hr</span>}
+          {listing.price_per_day   && <span className="text-xs font-bold text-[#6BEFB9]">£{Number(listing.price_per_day).toFixed(2)}/day</span>}
+          {listing.price_per_month && <span className="text-xs font-bold text-[#6BEFB9]">£{Number(listing.price_per_month).toFixed(0)}/mo</span>}
+          {listing.spaces > 1 && <span className="text-xs text-[#6b7d96]">{listing.spaces} spaces</span>}
         </div>
         {listing.amenities?.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
             {listing.amenities.slice(0,3).map(a => (
-              <span key={a} className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+              <span key={a} className="text-[10px] bg-white/8 text-[#8da2bd] px-2 py-0.5 rounded-full">
                 {RENTAL_AMENITIES.find(x => x.id === a)?.label || a}
               </span>
             ))}
           </div>
         )}
         {listing.description && (
-          <p className="text-xs text-gray-500 mb-3 line-clamp-2">{listing.description}</p>
+          <p className="text-xs text-[#8da2bd] mb-3 line-clamp-2">{listing.description}</p>
         )}
         <a href={`mailto:${listing.contact_email}?subject=Parking enquiry: ${encodeURIComponent(listing.title)}`}
-          className="block w-full bg-[#4a9eff] text-white text-xs font-bold py-2.5 rounded-xl text-center hover:bg-blue-600 transition">
+          className="block w-full bg-[#5BE7DA] text-[#06231f] text-xs font-bold py-2.5 rounded-xl text-center hover:bg-blue-600 transition">
           Contact Owner
         </a>
       </div>
@@ -2412,18 +2412,18 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   return (
     <div className="p-4 pb-28">
       <div className="flex items-center gap-3 mb-5">
-        <button onClick={onBack} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-          <X size={16} className="text-gray-600"/>
+        <button onClick={onBack} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center">
+          <X size={16} className="text-[#aebfd4]"/>
         </button>
-        <h2 className="font-bold text-gray-800 text-lg">List Your Space</h2>
+        <h2 className="font-bold text-[#EAF1F8] text-lg">List Your Space</h2>
       </div>
 
-      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Space Type</label>
+      <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-2">Space Type</label>
       <div className="grid grid-cols-4 gap-2 mb-5">
         {RENTAL_SPACE_TYPES.map(t => (
           <button key={t.id} onClick={() => f('space_type', t.id)}
             className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition text-xs font-semibold
-              ${form.space_type === t.id ? 'border-[#4a9eff] bg-blue-50 text-[#4a9eff]' : 'border-gray-200 text-gray-500'}`}>
+              ${form.space_type === t.id ? 'border-[#5BE7DA] bg-[#2ED3C6]/10 text-[#5BE7DA]' : 'border-white/12 text-[#8da2bd]'}`}>
             <span className="text-2xl">{t.emoji}</span>
             {t.label}
           </button>
@@ -2435,26 +2435,26 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
         { key:'address', label:'Full Address',   placeholder:'e.g. 12 Main Street, Belfast, BT1 1AA' },
       ].map(({key, label, placeholder}) => (
         <div key={key} className="mb-4">
-          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</label>
+          <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">{label}</label>
           <input value={form[key]} onChange={e => f(key, e.target.value)} placeholder={placeholder}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
         </div>
       ))}
 
       <div className="mb-4">
-        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Description</label>
+        <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">Description</label>
         <textarea value={form.description} onChange={e => f('description', e.target.value)} rows={3}
           placeholder="Access instructions, height restrictions, nearby landmarks..."
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"/>
+          className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"/>
       </div>
 
       <div className="mb-5">
-        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Number of Spaces</label>
+        <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">Number of Spaces</label>
         <input type="number" min="1" max="20" value={form.spaces} onChange={e => f('spaces', e.target.value)}
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+          className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
       </div>
 
-      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Pricing (£ — fill at least one)</label>
+      <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-2">Pricing (£ — fill at least one)</label>
       <div className="grid grid-cols-3 gap-2 mb-5">
         {[
           {key:'price_per_hour',  label:'Per Hour' },
@@ -2462,32 +2462,32 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
           {key:'price_per_month', label:'Per Month'},
         ].map(({key, label}) => (
           <div key={key}>
-            <label className="block text-[10px] text-gray-400 font-semibold mb-1">{label}</label>
+            <label className="block text-[10px] text-[#6b7d96] font-semibold mb-1">{label}</label>
             <div className="relative">
-              <span className="absolute left-2.5 top-2.5 text-gray-400 text-sm">£</span>
+              <span className="absolute left-2.5 top-2.5 text-[#6b7d96] text-sm">£</span>
               <input type="number" min="0" step="0.50" value={form[key]}
                 onChange={e => f(key, e.target.value)} placeholder="0.00"
-                className="w-full border border-gray-200 rounded-xl pl-6 pr-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+                className="w-full border border-white/12 rounded-xl pl-6 pr-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
             </div>
           </div>
         ))}
       </div>
 
-      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Amenities</label>
+      <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-2">Amenities</label>
       <div className="flex flex-wrap gap-2 mb-5">
         {RENTAL_AMENITIES.map(a => (
           <button key={a.id} onClick={() => toggleAmenity(a.id)}
             className={`text-xs px-3 py-1.5 rounded-full border-2 font-semibold transition
-              ${form.amenities.includes(a.id) ? 'border-[#4a9eff] bg-blue-50 text-[#4a9eff]' : 'border-gray-200 text-gray-500'}`}>
+              ${form.amenities.includes(a.id) ? 'border-[#5BE7DA] bg-[#2ED3C6]/10 text-[#5BE7DA]' : 'border-white/12 text-[#8da2bd]'}`}>
             {a.label}
           </button>
         ))}
       </div>
 
       <div className="mb-4">
-        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Photo URL (optional)</label>
+        <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">Photo URL (optional)</label>
         <input value={form.photos[0] || ''} onChange={e => f('photos', [e.target.value])} placeholder="https://..."
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+          className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
       </div>
 
       {[
@@ -2495,16 +2495,16 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
         {key:'contact_phone', label:'Contact Phone (optional)',    type:'tel',   placeholder:'+44 7...'},
       ].map(({key, label, type, placeholder}) => (
         <div key={key} className="mb-4">
-          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</label>
+          <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">{label}</label>
           <input type={type} value={form[key]} onChange={e => f(key, e.target.value)} placeholder={placeholder}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
         </div>
       ))}
 
-      {err && <p className="text-red-500 text-xs mb-3 font-medium">{err}</p>}
+      {err && <p className="text-red-300 text-xs mb-3 font-medium">{err}</p>}
 
       <button onClick={submit} disabled={saving}
-        className="w-full bg-[#4a9eff] text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-60 hover:bg-blue-600 transition">
+        className="w-full bg-[#5BE7DA] text-[#06231f] font-bold py-3 rounded-2xl text-sm disabled:opacity-60 hover:bg-blue-600 transition">
         {saving ? 'Submitting...' : 'List My Space'}
       </button>
     </div>
@@ -2541,13 +2541,13 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
     if (submitted) {
       return (
         <div className="p-6 flex flex-col items-center justify-center min-h-64 text-center pb-28">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-            <Check size={28} className="text-green-600"/>
+          <div className="w-16 h-16 bg-[#34E0A0]/15 rounded-full flex items-center justify-center mb-4">
+            <Check size={28} className="text-[#6BEFB9]"/>
           </div>
-          <h3 className="font-bold text-gray-800 text-lg mb-2">Space Listed!</h3>
-          <p className="text-gray-500 text-sm mb-5">Your listing is now live. Renters can contact you directly by email.</p>
+          <h3 className="font-bold text-[#EAF1F8] text-lg mb-2">Space Listed!</h3>
+          <p className="text-[#8da2bd] text-sm mb-5">Your listing is now live. Renters can contact you directly by email.</p>
           <button onClick={() => { setSubmitted(false); setView('browse'); }}
-            className="bg-[#4a9eff] text-white font-bold px-6 py-2.5 rounded-2xl text-sm hover:bg-blue-600 transition">
+            className="bg-[#5BE7DA] text-[#06231f] font-bold px-6 py-2.5 rounded-2xl text-sm hover:bg-blue-600 transition">
             Browse Spaces
           </button>
         </div>
@@ -2566,7 +2566,7 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
 
   return (
     <div className="p-4 pb-28">
-      <div className="bg-gradient-to-br from-[#4a9eff] to-indigo-600 rounded-2xl p-5 mb-5 text-white">
+      <div className="bg-gradient-to-br from-[#5BE7DA] to-indigo-600 rounded-2xl p-5 mb-5 text-white">
         <div className="flex items-center gap-2 mb-1">
           <Key size={18}/>
           <h2 className="font-black text-xl">Private Spaces</h2>
@@ -2574,7 +2574,7 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
         <p className="text-blue-100 text-sm mb-4">Rent a driveway or garage from a local — cheaper than car parks, guaranteed spot.</p>
         <div className="flex gap-2">
           <button onClick={() => setView('list')}
-            className="bg-white text-[#4a9eff] font-bold text-sm px-4 py-2 rounded-xl hover:bg-blue-50 transition">
+            className="bg-[#0e1a2c] text-[#5BE7DA] font-bold text-sm px-4 py-2 rounded-xl hover:bg-[#2ED3C6]/10 transition">
             + List Your Space
           </button>
           <div className="flex-1 text-right">
@@ -2587,7 +2587,7 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
         {FILTERS.map(({id, label}) => (
           <button key={id} onClick={() => setFilter(id)}
             className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition
-              ${filter === id ? 'bg-[#4a9eff] text-white border-[#4a9eff]' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+              ${filter === id ? 'bg-[#5BE7DA] text-[#06231f] border-[#5BE7DA]' : 'bg-[#0e1a2c] text-[#8da2bd] border-white/12 hover:border-white/15'}`}>
             {label}
           </button>
         ))}
@@ -2596,32 +2596,32 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
       {loading ? (
         <div className="space-y-4">
           {[1,2,3].map(i => (
-            <div key={i} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 animate-pulse">
-              <div className="h-36 bg-gray-200"/>
+            <div key={i} className="bg-[#0e1a2c] rounded-2xl overflow-hidden shadow-sm border border-white/10 animate-pulse">
+              <div className="h-36 bg-white/10"/>
               <div className="p-4 space-y-2">
-                <div className="h-4 bg-gray-200 rounded w-3/4"/>
-                <div className="h-3 bg-gray-200 rounded w-1/2"/>
-                <div className="h-8 bg-gray-200 rounded-xl mt-3"/>
+                <div className="h-4 bg-white/10 rounded w-3/4"/>
+                <div className="h-3 bg-white/10 rounded w-1/2"/>
+                <div className="h-8 bg-white/10 rounded-xl mt-3"/>
               </div>
             </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-[#2ED3C6]/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">🅿️</span>
           </div>
-          <h3 className="font-bold text-gray-700 mb-2">
+          <h3 className="font-bold text-[#cdd9e8] mb-2">
             {listings.length === 0 ? 'No listings yet' : 'No matches for this filter'}
           </h3>
-          <p className="text-gray-400 text-sm mb-5">
+          <p className="text-[#6b7d96] text-sm mb-5">
             {listings.length === 0
               ? 'Be the first to list a space in your area!'
               : 'Try a different filter above.'}
           </p>
           {listings.length === 0 && (
             <button onClick={() => setView('list')}
-              className="bg-[#4a9eff] text-white font-bold px-6 py-2.5 rounded-2xl text-sm hover:bg-blue-600 transition">
+              className="bg-[#5BE7DA] text-[#06231f] font-bold px-6 py-2.5 rounded-2xl text-sm hover:bg-blue-600 transition">
               List Your Space
             </button>
           )}
@@ -2848,7 +2848,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{maxWidth:680,margin:'0 auto',background:'linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%)'}}>
+    <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'linear-gradient(180deg, #0d1626 0%, #0a111e 60%)'}}>
       {/* ── Modals ── */}
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
@@ -2863,13 +2863,13 @@ export default function App() {
       )}
 
       {/* ── Header ── */}
-      <header style={{background:'linear-gradient(135deg, #1a2332 0%, #243044 55%, #2b3a52 100%)', paddingTop:'env(safe-area-inset-top)'}} className="sticky top-0 z-50 shadow-xl border-b border-white/5">
+      <header style={{background:'linear-gradient(135deg, #0b1422 0%, #0e1a2c 55%, #112338 100%)', paddingTop:'env(safe-area-inset-top)'}} className="sticky top-0 z-50 shadow-xl border-b border-white/5">
         <div className="px-4 py-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg" style={{background:'linear-gradient(135deg, #4a9eff 0%, #2563eb 100%)', boxShadow:'0 4px 14px rgba(74,158,255,0.45)'}}>
-            <MapPin size={20} className="text-white" strokeWidth={2.5}/>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'linear-gradient(135deg, #54E6D8 0%, #2ED3C6 100%)', boxShadow:'0 4px 16px rgba(46,211,198,0.5)'}}>
+            <MapPin size={20} className="text-[#06231f]" strokeWidth={2.6}/>
           </div>
           <div className="relative">
-            <h1 className="text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
+            <h1 className="font-display text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
             {timerRemaining != null && timerRemaining > 0
               ? (
                 <p className="text-[10px] font-bold flex items-center gap-1" style={{color: timerRemaining <= 15*60*1000 ? '#fbbf24' : '#4ade80'}}>
@@ -2879,7 +2879,7 @@ export default function App() {
               )
               : (
                 <button onClick={()=>setShowCityPicker(v=>!v)}
-                  className="text-blue-400 text-[10px] font-medium flex items-center gap-0.5 hover:text-blue-300 active:scale-95 transition">
+                  className="text-[#5BE7DA] text-[10px] font-semibold flex items-center gap-0.5 hover:text-[#8ff3ea] active:scale-95 transition">
                   {currentCity.name} · {citySpots.length} spot{citySpots.length!==1?'s':''}
                   <ChevronRight size={10} className={`transition-transform ${showCityPicker?'rotate-90':''}`}/>
                 </button>
@@ -2888,13 +2888,13 @@ export default function App() {
             {showCityPicker && (
               <>
                 <div className="fixed inset-0 z-40" onClick={()=>setShowCityPicker(false)}/>
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 w-48 max-h-72 overflow-y-auto">
+                <div className="absolute top-full left-0 mt-2 rounded-xl overflow-hidden z-50 w-48 max-h-72 overflow-y-auto" style={{background:'#0e1a2c',border:'1px solid rgba(255,255,255,0.12)',boxShadow:'0 12px 40px rgba(0,0,0,0.5)'}}>
                   {CITY_REGIONS.map(region=>(
                     <div key={region}>
-                      <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 bg-gray-50">{region}</p>
+                      <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-[rgba(234,241,248,0.4)] bg-white/5">{region}</p>
                       {CITIES.filter(c=>c.region===region).map(c=>(
                         <button key={c.id} onClick={()=>changeCity(c.id)}
-                          className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50 flex items-center justify-between ${c.id===currentCity.id?'text-[#4a9eff] font-bold':'text-gray-700'}`}>
+                          className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-white/5 flex items-center justify-between ${c.id===currentCity.id?'text-[#5BE7DA] font-bold':'text-[#cdd9e8]'}`}>
                           {c.name}
                           {c.id===currentCity.id && <Check size={12}/>}
                         </button>
@@ -2908,39 +2908,39 @@ export default function App() {
 
           <div className="ml-auto flex items-center gap-2">
             <button aria-label="Saved spots" onClick={()=>setTab('saved')}
-              className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/20 ${
-                tab==='saved' ? 'bg-[#4a9eff] text-white' : 'bg-white/10 text-white hover:bg-white/20'
+              className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/15 ${
+                tab==='saved' ? 'text-[#06231f] teal-grad' : 'bg-white/10 text-white hover:bg-white/20'
               }`}>
-              <Bookmark size={16} fill={tab==='saved' ? 'white' : 'none'}/>
+              <Bookmark size={16} fill={tab==='saved' ? '#06231f' : 'none'}/>
               {saved.size > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-yellow-400 text-yellow-900 text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 text-[#06231f] text-[9px] font-bold rounded-full flex items-center justify-center px-1 teal-grad">
                   {saved.size}
                 </span>
               )}
             </button>
             {!isStandalone && (
               <button onClick={()=>isIOS ? setShowIOSGuide(true) : handleInstall()}
-                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/20 flex items-center gap-1">
+                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 flex items-center gap-1">
                 <Download size={11}/>Install
               </button>
             )}
             {!isPremium && (
               <button onClick={()=>setShowPricing(true)}
-                className="text-[11px] bg-yellow-400 text-yellow-900 px-2.5 py-1.5 rounded-full font-bold hover:bg-yellow-300 active:scale-95 transition-all shadow">
+                className="text-[11px] text-[#06231f] px-2.5 py-1.5 rounded-full font-bold active:scale-95 transition-all btn-teal">
                 ★ Premium
               </button>
             )}
             {user ? (
               <button onClick={()=>setShowUserMenu(v=>!v)}
-                className="relative w-9 h-9 bg-[#4a9eff] rounded-full flex items-center justify-center text-white font-bold text-sm hover:bg-blue-400 active:scale-95 transition-all shadow">
+                className="relative w-9 h-9 rounded-full flex items-center justify-center text-[#06231f] font-bold text-sm active:scale-95 transition-all teal-grad">
                 {user.name.charAt(0).toUpperCase()}
                 {isPremium && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center text-yellow-900 font-black shadow" style={{fontSize:8}}>★</span>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FFC24B] rounded-full flex items-center justify-center text-[#5a3c00] font-black shadow" style={{fontSize:8}}>★</span>
                 )}
               </button>
             ) : (
               <button onClick={()=>setShowWelcome(true)}
-                className="text-[11px] bg-white/10 text-white px-3 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/20">
+                className="text-[11px] bg-white/10 text-white px-3 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15">
                 Sign in
               </button>
             )}
@@ -2963,28 +2963,28 @@ export default function App() {
       </main>
 
       {/* ── Bottom Navigation ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200/70" style={{maxWidth:680,margin:'0 auto',background:'rgba(255,255,255,0.85)',backdropFilter:'saturate(180%) blur(20px)',WebkitBackdropFilter:'saturate(180%) blur(20px)',boxShadow:'0 -8px 30px rgba(15,23,42,0.08)'}}>
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10" style={{maxWidth:680,margin:'0 auto',background:'rgba(13,20,33,0.78)',backdropFilter:'saturate(180%) blur(24px)',WebkitBackdropFilter:'saturate(180%) blur(24px)',boxShadow:'0 -10px 36px rgba(0,0,0,0.45)'}}>
         <div className="flex" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
           {TABS.map(({id,label,Icon})=>{
             const active = tab===id;
             const pill   = id==='bookings' && bookings.length>0 ? bookings.length : null;
             return (
               <button key={id} onClick={()=>setTab(id)}
-                className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors active:bg-gray-50 ${
-                  active ? 'text-[#4a9eff]' : 'text-gray-400 hover:text-gray-500'
+                className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors active:bg-white/5 ${
+                  active ? 'text-[#5BE7DA]' : 'text-[rgba(234,241,248,0.45)] hover:text-[rgba(234,241,248,0.7)]'
                 }`}>
                 <div className="relative">
                   {active && (
-                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-[#4a9eff] rounded-full"/>
+                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-[#5BE7DA] rounded-full"/>
                   )}
                   <Icon size={22} strokeWidth={active ? 2.5 : 1.8}/>
                   {pill && (
-                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 bg-[#4a9eff] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 text-[#06231f] text-[9px] font-bold rounded-full flex items-center justify-center px-1 teal-grad">
                       {pill}
                     </span>
                   )}
                 </div>
-                <span className={`text-[10px] font-semibold ${active ? 'text-[#4a9eff]' : 'text-gray-400'}`}>{label}</span>
+                <span className={`text-[10px] font-semibold ${active ? 'text-[#5BE7DA]' : 'text-[rgba(234,241,248,0.45)]'}`}>{label}</span>
               </button>
             );
           })}

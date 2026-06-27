@@ -9,72 +9,84 @@
 }
 
 :root {
-  --brand: #4a9eff;
-  --brand-deep: #2563eb;
-  --ink: #1a2332;
-  --ink-soft: #243044;
+  --bg:        #0a111e;
+  --bg-2:      #0d1626;
+  --ink:       #EAF1F8;
+  --ink-70:    rgba(234,241,248,0.7);
+  --ink-55:    rgba(234,241,248,0.55);
+  --ink-45:    rgba(234,241,248,0.45);
+  --teal:      #5BE7DA;
+  --teal-deep: #2ED3C6;
+  --green:     #34E0A0;
+  --amber:     #FFC24B;
+  --glass:     rgba(255,255,255,0.055);
+  --glass-2:   rgba(255,255,255,0.09);
+  --hair:      rgba(255,255,255,0.12);
 }
 
-html {
-  scroll-behavior: smooth;
-}
+html { scroll-behavior: smooth; }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
-    'Helvetica Neue', sans-serif;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  color: #0f172a;
-  background: #f1f5f9;
-  /* Avoid the grey tap-flash on mobile so buttons feel native */
+  color: var(--ink);
+  background: var(--bg);
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Headings get the full Inter weight + tighter tracking for a designed feel */
-h1, h2, h3 {
+/* Display / heading + price typeface */
+.font-display {
+  font-family: 'Sora', 'Manrope', sans-serif;
   letter-spacing: -0.02em;
 }
+h1, h2, h3 { letter-spacing: -0.02em; }
 
-/* Keep Leaflet's map layers (tiles, pins, zoom controls) contained in their own
-   stacking context so they can never render on top of modals/popups like the
-   login or install screens. */
+/* ── Reusable design-system primitives (dark glass + teal) ───────────────── */
+
+/* Frosted glass surface — use over the dark page or the map */
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--hair);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+/* Signature teal gradient — buttons & active states */
+.teal-grad { background: linear-gradient(135deg, #54E6D8, #2ED3C6); }
+.btn-teal {
+  background: linear-gradient(135deg, #54E6D8, #2ED3C6);
+  color: #06231f;
+  box-shadow: 0 10px 28px rgba(46,211,198,0.45);
+}
+.text-teal { color: var(--teal); }
+
+/* Leaflet kept dark & contained so map tiles sit behind the glass UI */
 .leaflet-container {
   isolation: isolate;
   z-index: 0;
+  background: #0a111e !important;
 }
+.leaflet-tile { filter: brightness(0.78) saturate(0.85) hue-rotate(170deg) invert(0.92); }
+.leaflet-control-attribution {
+  background: rgba(10,17,30,0.7) !important;
+  color: rgba(234,241,248,0.5) !important;
+}
+.leaflet-control-attribution a { color: rgba(91,231,218,0.8) !important; }
 
-/* Hide scrollbars on horizontal chip/filter rows while keeping them scrollable */
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
+/* Horizontal chip rows */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
-/* Slim, modern scrollbar for vertical lists (dropdowns, long pages) */
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-*::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.35);
-  border-radius: 8px;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.55);
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* Slim dark scrollbar */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
+*::-webkit-scrollbar-track { background: transparent; }
 
-/* Subtle, reusable entrance animation for cards/lists */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in-up {
-  animation: fadeInUp 0.35s ease both;
-}
+@keyframes fadeInUp { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+.animate-fade-in-up { animation: fadeInUp 0.35s ease both; }
+
+@keyframes pe-pulse { 0%{ transform:scale(.7); opacity:.7 } 70%{ transform:scale(2.1); opacity:0 } 100%{ opacity:0 } }
