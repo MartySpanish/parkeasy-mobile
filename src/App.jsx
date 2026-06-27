@@ -6,7 +6,7 @@ import {
   MapPin, Search, Crosshair, Plus, Building2, Navigation,
   Bookmark, Camera, Check, X, ChevronRight, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
-  Zap, Timer, Globe, Receipt, Key,
+  Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -1315,7 +1315,7 @@ const walkFromMiles = (mi) => {
   return mins >= 60 ? `${mi.toFixed(1)} mi away` : `~${mins} min walk`;
 };
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade, citySpots, cityCenter, cityName }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -1607,8 +1607,11 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
         </div>
       ) : (
         <div className="space-y-4">
-          {visibleSpots.map(s=>(
-            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap} isPremium={isPremium} onUpgrade={onUpgrade}/>
+          {visibleSpots.map((s,i)=>(
+            <React.Fragment key={s.id}>
+              <SpotCard spot={s} saved={saved.has(s.id)} onSave={onSave} rating={ratings[s.id]} onRate={onRate} voted={!!votes?.[s.id]} onVote={onVote} onBook={onBook} onViewMap={viewOnMap} isPremium={isPremium} onUpgrade={onUpgrade}/>
+              {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
+            </React.Fragment>
           ))}
           {hiddenCount > 0 && (
             <div onClick={onUpgrade}
@@ -2645,6 +2648,129 @@ const TABS = [
 ];
 
 // ── Main App ──────────────────────────────────────────────────────────────────
+// ── Cookie consent ────────────────────────────────────────────────────────────
+const CookieBanner = ({ onChoice }) => (
+  <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-24px)]" style={{maxWidth:640}}>
+    <div className="glass rounded-2xl p-4">
+      <p className="text-sm font-bold text-[#EAF1F8] font-display mb-1">Cookies &amp; privacy</p>
+      <p className="text-xs text-[rgba(234,241,248,0.6)] leading-relaxed mb-3">
+        We use essential storage to make ParkEasy work, plus optional analytics to improve it. You choose.
+      </p>
+      <div className="flex gap-2">
+        <button onClick={()=>onChoice('all')}
+          className="flex-1 text-[#06231f] text-xs font-bold py-2.5 rounded-xl btn-teal active:scale-95 transition">Accept all</button>
+        <button onClick={()=>onChoice('essential')}
+          className="flex-1 bg-white/8 border border-white/15 text-[#cdd9e8] text-xs font-bold py-2.5 rounded-xl hover:bg-white/12 active:scale-95 transition">Reject all</button>
+      </div>
+    </div>
+  </div>
+);
+
+// ── Sponsor slot (advertising) ────────────────────────────────────────────────
+const SponsorCard = ({ onAdvertise }) => (
+  <div className="glass rounded-2xl overflow-hidden" style={{borderLeft:'4px solid #FFC24B'}}>
+    <div className="p-4 flex items-center gap-3">
+      <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#FFC24B]/15 border border-[#FFC24B]/30 text-xl">📣</div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="font-bold text-[#EAF1F8] text-sm">Your business here</p>
+          <span className="text-[9px] font-bold uppercase tracking-wide text-[#FFD27A] bg-[#FFC24B]/15 px-1.5 py-0.5 rounded">Sponsored</span>
+        </div>
+        <p className="text-xs text-[rgba(234,241,248,0.55)] mt-0.5">Reach drivers searching near you — from £25/mo.</p>
+      </div>
+      <button onClick={onAdvertise} className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal active:scale-95 transition whitespace-nowrap">Advertise</button>
+    </div>
+  </div>
+);
+
+// ── Info / legal pages (Privacy, About, Contact, Advertise) ───────────────────
+const INFO_PAGES = {
+  about: {
+    title: 'About ParkEasy', Icon: Info,
+    body: (
+      <>
+        <p>ParkEasy helps drivers across Northern Ireland find where locals actually park — street spots, hidden gems, official car parks and live prices — all in one fast, free app.</p>
+        <p>It started in Belfast as a way to share the spots locals know and tourists never find, and now covers towns and cities right across NI. Every spot is community-powered: people add the places they use and confirm whether they&apos;re still accurate.</p>
+        <p>We also let people rent out private driveways and spaces, and help local businesses reach customers who&apos;d otherwise drive past over parking worries.</p>
+        <p className="text-[rgba(234,241,248,0.5)]">Built by a local solo founder. If it saved you a lap of the block, tell a friend.</p>
+      </>
+    ),
+  },
+  contact: {
+    title: 'Contact us', Icon: Mail,
+    body: (
+      <>
+        <p>Questions, a spot to add, a correction, or a business enquiry? We&apos;d love to hear from you.</p>
+        <p><strong className="text-[#EAF1F8]">Email:</strong> <a className="text-[#5BE7DA] underline" href="mailto:hello@parkeasy.uk">hello@parkeasy.uk</a></p>
+        <p>We aim to reply within 2 working days. For wrong or out-of-date spots, the quickest fix is the &ldquo;Changed&rdquo; button on any spot card.</p>
+      </>
+    ),
+  },
+  privacy: {
+    title: 'Privacy policy', Icon: Shield,
+    body: (
+      <>
+        <p className="text-[rgba(234,241,248,0.5)] text-xs">Last updated: June 2026</p>
+        <p>ParkEasy is built to need as little of your data as possible.</p>
+        <p><strong className="text-[#EAF1F8]">What we store on your device:</strong> your saved spots, ratings and preferences are kept in your browser&apos;s local storage. They never leave your device unless you create an account.</p>
+        <p><strong className="text-[#EAF1F8]">Accounts:</strong> if you sign up, your email and the spots you add are stored securely with our backend provider (Supabase) so you can access them across devices.</p>
+        <p><strong className="text-[#EAF1F8]">Location:</strong> we only request your location when you tap &ldquo;near me&rdquo;, and we use it solely to show nearby parking. We don&apos;t track or store your movements.</p>
+        <p><strong className="text-[#EAF1F8]">Analytics &amp; cookies:</strong> optional, and only with your consent via the cookie banner. Reject all and the app still works fully.</p>
+        <p><strong className="text-[#EAF1F8]">Payments:</strong> Premium subscriptions are handled by Stripe; we never see your card details.</p>
+        <p><strong className="text-[#EAF1F8]">Your rights:</strong> email <a className="text-[#5BE7DA] underline" href="mailto:hello@parkeasy.uk">hello@parkeasy.uk</a> any time to access or delete your data.</p>
+      </>
+    ),
+  },
+  advertise: {
+    title: 'Advertise with us', Icon: Megaphone,
+    body: (
+      <>
+        <p>Thousands of drivers use ParkEasy to decide where to park — and where to park is where they shop, eat and visit. Put your business in front of them at the exact moment they&apos;re choosing.</p>
+        <p><strong className="text-[#EAF1F8]">What you get:</strong></p>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>A clearly-labelled &ldquo;Sponsored&rdquo; slot shown to drivers searching near you</li>
+          <li>Your pin highlighted on the map with your offer</li>
+          <li>A spot on the Local businesses tab</li>
+        </ul>
+        <p><strong className="text-[#EAF1F8]">Founding-sponsor pricing:</strong> £25–40/month, and your first month is free. Limited slots per area so it stays useful, not cluttered.</p>
+        <p>Interested? Email <a className="text-[#5BE7DA] underline" href="mailto:hello@parkeasy.uk?subject=Advertising%20with%20ParkEasy">hello@parkeasy.uk</a> and we&apos;ll set you up.</p>
+      </>
+    ),
+  },
+};
+
+const InfoOverlay = ({ page, onClose }) => {
+  const p = INFO_PAGES[page];
+  if (!p) return null;
+  const { Icon } = p;
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col" style={{background:'#0a111e'}}>
+      <div className="sticky top-0 flex items-center gap-3 px-4 py-4 border-b border-white/10" style={{paddingTop:'calc(env(safe-area-inset-top) + 14px)',background:'#0b1422'}}>
+        <button onClick={onClose} aria-label="Back" className="w-9 h-9 rounded-full bg-white/8 border border-white/15 flex items-center justify-center text-[#EAF1F8] active:scale-90 transition"><X size={16}/></button>
+        <div className="flex items-center gap-2">
+          <Icon size={18} className="text-[#5BE7DA]"/>
+          <h2 className="font-display font-bold text-[#EAF1F8] text-lg">{p.title}</h2>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto px-5 py-6" style={{maxWidth:680,margin:'0 auto',width:'100%'}}>
+        <div className="space-y-4 text-sm leading-relaxed text-[#cdd9e8] [&_p]:leading-relaxed">{p.body}</div>
+        <p className="mt-8 text-xs text-[rgba(234,241,248,0.4)]">ParkEasy · Northern Ireland · parkeasy.uk</p>
+      </div>
+    </div>
+  );
+};
+
+const Footer = ({ onOpen }) => (
+  <footer className="px-4 pt-2 pb-6 text-center">
+    <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-[rgba(234,241,248,0.5)]">
+      {[['about','About'],['privacy','Privacy'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
+        <button key={id} onClick={()=>onOpen(id)} className="hover:text-[#5BE7DA] transition font-medium">{label}</button>
+      ))}
+    </div>
+    <p className="text-[10px] text-[rgba(234,241,248,0.3)] mt-3">© 2026 ParkEasy · Made in Northern Ireland</p>
+  </footer>
+);
+
 export default function App() {
   const [tab,           setTab]           = useState('search');
   const [user,          setUser]          = useState(()=>ls.get('pe_user', null));
@@ -2655,6 +2781,8 @@ export default function App() {
   const [showBizModal,  setShowBizModal]  = useState(false);
   const [isPremium,     setIsPremium]     = useState(()=>ls.get('pe_premium', false));
   const [showPricing,   setShowPricing]   = useState(false);
+  const [infoPage,      setInfoPage]      = useState(null);
+  const [cookieChoice,  setCookieChoice]  = useState(()=>ls.get('pe_cookie', null));
   const [votes,          setVotes]          = useState(()=>ls.get('pe_votes', {}));
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstall,    setShowInstall]    = useState(false);
@@ -2850,6 +2978,8 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'linear-gradient(180deg, #0d1626 0%, #0a111e 60%)'}}>
       {/* ── Modals ── */}
+      {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
+      {!cookieChoice && <CookieBanner onChoice={(c)=>{ setCookieChoice(c); ls.set('pe_cookie', c); }}/>}
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
       {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)} onRedeem={redeemVipCode}/>}
@@ -2953,13 +3083,14 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='businesses' && <BusinessesTab onGetListed={()=>setShowBizModal(true)} allSpots={allSpots}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} onBook={handleBook} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='bookings'   && <BookingHistoryTab bookings={bookings}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
+        <Footer onOpen={setInfoPage}/>
       </main>
 
       {/* ── Bottom Navigation ── */}
