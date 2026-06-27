@@ -1087,30 +1087,35 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   }
   const occ = occupancyOf(spot); const pr = priceParts(spot);
   const free = ['free','hidden_gem'].includes(spot.badge);
+  const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
+  const [imgErr,setImgErr] = useState(false);
+  const img = spot.photo || (GOOGLE_MAPS_KEY ? spotImageUrl(spot.lat, spot.lng) : null);
+  const showImg = img && !imgErr;
   return (
-    <button onClick={()=>onOpen?.(spot)} className="glass rounded-[22px] w-full text-left p-4 active:scale-[0.99] transition">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-display font-bold text-[#EAF1F8] text-[17px] leading-tight truncate">{spot.name}</h3>
-          <div className="flex items-center gap-1.5 mt-1 text-xs text-[rgba(234,241,248,0.55)]">
-            <Clock size={12}/>{spot.walk}{spot.dist?` · ${spot.dist} mi`:''}
-          </div>
+    <button onClick={()=>onOpen?.(spot)} className="glass rounded-[20px] w-full text-left p-3 flex items-center gap-3 active:scale-[0.99] transition">
+      {/* thumbnail image of the parking spot */}
+      <div className="w-[64px] h-[64px] rounded-2xl overflow-hidden flex-shrink-0 relative flex items-center justify-center" style={{background:theme.grad}}>
+        {showImg
+          ? <img src={img} alt={spot.name} className="w-full h-full object-cover" onError={()=>setImgErr(true)}/>
+          : <Car size={26} strokeWidth={1.4} className="text-white/45"/>}
+        <span className="absolute bottom-0 inset-x-0 text-center text-[10px] font-extrabold py-0.5 font-display"
+          style={{background:'rgba(6,11,20,0.62)', color: free?'#5BE7DA':'#fff'}}>{pr.big}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] leading-tight truncate">{spot.name}</h3>
+        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-[rgba(234,241,248,0.55)]">
+          <Clock size={11}/>{spot.walk}{spot.dist?` · ${spot.dist} mi`:''}
         </div>
-        <div className="text-right flex items-center gap-2 flex-shrink-0">
-          <div className="font-display font-bold text-[18px]" style={{color: free?'#5BE7DA':'#EAF1F8'}}>
-            {pr.big}<span className="text-[11px] font-semibold text-[rgba(234,241,248,0.5)]">{pr.small}</span>
+        <div className="flex items-center gap-2 mt-2">
+          <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div style={{width:`${Math.round(occ.pct*100)}%`, background:occ.grad}} className="h-full rounded-full"/>
           </div>
-          <span role="button" onClick={(e)=>{e.stopPropagation();onSave(spot.id);}} className={`w-8 h-8 rounded-full flex items-center justify-center ${saved?'teal-grad':'bg-white/8 border border-white/12'}`}>
-            <Bookmark size={13} className={saved?'text-[#06231f]':'text-[rgba(234,241,248,0.6)]'} fill={saved?'#06231f':'none'}/>
-          </span>
+          <span className="text-[11px] font-bold whitespace-nowrap" style={{color:occ.color}}>{occ.label}</span>
         </div>
       </div>
-      <div className="flex items-center gap-2.5 mt-3.5">
-        <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
-          <div style={{width:`${Math.round(occ.pct*100)}%`, background:occ.grad}} className="h-full rounded-full"/>
-        </div>
-        <span className="text-xs font-bold whitespace-nowrap" style={{color:occ.color}}>{occ.label}</span>
-      </div>
+      <span role="button" onClick={(e)=>{e.stopPropagation();onSave(spot.id);}} className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${saved?'teal-grad':'bg-white/8 border border-white/12'}`}>
+        <Bookmark size={13} className={saved?'text-[#06231f]':'text-[rgba(234,241,248,0.6)]'} fill={saved?'#06231f':'none'}/>
+      </span>
     </button>
   );
 };
@@ -1130,13 +1135,17 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   const C = 2*Math.PI*26; const off = C*(1-Math.max(0.05,Math.min(1,ring)));
   const amen = amenitiesOf(spot);
   const share=async()=>{ const url='https://parkeasy.uk/'; const text=`${spot.name} — ${(spot.notes||'').slice(0,90)}`; if(navigator.share){try{await navigator.share({title:'ParkEasy',text,url});}catch{}}else{navigator.clipboard?.writeText(`${spot.name}\n${url}`);setShareDone(true);setTimeout(()=>setShareDone(false),2000);} };
+  const heroImg = spot.photo || (GOOGLE_MAPS_KEY ? spotImageUrl(spot.lat, spot.lng) : null);
   return (
     <div className="fixed inset-0 z-[70] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.6)'}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] overflow-hidden animate-fade-in-up" style={{maxWidth:680,width:'100%',margin:'0 auto',maxHeight:'92vh',background:'rgba(13,20,33,0.97)',borderTop:'1px solid rgba(255,255,255,0.14)',boxShadow:'0 -12px 44px rgba(0,0,0,0.5)'}}>
-        <div className="relative h-28 flex items-end" style={{background:theme.grad}}>
-          <div className="absolute inset-0 opacity-[0.18]" style={{backgroundImage:'radial-gradient(circle at 1px 1px, white 1.5px, transparent 0)',backgroundSize:'15px 15px'}}/>
-          <button onClick={onClose} className="absolute top-3 left-3 w-9 h-9 rounded-full bg-black/30 border border-white/20 flex items-center justify-center text-white"><X size={16}/></button>
-          <button onClick={()=>onSave(spot.id)} className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center ${saved?'bg-white text-[#06231f]':'bg-black/30 border border-white/20 text-white'}`}><Bookmark size={15} fill={saved?'#06231f':'none'}/></button>
+        <div className="relative h-40 flex items-end" style={{background:theme.grad}}>
+          {heroImg
+            ? <img src={heroImg} alt={spot.name} className="absolute inset-0 w-full h-full object-cover" onError={e=>{e.currentTarget.style.display='none';}}/>
+            : <><div className="absolute inset-0 opacity-[0.18]" style={{backgroundImage:'radial-gradient(circle at 1px 1px, white 1.5px, transparent 0)',backgroundSize:'15px 15px'}}/><Car size={120} strokeWidth={1.1} className="absolute -right-4 -bottom-5 text-white/20"/></>}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent pointer-events-none"/>
+          <button onClick={onClose} className="absolute top-3 left-3 w-9 h-9 rounded-full bg-black/40 border border-white/20 flex items-center justify-center text-white backdrop-blur"><X size={16}/></button>
+          <button onClick={()=>onSave(spot.id)} className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center ${saved?'bg-white text-[#06231f]':'bg-black/40 border border-white/20 text-white backdrop-blur'}`}><Bookmark size={15} fill={saved?'#06231f':'none'}/></button>
         </div>
         <div className="overflow-auto p-5" style={{maxHeight:'calc(92vh - 112px)'}}>
           <h2 className="font-display font-bold text-2xl text-[#EAF1F8] leading-tight">{spot.name}</h2>
@@ -1474,186 +1483,129 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
 
   const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); };
 
+  // "Locate me" — find the nearest spots to the user's current position.
+  const locateMe = () => {
+    if (!navigator.geolocation) return;
+    setGeoBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      ({coords}) => { setGeoBusy(false); setFocusSpot(null); setGeo({ lat:coords.latitude, lng:coords.longitude, label:'your location' }); },
+      () => setGeoBusy(false),
+      { enableHighAccuracy:true, timeout:10000, maximumAge:60000 }
+    );
+  };
+
   const freeCount = citySpots.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Hero */}
-      {!isSearching && (
-        <div className="pt-1 pb-1">
-          <p className="text-[13px] font-bold tracking-[1.5px] text-[#5BE7DA] uppercase">{cityName}</p>
-          <h1 className="font-display font-extrabold text-[33px] leading-none tracking-tight text-[#EAF1F8] mt-1">Find parking</h1>
-        </div>
-      )}
-      {/* Search bar */}
-      <div className="relative">
-        <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[rgba(234,241,248,0.5)] pointer-events-none"/>
-        <input
-          ref={inputRef}
-          aria-label="Search any address or place"
-          value={query}
-          onChange={e=>onQueryChange(e.target.value)}
-          onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
-          placeholder="Search any street, postcode or place…"
-          className="w-full pl-10 pr-10 py-3.5 rounded-2xl border border-white/12 bg-white/[0.06] text-sm text-[#EAF1F8] placeholder-[rgba(234,241,248,0.5)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60 transition"
-        />
-        {geoBusy && (
-          <span className="absolute right-10 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/20 border-t-[#5BE7DA] rounded-full animate-spin"/>
-        )}
-        {(query || geo) && (
-          <button aria-label="Clear search" onClick={clearSearch} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-white/10 rounded-full flex items-center justify-center text-[rgba(234,241,248,0.6)] hover:bg-white/20 transition">
-            <X size={12}/>
-          </button>
-        )}
-      </div>
+    <div className="relative">
+      {/* ── Map (dominant, with floating controls over it) ── */}
+      <div ref={mapRef} className="relative">
+        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={showMap ? 440 : 150} selectedId={focusSpot?.id}/>
 
-      {/* Location search hint */}
-      {!geo && !geoBusy && query.trim() && (
-        <button onClick={()=>doSearch(query)}
-          className="w-full flex items-center gap-2 text-xs font-semibold text-[#5BE7DA] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 px-3.5 py-2.5 rounded-xl hover:bg-[#2ED3C6]/15 transition">
-          <Navigation size={13}/> Find parking near “{query.trim()}” — press Enter
-        </button>
-      )}
-
-      {/* Active location-search banner */}
-      {geo && (
-        <div className="flex items-start gap-2 bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 text-[#cdeef0] text-xs px-3.5 py-3 rounded-xl">
-          <MapPin size={14} className="mt-0.5 flex-shrink-0 text-[#5BE7DA]"/>
-          <span className="flex-1">Showing the nearest parking to <strong className="text-[#EAF1F8]">{geo.label}</strong>, closest first.</span>
-          <button onClick={clearSearch} className="font-bold underline whitespace-nowrap text-[#5BE7DA]">Clear</button>
-        </div>
-      )}
-
-      {/* Location not found */}
-      {geoMiss && query.trim() && (
-        <div className="flex items-start gap-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 text-[#FFD27A] text-xs px-3.5 py-3 rounded-xl">
-          <Info size={14} className="mt-0.5 flex-shrink-0"/>
-          <span>Couldn’t find “{query.trim()}”. Showing keyword matches instead — try a fuller address or postcode.</span>
-        </div>
-      )}
-
-      {/* Filter chips — All · Cheapest · Covered · EV */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
-        {BADGE_FILTERS.map(f => (
-          <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
-            className={`text-sm px-4 py-2 rounded-full whitespace-nowrap font-bold flex-shrink-0 transition-all active:scale-95 ${
-              badgeFilter===f.id ? 'teal-grad text-[#06231f]' : 'bg-white/[0.06] border border-white/12 text-[#cdd9e8] hover:border-white/25'
-            }`}>
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Results header + controls */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-bold text-[#EAF1F8]">
-            {filtered.length} {geo ? 'nearby' : isSearching ? 'matching' : ''} spot{filtered.length!==1?'s':''}
-            {!geo && isSearching && query && <span className="text-[#5BE7DA] font-normal"> for "{query}"</span>}
-          </p>
-          {geo
-            ? <p className="text-xs text-[rgba(234,241,248,0.45)]">closest to {geo.label}</p>
-            : !isSearching && <p className="text-xs text-[rgba(234,241,248,0.45)]">{freeCount} free or hidden gem spots</p>}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="relative">
-            <button onClick={()=>setShowSort(v=>!v)}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full border border-white/12 bg-white/[0.06] text-[#cdd9e8] font-semibold hover:border-white/25 transition">
-              <Filter size={11}/>{SORT_OPTIONS.find(s=>s.id===sortBy)?.label}
-            </button>
-            {showSort && (
-              <div className="absolute right-0 top-full mt-1 rounded-xl z-50 overflow-hidden w-36" style={{background:'#0e1a2c',border:'1px solid rgba(255,255,255,0.12)',boxShadow:'0 12px 40px rgba(0,0,0,0.5)'}}>
-                {SORT_OPTIONS.map(o=>(
-                  <button key={o.id} onClick={()=>{setSortBy(o.id);setShowSort(false);}}
-                    className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-white/5 ${sortBy===o.id?'text-[#5BE7DA] font-bold':'text-[#cdd9e8]'}`}>
-                    {sortBy===o.id && '✓ '}{o.label}
-                  </button>
-                ))}
-              </div>
-            )}
+        {/* Floating search + chips */}
+        <div className="absolute top-3 left-3 right-3 z-[5] space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[rgba(234,241,248,0.6)] pointer-events-none"/>
+              <input ref={inputRef} aria-label="Search any address or place" value={query}
+                onChange={e=>onQueryChange(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
+                placeholder="Where are you headed?"
+                style={{background:'rgba(13,20,33,0.82)',backdropFilter:'blur(18px) saturate(160%)',WebkitBackdropFilter:'blur(18px) saturate(160%)'}}
+                className="w-full pl-10 pr-10 py-3.5 rounded-full border border-white/18 text-sm text-[#EAF1F8] placeholder-[rgba(234,241,248,0.6)] shadow-lg focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60 transition"/>
+              {geoBusy && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/25 border-t-[#5BE7DA] rounded-full animate-spin"/>}
+              {!geoBusy && (query || geo) && (
+                <button aria-label="Clear search" onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white/15 rounded-full flex items-center justify-center text-[rgba(234,241,248,0.7)] hover:bg-white/25 transition"><X size={12}/></button>
+              )}
+            </div>
           </div>
-          <button onClick={()=>setShowMap(m=>!m)}
-            className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border font-semibold transition-all ${
-              showMap ? 'teal-grad text-[#06231f] border-transparent' : 'bg-white/[0.06] text-[#cdd9e8] border-white/12'
-            }`}>
-            <Map size={11}/>{showMap?'Map':'Map'}
-          </button>
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            {BADGE_FILTERS.map(f => (
+              <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
+                style={badgeFilter!==f.id?{background:'rgba(13,20,33,0.78)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}:{}}
+                className={`text-sm px-4 py-1.5 rounded-full whitespace-nowrap font-bold flex-shrink-0 transition-all active:scale-95 shadow ${
+                  badgeFilter===f.id ? 'teal-grad text-[#06231f]' : 'border border-white/15 text-[#dbe4f0]'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* Locate me */}
+        <button onClick={locateMe} aria-label="Find parking near me"
+          className="absolute right-4 bottom-4 z-[5] w-12 h-12 rounded-full flex items-center justify-center text-[#5BE7DA] shadow-lg active:scale-95 transition"
+          style={{background:'rgba(13,20,33,0.85)',border:'1px solid rgba(255,255,255,0.18)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}}>
+          <Crosshair size={20}/>
+        </button>
       </div>
 
-      {/* EV filter toggle (premium) */}
-      {isPremium && (
-        <button onClick={()=>setEvOnly(v=>!v)}
-          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border font-semibold transition-all ${
-            evOnly ? 'teal-grad text-[#06231f] border-transparent' : 'bg-white/[0.06] text-[#cdd9e8] border-white/12 hover:border-[#5BE7DA]/40'
-          }`}>
-          <Zap size={11}/> EV charging only
-        </button>
-      )}
+      {/* ── Bottom sheet ── */}
+      <div className="relative z-[6] -mt-5 rounded-t-[24px] px-4 pt-3 pb-6" style={{background:'#0d1626',boxShadow:'0 -14px 40px rgba(0,0,0,0.55)'}}>
+        <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
 
-      {/* Map */}
-      {showMap && (
-        <div ref={mapRef}>
-          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260} selectedId={focusSpot?.id}/>
+        {/* Location banners */}
+        {!geo && !geoBusy && query.trim() && (
+          <button onClick={()=>doSearch(query)} className="w-full flex items-center gap-2 text-xs font-semibold text-[#5BE7DA] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 px-3.5 py-2.5 rounded-xl hover:bg-[#2ED3C6]/15 transition mb-3">
+            <Navigation size={13}/> Find parking near &ldquo;{query.trim()}&rdquo; — press Enter
+          </button>
+        )}
+        {geo && (
+          <div className="flex items-start gap-2 bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 text-[#cdeef0] text-xs px-3.5 py-3 rounded-xl mb-3">
+            <MapPin size={14} className="mt-0.5 flex-shrink-0 text-[#5BE7DA]"/>
+            <span className="flex-1">Nearest parking to <strong className="text-[#EAF1F8]">{geo.label}</strong>, closest first.</span>
+            <button onClick={clearSearch} className="font-bold underline whitespace-nowrap text-[#5BE7DA]">Clear</button>
+          </div>
+        )}
+        {geoMiss && query.trim() && (
+          <div className="flex items-start gap-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 text-[#FFD27A] text-xs px-3.5 py-3 rounded-xl mb-3">
+            <Info size={14} className="mt-0.5 flex-shrink-0"/>
+            <span>Couldn&rsquo;t find &ldquo;{query.trim()}&rdquo;. Showing keyword matches — try a fuller address.</span>
+          </div>
+        )}
+
+        {/* Sheet header */}
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="font-display font-bold text-lg text-[#EAF1F8]">{geo ? 'Nearby parking' : isSearching ? 'Results' : `Parking in ${cityName}`}</h2>
+          <span className="text-sm font-semibold text-[rgba(234,241,248,0.5)]">{filtered.length} spot{filtered.length!==1?'s':''}</span>
         </div>
-      )}
 
-      {/* Keyword chips (when not searching) — two tidy horizontal rows that
-          scroll, instead of a big wrapping wall of identical grey pills. */}
-      {!isSearching && (
-        <div>
-          <p className="text-[11px] text-[rgba(234,241,248,0.4)] uppercase tracking-widest font-bold mb-2">Quick search</p>
-          <div className="-mx-4 px-4 overflow-x-auto no-scrollbar">
+        {/* Quick search */}
+        {!isSearching && (
+          <div className="-mx-4 px-4 overflow-x-auto no-scrollbar mb-4">
             <div className="grid grid-flow-col auto-cols-max grid-rows-2 gap-2 w-max pb-1">
               {SEARCH_KEYWORDS.map(a=>(
-                <button key={a} onClick={()=>doSearch(a)}
-                  className="text-xs font-semibold bg-white/[0.06] border border-white/12 text-[#cdd9e8] px-3.5 py-2 rounded-xl hover:border-[#5BE7DA] hover:text-[#5BE7DA] active:scale-95 transition-all whitespace-nowrap">
-                  {a}
-                </button>
+                <button key={a} onClick={()=>doSearch(a)} className="text-xs font-semibold bg-white/[0.06] border border-white/12 text-[#cdd9e8] px-3.5 py-2 rounded-xl hover:border-[#5BE7DA] hover:text-[#5BE7DA] active:scale-95 transition-all whitespace-nowrap">{a}</button>
               ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Spot list */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Search size={24} className="text-[rgba(234,241,248,0.3)]"/>
+        {/* List */}
+        {filtered.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3"><Search size={24} className="text-[rgba(234,241,248,0.3)]"/></div>
+            <p className="font-bold text-[#EAF1F8]">{citySpots.length===0?`No spots in ${cityName} yet`:'No spots found'}</p>
+            <p className="text-sm text-[rgba(234,241,248,0.5)] mt-1">{citySpots.length===0?'Be the first — tap Add Spot below.':'Try a fuller address or a different filter.'}</p>
+            {citySpots.length>0 && <button onClick={()=>{clearSearch();setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#5BE7DA] font-semibold underline">Clear filters</button>}
           </div>
-          {citySpots.length === 0 ? (
-            <>
-              <p className="font-bold text-[#EAF1F8]">No spots in {cityName} yet</p>
-              <p className="text-sm text-[rgba(234,241,248,0.5)] mt-1 max-w-xs mx-auto leading-relaxed">Be the first to share a great parking spot in {cityName} — tap "Add Spot" below.</p>
-            </>
-          ) : (
-            <>
-              <p className="font-bold text-[#EAF1F8]">No spots found</p>
-              <p className="text-sm text-[rgba(234,241,248,0.5)] mt-1">Try searching "City Centre" or "Cathedral Quarter"</p>
-              <button onClick={()=>{setQuery('');setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#5BE7DA] font-semibold underline">Clear filters</button>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {visibleSpots.map((s,i)=>(
-            <React.Fragment key={s.id}>
-              <SpotCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
-              {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
-            </React.Fragment>
-          ))}
-          {hiddenCount > 0 && (
-            <div onClick={onUpgrade}
-              className="rounded-2xl border-2 border-dashed border-[#2ED3C6]/40 bg-[#2ED3C6]/8 p-5 text-center cursor-pointer hover:bg-[#2ED3C6]/12 transition-colors">
-              <p className="text-2xl mb-1">🔒</p>
-              <p className="font-bold text-[#EAF1F8] text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available</p>
-              <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">Upgrade to Premium to see all {filtered.length} results, sort by distance, and more</p>
-              <span className="inline-block text-[#06231f] text-xs font-bold px-4 py-2 rounded-full btn-teal">★ Unlock Premium</span>
-            </div>
-          )}
-        </div>
-      )}
+        ) : (
+          <div className="space-y-3">
+            {visibleSpots.map((s,i)=>(
+              <React.Fragment key={s.id}>
+                <SpotCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
+                {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
+              </React.Fragment>
+            ))}
+            {hiddenCount > 0 && (
+              <div onClick={onUpgrade} className="rounded-2xl border-2 border-dashed border-[#2ED3C6]/40 bg-[#2ED3C6]/8 p-5 text-center cursor-pointer hover:bg-[#2ED3C6]/12 transition-colors">
+                <p className="text-2xl mb-1">🔒</p>
+                <p className="font-bold text-[#EAF1F8] text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available</p>
+                <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">Upgrade to Premium to see all {filtered.length} results and more</p>
+                <span className="inline-block text-[#06231f] text-xs font-bold px-4 py-2 rounded-full btn-teal">★ Unlock Premium</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
