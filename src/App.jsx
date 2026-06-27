@@ -1278,6 +1278,43 @@ const spotImageUrl = (lat, lng) =>
     ? `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=0&key=${GOOGLE_MAPS_KEY}`
     : `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=17&size=600x300&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
 
+// Every spot across every city — used for "search any location" so a searched
+// address returns the nearest spots regardless of which city is selected.
+const ALL_SPOTS = CITIES.flatMap(c => getCitySpots(c.id));
+
+// Geocode a free-text place/address to coordinates. Uses Google when a key is
+// configured, otherwise the free OpenStreetMap Nominatim service, biased to
+// Northern Ireland first and then falling back to a UK-wide lookup.
+const geocodePlace = async (q) => {
+  const term = q.trim();
+  if (!term) return null;
+  try {
+    if (GOOGLE_MAPS_KEY) {
+      const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(term)}&region=gb&key=${GOOGLE_MAPS_KEY}`);
+      const d = await r.json();
+      const hit = d.results?.[0];
+      if (hit) return { lat: hit.geometry.location.lat, lng: hit.geometry.location.lng, label: hit.formatted_address.split(',').slice(0,2).join(', ') };
+    }
+  } catch { /* fall through to Nominatim */ }
+  const niBox = '&viewbox=-8.3,55.45,-5.3,54.0';
+  const lookup = async (extra) => {
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=gb&q=${encodeURIComponent(term)}${extra}`, { headers: { Accept: 'application/json' } });
+      const d = await r.json();
+      if (d && d[0]) return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon), label: (d[0].display_name || term).split(',').slice(0,2).join(', ') };
+    } catch { /* ignore */ }
+    return null;
+  };
+  // Prefer a result inside Northern Ireland, then anywhere in the UK.
+  return (await lookup(niBox + '&bounded=1')) || (await lookup(''));
+};
+
+// Human-readable walk estimate from a distance in miles (~3 mph walking pace).
+const walkFromMiles = (mi) => {
+  const mins = Math.max(1, Math.round((mi / 3) * 60));
+  return mins >= 60 ? `${mi.toFixed(1)} mi away` : `~${mins} min walk`;
+};
+
 const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPremium, onUpgrade, citySpots, cityCenter, cityName }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
@@ -1287,6 +1324,9 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
   const [evOnly,      setEvOnly]      = useState(false);
   const [userLoc,     setUserLoc]     = useState(null);
   const [focusSpot,   setFocusSpot]   = useState(null);
+  const [geo,         setGeo]         = useState(null);   // {lat,lng,label} of a searched location
+  const [geoBusy,     setGeoBusy]     = useState(false);
+  const [geoMiss,     setGeoMiss]     = useState(false);
   const inputRef = useRef(null);
   const mapRef = useRef(null);
 
@@ -1316,6 +1356,20 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
   }, [sortBy]);
 
   const filtered = useMemo(() => {
+    // Location mode: a searched address/place returns the nearest spots across
+    // ALL cities, sorted by real distance, with walk estimates filled in.
+    if (geo) {
+      let spots = ALL_SPOTS
+        .map(s => {
+          const d = haversine(geo.lat, geo.lng, s.lat, s.lng);
+          return { ...s, dist: Math.round(d * 10) / 10, walk: walkFromMiles(d), _d: d };
+        })
+        .sort((a, b) => a._d - b._d);
+      if (badgeFilter !== 'all') spots = spots.filter(s => s.badge === badgeFilter);
+      if (evOnly) spots = spots.filter(s => s.ev?.available);
+      return spots.slice(0, 25);
+    }
+
     let spots = citySpots;
 
     if (query.trim()) {
@@ -1360,19 +1414,41 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
       if (sortBy === 'alpha') return a.name.localeCompare(b.name);
       return 0;
     });
-  }, [citySpots, query, badgeFilter, sortBy, evOnly, userLoc]);
+  }, [geo, citySpots, query, badgeFilter, sortBy, evOnly, userLoc]);
 
   const visibleSpots = isPremium ? filtered : filtered.slice(0, FREE_RESULTS_LIMIT);
   const hiddenCount  = isPremium ? 0 : Math.max(0, filtered.length - FREE_RESULTS_LIMIT);
 
-  const isSearching = query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
-  const mapCenter = focusSpot ? [focusSpot.lat, focusSpot.lng] : visibleSpots.length ? [visibleSpots[0].lat, visibleSpots[0].lng] : cityCenter;
-  const mapZoom = focusSpot ? 16 : isSearching ? 13 : 12;
+  const isSearching = !!geo || query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
+  const mapCenter = geo ? [geo.lat, geo.lng]
+    : focusSpot ? [focusSpot.lat, focusSpot.lng]
+    : visibleSpots.length ? [visibleSpots[0].lat, visibleSpots[0].lng]
+    : cityCenter;
+  const mapZoom = focusSpot ? 16 : (geo || isSearching) ? 14 : 12;
 
-  const doSearch = (q) => {
+  // Submit a search: geocode the text so any address/place returns the nearest
+  // spots. A keyword/badge term that isn't a real place falls back to the
+  // existing text filter.
+  const doSearch = async (q) => {
     setQuery(q);
     inputRef.current?.blur();
+    const term = (q || '').trim();
+    if (!term) { setGeo(null); setGeoMiss(false); return; }
+    setGeoBusy(true); setGeoMiss(false);
+    const loc = await geocodePlace(term);
+    setGeoBusy(false);
+    if (loc) { setGeo(loc); setFocusSpot(null); }
+    else { setGeo(null); setGeoMiss(true); }
   };
+
+  // Typing again clears an active location search so the text filter takes over.
+  const onQueryChange = (v) => {
+    setQuery(v);
+    if (geo) setGeo(null);
+    if (geoMiss) setGeoMiss(false);
+  };
+
+  const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); };
 
   const freeCount = citySpots.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
 
@@ -1383,19 +1459,47 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
         <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
         <input
           ref={inputRef}
-          aria-label="Search parking spots"
+          aria-label="Search any address or place"
           value={query}
-          onChange={e=>setQuery(e.target.value)}
+          onChange={e=>onQueryChange(e.target.value)}
           onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
-          placeholder={citySpots.length ? `Search ${citySpots.length} ${cityName} parking spots…` : `Search ${cityName} parking spots…`}
+          placeholder="Search any street, postcode or place…"
           className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4a9eff] transition"
         />
-        {query && (
-          <button aria-label="Clear search" onClick={()=>setQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-300 transition">
+        {geoBusy && (
+          <span className="absolute right-10 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-[#4a9eff] rounded-full animate-spin"/>
+        )}
+        {(query || geo) && (
+          <button aria-label="Clear search" onClick={clearSearch} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-300 transition">
             <X size={12}/>
           </button>
         )}
       </div>
+
+      {/* Location search hint */}
+      {!geo && !geoBusy && query.trim() && (
+        <button onClick={()=>doSearch(query)}
+          className="w-full flex items-center gap-2 text-xs font-semibold text-[#4a9eff] bg-blue-50 border border-blue-100 px-3.5 py-2.5 rounded-xl hover:bg-blue-100 transition">
+          <Navigation size={13}/> Find parking near “{query.trim()}” — press Enter
+        </button>
+      )}
+
+      {/* Active location-search banner */}
+      {geo && (
+        <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3.5 py-3 rounded-xl">
+          <MapPin size={14} className="mt-0.5 flex-shrink-0"/>
+          <span className="flex-1">Showing the nearest parking to <strong>{geo.label}</strong>, closest first.</span>
+          <button onClick={clearSearch} className="font-bold underline whitespace-nowrap">Clear</button>
+        </div>
+      )}
+
+      {/* Location not found */}
+      {geoMiss && query.trim() && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3.5 py-3 rounded-xl">
+          <Info size={14} className="mt-0.5 flex-shrink-0"/>
+          <span>Couldn’t find “{query.trim()}”. Showing keyword matches instead — try a fuller address or postcode.</span>
+        </div>
+      )}
 
       {/* Badge filter row */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
@@ -1414,10 +1518,12 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, onBook, isPr
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-bold text-gray-900">
-            {filtered.length} {isSearching ? 'matching' : ''} spot{filtered.length!==1?'s':''}
-            {isSearching && query && <span className="text-[#4a9eff] font-normal"> for "{query}"</span>}
+            {filtered.length} {geo ? 'nearby' : isSearching ? 'matching' : ''} spot{filtered.length!==1?'s':''}
+            {!geo && isSearching && query && <span className="text-[#4a9eff] font-normal"> for "{query}"</span>}
           </p>
-          {!isSearching && <p className="text-xs text-gray-400">{freeCount} free or hidden gem spots</p>}
+          {geo
+            ? <p className="text-xs text-gray-400">closest to {geo.label}</p>
+            : !isSearching && <p className="text-xs text-gray-400">{freeCount} free or hidden gem spots</p>}
         </div>
         <div className="flex items-center gap-1.5">
           <div className="relative">
