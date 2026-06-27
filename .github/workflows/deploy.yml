@@ -8,6 +8,14 @@ on:
 permissions:
   contents: write
 
+# Deployment strategy:
+#   - GitHub Pages builds and publishes here (safety net / current live site).
+#   - Vercel deploys via its own Git integration (connect the repo at
+#     vercel.com/new). Vercel auto-builds on every push to main — no token,
+#     secret, or workflow step needed. Set the VITE_* env vars in the Vercel
+#     project dashboard. Once parkeasy.uk DNS points to Vercel, that becomes
+#     the live site; the GitHub Pages build below can then be removed.
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -39,20 +47,9 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_GOOGLE_MAPS_KEY: ${{ secrets.VITE_GOOGLE_MAPS_KEY }}
 
-      # Primary: GitHub Pages (always runs — keeps parkeasy.uk live)
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           cname: parkeasy.uk
-
-      # Secondary: Vercel (runs only when VERCEL_TOKEN secret is configured)
-      # To activate: add VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
-      # to GitHub repo secrets, then point parkeasy.uk DNS to Vercel.
-      - name: Deploy to Vercel
-        if: ${{ secrets.VERCEL_TOKEN != '' }}
-        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
