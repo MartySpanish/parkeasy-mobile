@@ -8,12 +8,33 @@
   box-sizing: border-box;
 }
 
+:root {
+  --brand: #4a9eff;
+  --brand-deep: #2563eb;
+  --ink: #1a2332;
+  --ink-soft: #243044;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Helvetica Neue', sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  color: #0f172a;
+  background: #f1f5f9;
+  /* Avoid the grey tap-flash on mobile so buttons feel native */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Headings get the full Inter weight + tighter tracking for a designed feel */
+h1, h2, h3 {
+  letter-spacing: -0.02em;
 }
 
 /* Keep Leaflet's map layers (tiles, pins, zoom controls) contained in their own
@@ -22,4 +43,38 @@ body {
 .leaflet-container {
   isolation: isolate;
   z-index: 0;
+}
+
+/* Hide scrollbars on horizontal chip/filter rows while keeping them scrollable */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Slim, modern scrollbar for vertical lists (dropdowns, long pages) */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.55);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Subtle, reusable entrance animation for cards/lists */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.35s ease both;
 }
