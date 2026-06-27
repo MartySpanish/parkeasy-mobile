@@ -1210,7 +1210,21 @@ const RecenterMap = ({ center, zoom }) => {
   return null;
 };
 
-const ParkingMap = ({ spots, center, zoom=13, height=220 }) => (
+// Map markers rendered as price pills — teal when selected, dark otherwise.
+const pricePin = (spot, selected) => {
+  const free = ['free','hidden_gem'].includes(spot.badge);
+  const label = spot.price ? String(spot.price).split('/')[0].trim() : (free ? 'Free' : '£');
+  const bg = selected ? 'linear-gradient(135deg,#54E6D8,#2ED3C6)' : 'rgba(16,24,40,0.92)';
+  const color = selected ? '#06231f' : '#EAF1F8';
+  const border = selected ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.18)';
+  return L.divIcon({
+    className: 'pe-price-pin',
+    html: `<div style="padding:4px 9px;border-radius:999px;font:700 12px/1 Manrope,system-ui,sans-serif;color:${color};background:${bg};border:1px solid ${border};box-shadow:0 6px 16px rgba(0,0,0,0.45);white-space:nowrap;backdrop-filter:blur(6px)">${label}</div>`,
+    iconSize: [44, 22], iconAnchor: [22, 11],
+  });
+};
+
+const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId }) => (
   <div style={{height}} className="rounded-2xl overflow-hidden border border-white/10 shadow-sm">
     <MapContainer center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
@@ -1218,7 +1232,7 @@ const ParkingMap = ({ spots, center, zoom=13, height=220 }) => (
         attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'/>
       {center && <RecenterMap center={center} zoom={zoom}/>}
       {spots.map(s=>(
-        <Marker key={s.id} position={[s.lat,s.lng]} icon={PIN[s.badge]||PIN.free}>
+        <Marker key={s.id} position={[s.lat,s.lng]} icon={pricePin(s, s.id===selectedId)}>
           <Popup>
             <div style={{minWidth:160}}>
               <p className="font-bold text-sm mb-1">{s.name}</p>
@@ -1564,7 +1578,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
       {/* Map */}
       {showMap && (
         <div ref={mapRef}>
-          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260}/>
+          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={isSearching ? 200 : 260} selectedId={focusSpot?.id}/>
         </div>
       )}
 
@@ -1720,7 +1734,7 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, cityName, on
         </div>
       )}
       <div ref={mapRef}>
-        <ParkingMap spots={nearby} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240}/>
+        <ParkingMap spots={nearby} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240} selectedId={focusSpot?.id}/>
       </div>
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold text-[#EAF1F8]">{nearby.length ? `${nearby.length} closest spots in ${cityName}` : `No spots near you yet`}</p>
@@ -1904,7 +1918,7 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, allSpots = SP
       </div>
       {(spots.length > 1 || focusSpot) && (
         <div ref={mapRef}>
-          <ParkingMap spots={spots} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : [spots[0].lat, spots[0].lng]} zoom={focusSpot ? 16 : 12} height={200}/>
+          <ParkingMap spots={spots} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : [spots[0].lat, spots[0].lng]} zoom={focusSpot ? 16 : 12} height={200} selectedId={focusSpot?.id}/>
         </div>
       )}
       <div className="space-y-4">
@@ -2562,7 +2576,6 @@ const TABS = [
   { id:'search',     label:'Search',     Icon:Search    },
   { id:'nearby',     label:'Nearby',     Icon:Crosshair },
   { id:'spaces',     label:'Spaces',     Icon:Key       },
-  { id:'saved',      label:'Saved',      Icon:Bookmark  },
   { id:'add',        label:'Add Spot',   Icon:Plus      },
 ];
 
