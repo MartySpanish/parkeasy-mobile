@@ -1252,14 +1252,31 @@ const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId }) => (
 );
 
 // ── SearchTab ─────────────────────────────────────────────────────────────────
+// Filter chips match the approved design: All · Cheapest · Covered · EV.
 const BADGE_FILTERS = [
-  { id:'all',       label:'All',       color:'#374151', bg:'#f3f4f6' },
-  { id:'free',      label:'🟢 Free',   color:'#15803d', bg:'#dcfce7' },
-  { id:'hidden_gem',label:'💎 Hidden', color:'#7e22ce', bg:'#f3e8ff' },
-  { id:'official',  label:'🅿 Official',color:'#1e3a5f', bg:'#dbeafe' },
-  { id:'timed',     label:'⏱ Timed',   color:'#9a3412', bg:'#fff7ed' },
-  { id:'paid',      label:'£ Paid',    color:'#92400e', bg:'#fef9c3' },
+  { id:'all',      label:'All' },
+  { id:'cheapest', label:'Cheapest' },
+  { id:'covered',  label:'Covered' },
+  { id:'ev',       label:'EV' },
 ];
+
+// Numeric price for "Cheapest" sorting (free = 0).
+const priceVal = (s) => {
+  if (!s.price) return 0;
+  const m = String(s.price).match(/([\d.]+)/);
+  return m ? parseFloat(m[1]) : 0;
+};
+// A spot is "covered" if it's a multi-storey / underground structure.
+const isCovered = (s) => {
+  const t = ((s.name||'') + ' ' + (s.notes||'')).toLowerCase();
+  return t.includes('multi-storey') || t.includes('multi storey') || t.includes('multistorey') || t.includes('underground');
+};
+// Apply a chip filter (not the sort) to a spot list.
+const applyChip = (arr, chip) => {
+  if (chip === 'covered') return arr.filter(isCovered);
+  if (chip === 'ev')      return arr.filter(s => s.ev?.available);
+  return arr; // 'all' and 'cheapest' don't remove rows ('cheapest' only re-sorts)
+};
 
 const SORT_OPTIONS_FREE    = [
   { id:'popular', label:'Most Popular' },
@@ -1372,8 +1389,9 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
           return { ...s, dist: Math.round(d * 10) / 10, walk: walkFromMiles(d), _d: d };
         })
         .sort((a, b) => a._d - b._d);
-      if (badgeFilter !== 'all') spots = spots.filter(s => s.badge === badgeFilter);
+      spots = applyChip(spots, badgeFilter);
       if (evOnly) spots = spots.filter(s => s.ev?.available);
+      if (badgeFilter === 'cheapest') spots = [...spots].sort((a,b)=>priceVal(a)-priceVal(b));
       return spots.slice(0, 25);
     }
 
@@ -1400,15 +1418,14 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
       );
     }
 
-    if (badgeFilter !== 'all') {
-      spots = spots.filter(s => s.badge === badgeFilter);
-    }
+    spots = applyChip(spots, badgeFilter);
 
     if (evOnly) {
       spots = spots.filter(s => s.ev?.available);
     }
 
     return [...spots].sort((a, b) => {
+      if (badgeFilter === 'cheapest') return priceVal(a) - priceVal(b);
       if (sortBy === 'popular') return b.votes - a.votes;
       if (sortBy === 'free') {
         const fa = ['free','hidden_gem'].includes(a.badge) ? 0 : 1;
@@ -1515,13 +1532,12 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
         </div>
       )}
 
-      {/* Badge filter row */}
+      {/* Filter chips — All · Cheapest · Covered · EV */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
         {BADGE_FILTERS.map(f => (
           <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
-            style={badgeFilter===f.id ? {background:f.bg, color:f.color} : {}}
-            className={`text-xs px-3 py-1.5 rounded-full border whitespace-nowrap font-semibold flex-shrink-0 transition-all active:scale-95 ${
-              badgeFilter===f.id ? 'border-current shadow-sm' : 'border-white/12 text-[rgba(234,241,248,0.6)] bg-white/[0.06] hover:border-white/25'
+            className={`text-sm px-4 py-2 rounded-full whitespace-nowrap font-bold flex-shrink-0 transition-all active:scale-95 ${
+              badgeFilter===f.id ? 'teal-grad text-[#06231f]' : 'bg-white/[0.06] border border-white/12 text-[#cdd9e8] hover:border-white/25'
             }`}>
             {f.label}
           </button>
