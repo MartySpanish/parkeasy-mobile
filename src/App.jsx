@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
+import { suggestPlaces, resolvePlace, geocodeText } from './geo';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -1318,48 +1319,6 @@ const ALL_SPOTS = CITIES.flatMap(c => getCitySpots(c.id));
 // Geocode a free-text place/address to coordinates. Uses Google when a key is
 // configured, otherwise the free OpenStreetMap Nominatim service, biased to
 // Northern Ireland first and then falling back to a UK-wide lookup.
-const geocodePlace = async (q) => {
-  const term = q.trim();
-  if (!term) return null;
-  try {
-    if (GOOGLE_MAPS_KEY) {
-      const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(term)}&region=gb&key=${GOOGLE_MAPS_KEY}`);
-      const d = await r.json();
-      const hit = d.results?.[0];
-      if (hit) return { lat: hit.geometry.location.lat, lng: hit.geometry.location.lng, label: hit.formatted_address.split(',').slice(0,2).join(', ') };
-    }
-  } catch { /* fall through to Nominatim */ }
-  const niBox = '&viewbox=-8.3,55.45,-5.3,54.0';
-  const lookup = async (extra) => {
-    try {
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=gb&q=${encodeURIComponent(term)}${extra}`, { headers: { Accept: 'application/json' } });
-      const d = await r.json();
-      if (d && d[0]) return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon), label: (d[0].display_name || term).split(',').slice(0,2).join(', ') };
-    } catch { /* ignore */ }
-    return null;
-  };
-  // Prefer a result inside Northern Ireland, then anywhere in the UK.
-  return (await lookup(niBox + '&bounded=1')) || (await lookup(''));
-};
-
-// Address/place autocomplete suggestions (streets, postcodes AND venues),
-// biased to Northern Ireland, via OpenStreetMap Nominatim.
-const geocodeSuggest = async (q) => {
-  const term = q.trim();
-  if (term.length < 3) return [];
-  const niBox = '&viewbox=-8.3,55.45,-5.3,54.0';
-  try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&countrycodes=gb&q=${encodeURIComponent(term)}${niBox}`, { headers: { Accept: 'application/json' } });
-    const d = await r.json();
-    return (d || []).map(x => {
-      const parts = (x.display_name || '').split(',').map(s => s.trim());
-      return { lat: parseFloat(x.lat), lng: parseFloat(x.lon),
-        label: parts.slice(0, 2).join(', '),
-        sub: parts.slice(2, 4).join(', ') };
-    });
-  } catch { return []; }
-};
-
 // Human-readable walk estimate from a distance in miles (~3 mph walking pace).
 const walkFromMiles = (mi) => {
   const mins = Math.max(1, Math.round((mi / 3) * 60));
@@ -1500,7 +1459,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
     const term = (q || '').trim();
     if (!term) { setGeo(null); setGeoMiss(false); return; }
     setGeoBusy(true); setGeoMiss(false);
-    const loc = await geocodePlace(term);
+    const loc = await geocodeText(term);
     setGeoBusy(false);
     if (loc) { setGeo(loc); setFocusSpot(null); }
     else { setGeo(null); setGeoMiss(true); }
@@ -1515,19 +1474,24 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
     clearTimeout(sugTimer.current);
     if (v.trim().length < 3) { setSugs([]); return; }
     sugTimer.current = setTimeout(async () => {
-      const list = await geocodeSuggest(v);
+      const list = await suggestPlaces(v);
       setSugs(list);
-    }, 350);
+    }, 300);
   };
 
-  // Choose an address/place suggestion → show nearest spots to it.
-  const pickSuggestion = (s) => {
+  // Choose an address/place suggestion → resolve to coordinates, then show the
+  // nearest spots to it. (Google suggestions carry a placeId we geocode here.)
+  const pickSuggestion = async (s) => {
     setQuery(s.label);
     setSugs([]);
     setGeoMiss(false);
     setFocusSpot(null);
-    setGeo({ lat: s.lat, lng: s.lng, label: s.label });
     inputRef.current?.blur();
+    setGeoBusy(true);
+    const loc = await resolvePlace(s);
+    setGeoBusy(false);
+    if (loc) setGeo(loc);
+    else setGeoMiss(true);
   };
 
   const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); setSugs([]); };
