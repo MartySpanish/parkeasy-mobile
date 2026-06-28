@@ -1342,11 +1342,37 @@ const geocodePlace = async (q) => {
   return (await lookup(niBox + '&bounded=1')) || (await lookup(''));
 };
 
+// Address/place autocomplete suggestions (streets, postcodes AND venues),
+// biased to Northern Ireland, via OpenStreetMap Nominatim.
+const geocodeSuggest = async (q) => {
+  const term = q.trim();
+  if (term.length < 3) return [];
+  const niBox = '&viewbox=-8.3,55.45,-5.3,54.0';
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&countrycodes=gb&q=${encodeURIComponent(term)}${niBox}`, { headers: { Accept: 'application/json' } });
+    const d = await r.json();
+    return (d || []).map(x => {
+      const parts = (x.display_name || '').split(',').map(s => s.trim());
+      return { lat: parseFloat(x.lat), lng: parseFloat(x.lon),
+        label: parts.slice(0, 2).join(', '),
+        sub: parts.slice(2, 4).join(', ') };
+    });
+  } catch { return []; }
+};
+
 // Human-readable walk estimate from a distance in miles (~3 mph walking pace).
 const walkFromMiles = (mi) => {
   const mins = Math.max(1, Math.round((mi / 3) * 60));
   return mins >= 60 ? `${mi.toFixed(1)} mi away` : `~${mins} min walk`;
 };
+
+// Which spots are gated behind Premium for non-subscribers: all explicit
+// premium spots, plus ~75% of the free/hidden-gem spots (deterministic by id).
+// Free users see these only as an aggregate "N more with Premium" teaser —
+// never their name or location.
+const isGated = (spot) =>
+  spot.premium === true ||
+  (['free','hidden_gem'].includes(spot.badge) && (spot.id % 4 !== 0));
 
 const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot }) => {
   const [query,       setQuery]       = useState('');
@@ -1360,8 +1386,10 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
   const [geo,         setGeo]         = useState(null);   // {lat,lng,label} of a searched location
   const [geoBusy,     setGeoBusy]     = useState(false);
   const [geoMiss,     setGeoMiss]     = useState(false);
+  const [sugs,        setSugs]        = useState([]);     // address autocomplete suggestions
   const inputRef = useRef(null);
   const mapRef = useRef(null);
+  const sugTimer = useRef(null);
 
   const SORT_OPTIONS = isPremium ? SORT_OPTIONS_PREMIUM : SORT_OPTIONS_FREE;
 
@@ -1449,8 +1477,11 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
     });
   }, [geo, citySpots, query, badgeFilter, sortBy, evOnly, userLoc]);
 
-  const visibleSpots = isPremium ? filtered : filtered.slice(0, FREE_RESULTS_LIMIT);
-  const hiddenCount  = isPremium ? 0 : Math.max(0, filtered.length - FREE_RESULTS_LIMIT);
+  // Free users: hide gated spots entirely (no name/location), then cap the rest.
+  // The gated ones surface only as an aggregate "N more with Premium" teaser.
+  const ungated      = isPremium ? filtered : filtered.filter(s => !isGated(s));
+  const visibleSpots = isPremium ? filtered : ungated.slice(0, FREE_RESULTS_LIMIT);
+  const hiddenCount  = isPremium ? 0 : (filtered.length - visibleSpots.length);
 
   const isSearching = !!geo || query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
   const mapCenter = geo ? [geo.lat, geo.lng]
@@ -1464,6 +1495,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
   // existing text filter.
   const doSearch = async (q) => {
     setQuery(q);
+    setSugs([]);
     inputRef.current?.blur();
     const term = (q || '').trim();
     if (!term) { setGeo(null); setGeoMiss(false); return; }
@@ -1474,14 +1506,31 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
     else { setGeo(null); setGeoMiss(true); }
   };
 
-  // Typing again clears an active location search so the text filter takes over.
+  // Typing updates the live address/place suggestions (debounced) and clears
+  // any active location search so the text filter takes over.
   const onQueryChange = (v) => {
     setQuery(v);
     if (geo) setGeo(null);
     if (geoMiss) setGeoMiss(false);
+    clearTimeout(sugTimer.current);
+    if (v.trim().length < 3) { setSugs([]); return; }
+    sugTimer.current = setTimeout(async () => {
+      const list = await geocodeSuggest(v);
+      setSugs(list);
+    }, 350);
   };
 
-  const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); };
+  // Choose an address/place suggestion → show nearest spots to it.
+  const pickSuggestion = (s) => {
+    setQuery(s.label);
+    setSugs([]);
+    setGeoMiss(false);
+    setFocusSpot(null);
+    setGeo({ lat: s.lat, lng: s.lng, label: s.label });
+    inputRef.current?.blur();
+  };
+
+  const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); setSugs([]); };
 
   // "Locate me" — find the nearest spots to the user's current position.
   const locateMe = () => {
@@ -1515,6 +1564,22 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
               {geoBusy && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/25 border-t-[#5BE7DA] rounded-full animate-spin"/>}
               {!geoBusy && (query || geo) && (
                 <button aria-label="Clear search" onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white/15 rounded-full flex items-center justify-center text-[rgba(234,241,248,0.7)] hover:bg-white/25 transition"><X size={12}/></button>
+              )}
+              {/* Address / place autocomplete */}
+              {sugs.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl overflow-hidden z-[10]"
+                  style={{background:'rgba(13,20,33,0.97)',border:'1px solid rgba(255,255,255,0.14)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',boxShadow:'0 16px 44px rgba(0,0,0,0.55)'}}>
+                  {sugs.map((s,i)=>(
+                    <button key={i} onClick={()=>pickSuggestion(s)}
+                      className="w-full text-left px-3.5 py-3 flex items-start gap-3 hover:bg-white/5 transition border-b border-white/5 last:border-0">
+                      <MapPin size={15} className="text-[#5BE7DA] mt-0.5 flex-shrink-0"/>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-[#EAF1F8] truncate">{s.label}</span>
+                        {s.sub && <span className="block text-xs text-[rgba(234,241,248,0.5)] truncate">{s.sub}</span>}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -1597,9 +1662,9 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
             ))}
             {hiddenCount > 0 && (
               <div onClick={onUpgrade} className="rounded-2xl border-2 border-dashed border-[#2ED3C6]/40 bg-[#2ED3C6]/8 p-5 text-center cursor-pointer hover:bg-[#2ED3C6]/12 transition-colors">
-                <p className="text-2xl mb-1">🔒</p>
-                <p className="font-bold text-[#EAF1F8] text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available</p>
-                <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">Upgrade to Premium to see all {filtered.length} results and more</p>
+                <p className="text-2xl mb-1">💎</p>
+                <p className="font-bold text-[#EAF1F8] text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available with Premium</p>
+                <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">They're around here too — unlock Premium to reveal their exact locations</p>
                 <span className="inline-block text-[#06231f] text-xs font-bold px-4 py-2 rounded-full btn-teal">★ Unlock Premium</span>
               </div>
             )}
@@ -1702,10 +1767,10 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, cityName, on
         </div>
       )}
       <div ref={mapRef}>
-        <ParkingMap spots={nearby} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240} selectedId={focusSpot?.id}/>
+        <ParkingMap spots={isPremium ? nearby : nearby.filter(s=>!isGated(s))} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240} selectedId={focusSpot?.id}/>
       </div>
       <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-[#EAF1F8]">{nearby.length ? `${nearby.length} closest spots in ${cityName}` : `No spots near you yet`}</p>
+        <p className="text-sm font-bold text-[#EAF1F8]">{nearby.length ? `${(isPremium?nearby:nearby.filter(s=>!isGated(s))).length} closest spots in ${cityName}` : `No spots near you yet`}</p>
         <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);setFallback(null);}} className="text-xs text-[#5BE7DA] font-semibold">Refresh</button>
       </div>
       {nearby.length === 0 && (
@@ -1714,10 +1779,18 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, cityName, on
         </div>
       )}
       <div className="space-y-4">
-        {nearby.map(s=>(
+        {(isPremium ? nearby : nearby.filter(s=>!isGated(s))).map(s=>(
           <SpotCard key={s.id} spot={{...s, dist:Math.round(s.realDist*10)/10}}
             saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
         ))}
+        {!isPremium && nearby.filter(isGated).length > 0 && (
+          <div onClick={onUpgrade} className="rounded-2xl border-2 border-dashed border-[#2ED3C6]/40 bg-[#2ED3C6]/8 p-5 text-center cursor-pointer hover:bg-[#2ED3C6]/12 transition-colors">
+            <p className="text-2xl mb-1">💎</p>
+            <p className="font-bold text-[#EAF1F8] text-sm">{nearby.filter(isGated).length} more spot{nearby.filter(isGated).length!==1?'s':''} available with Premium</p>
+            <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">They're nearby too — unlock to reveal their exact locations</p>
+            <span className="inline-block text-[#06231f] text-xs font-bold px-4 py-2 rounded-full btn-teal">★ Unlock Premium</span>
+          </div>
+        )}
       </div>
     </div>
   );
