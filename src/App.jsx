@@ -11,6 +11,7 @@ import {
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
 import { suggestPlaces, resolvePlace, geocodeText } from './geo';
+import { notify } from './notify';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -71,23 +72,8 @@ const CARD_THEME = {
 
 const BELFAST_CENTER = [54.5973, -5.9301];
 
-// ── Notification email (FormSubmit — free, no config needed) ──────────────────
-const notifyAdmin = async (name, email) => {
-  try {
-    await fetch('https://formsubmit.co/ajax/martinrooney250@gmail.com', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        _subject: `🅿 New ParkEasy member: ${name}`,
-        Name: name,
-        Email: email,
-        Message: `New sign-up on ParkEasy Belfast!\n\nName: ${name}\nEmail: ${email}\nTime: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}`,
-        _honey: '',
-        _captcha: 'false',
-      }),
-    });
-  } catch { /* silent fail — app still works */ }
-};
+// ── Notification email (Resend via /api/notify → CONTACT_EMAIL) ───────────────
+const notifyAdmin = (name, email) => notify('signup', { name, email });
 
 // ── Stripe links ──────────────────────────────────────────────────────────────
 const STRIPE_MONTHLY = 'https://buy.stripe.com/00w4gscgJ6QoahjcTU0kE01';
@@ -841,21 +827,11 @@ const BusinessModal = ({ onClose }) => {
   const submit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    try {
-      await fetch('https://formsubmit.co/ajax/martinrooney250@gmail.com', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          _subject: `🏪 New Business Listing: ${form.name}`,
-          'Business Name': form.name,
-          Address: form.address,
-          Email: form.email,
-          Phone: form.phone || 'Not provided',
-          _honey: '',
-          _captcha: 'false',
-        }),
-      });
-    } catch { /* silent fail */ }
+    await notify('business', {
+      name: form.name,
+      email: form.email,
+      message: `Address: ${form.address}\nPhone: ${form.phone || 'Not provided'}`,
+    });
     setDone(true);
   };
 
@@ -2006,25 +1982,12 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
     if (!form.type || !form.restriction) return;
     setSubmitting(true);
     const newSpot = buildSpot();
-    try {
-      await fetch('https://formsubmit.co/ajax/martinrooney250@gmail.com', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          _subject: `🅿 New Spot from ${user.name}: near ${form.near}`,
-          'Submitted by': user.name,
-          'User email': user.email,
-          'Near': form.near,
-          'Street / Area': form.street,
-          'Spot type': form.type,
-          'Restrictions': form.restriction,
-          'Notes': form.notes || 'None',
-          'Coordinates': coords ? `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}` : 'Not captured',
-          _honey: '',
-          _captcha: 'false',
-        }),
-      });
-    } catch { /* silent fail */ }
+    await notify('spot', {
+      name: form.near,
+      near: form.street,
+      email: user.email,
+      message: `Submitted by: ${user.name}\nType: ${form.type}\nRestrictions: ${form.restriction}\nNotes: ${form.notes || 'None'}\nCoordinates: ${coords ? `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}` : 'Not captured'}`,
+    });
     setDone(true);
     onSpotAdded(newSpot);
   };
@@ -2285,7 +2248,8 @@ const ListingCard = ({ listing }) => {
           <p className="text-xs text-[#8da2bd] mb-3 line-clamp-2">{listing.description}</p>
         )}
         <a href={`mailto:${listing.contact_email}?subject=Parking enquiry: ${encodeURIComponent(listing.title)}`}
-          className="block w-full bg-[#5BE7DA] text-[#06231f] text-xs font-bold py-2.5 rounded-xl text-center hover:bg-blue-600 transition">
+          onClick={()=>notify('enquiry', { title: listing.title, address: listing.address, ownerEmail: listing.contact_email })}
+          className="block w-full bg-[#5BE7DA] text-[#06231f] text-xs font-bold py-2.5 rounded-xl text-center hover:bg-[#34E0A0] transition">
           Contact Owner
         </a>
       </div>
@@ -2343,6 +2307,11 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
         const { error } = await supabase.from('rental_listings').insert(payload);
         if (error) throw error;
       }
+      notify('listing', {
+        title: payload.title, address: payload.address, spaceType: payload.space_type,
+        price: payload.price_per_hour ? `£${payload.price_per_hour}/hr` : payload.price_per_day ? `£${payload.price_per_day}/day` : payload.price_per_month ? `£${payload.price_per_month}/mo` : '—',
+        email: payload.contact_email,
+      });
       onSuccess();
     } catch(e) {
       setErr(e.message || 'Something went wrong. Please try again.');
@@ -2620,6 +2589,37 @@ const SponsorCard = ({ onAdvertise }) => (
   </div>
 );
 
+// ── Contact / feedback form (emails CONTACT_EMAIL via /api/notify) ────────────
+const ContactForm = () => {
+  const [f, setF] = useState({ name:'', email:'', message:'' });
+  const [state, setState] = useState('idle'); // idle | sending | done | error
+  const s = (k,v) => setF(p=>({...p,[k]:v}));
+  const send = async () => {
+    if (!f.message.trim() || !f.email.trim()) { setState('error'); return; }
+    setState('sending');
+    const ok = await notify('contact', f);
+    setState(ok ? 'done' : 'error');
+  };
+  if (state === 'done') return (
+    <div className="mt-4 p-4 rounded-2xl bg-[#34E0A0]/12 border border-[#34E0A0]/30 text-[#6BEFB9] text-sm font-semibold">
+      ✓ Thanks — your message is on its way. We&apos;ll reply within 2 working days.
+    </div>
+  );
+  const inp = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2.5 text-sm text-[#EAF1F8] placeholder-[rgba(234,241,248,0.45)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60 mt-2";
+  return (
+    <div className="mt-4 space-y-1">
+      <input className={inp} placeholder="Your name (optional)" value={f.name} onChange={e=>s('name',e.target.value)}/>
+      <input className={inp} type="email" placeholder="Your email" value={f.email} onChange={e=>s('email',e.target.value)}/>
+      <textarea className={inp} rows={4} placeholder="Your message, feedback, or a spot to add…" value={f.message} onChange={e=>s('message',e.target.value)}/>
+      {state==='error' && <p className="text-red-300 text-xs pt-1">Please add your email and a message, then try again.</p>}
+      <button onClick={send} disabled={state==='sending'}
+        className="mt-2 w-full btn-teal text-[#06231f] font-bold py-3 rounded-xl text-sm disabled:opacity-60">
+        {state==='sending' ? 'Sending…' : 'Send message'}
+      </button>
+    </div>
+  );
+};
+
 // ── Info / legal pages (Privacy, About, Contact, Advertise) ───────────────────
 const INFO_PAGES = {
   about: {
@@ -2637,9 +2637,9 @@ const INFO_PAGES = {
     title: 'Contact us', Icon: Mail,
     body: (
       <>
-        <p>Questions, a spot to add, a correction, or a business enquiry? We&apos;d love to hear from you.</p>
-        <p><strong className="text-[#EAF1F8]">Email:</strong> <a className="text-[#5BE7DA] underline" href="mailto:hello@parkeasy.uk">hello@parkeasy.uk</a></p>
-        <p>We aim to reply within 2 working days. For wrong or out-of-date spots, the quickest fix is the &ldquo;Changed&rdquo; button on any spot card.</p>
+        <p>Questions, a spot to add, a correction, or a business enquiry? We&apos;d love to hear from you — drop us a message below.</p>
+        <ContactForm/>
+        <p className="text-xs text-[rgba(234,241,248,0.45)] pt-1">We aim to reply within 2 working days. For wrong or out-of-date spots, the quickest fix is the &ldquo;Changed&rdquo; button on any spot card.</p>
       </>
     ),
   },
