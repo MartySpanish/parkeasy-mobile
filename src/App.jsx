@@ -1309,7 +1309,7 @@ const isGated = (spot) =>
   spot.premium === true ||
   (['free','hidden_gem'].includes(spot.badge) && (spot.id % 4 !== 0));
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot, onBrowseTowns }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -1569,8 +1569,15 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
 
         {/* Sheet header */}
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="font-display font-bold text-lg text-[#EAF1F8]">{geo ? 'Nearby parking' : isSearching ? 'Results' : `Parking in ${cityName}`}</h2>
-          <span className="text-sm font-semibold text-[rgba(234,241,248,0.5)]">{filtered.length} spot{filtered.length!==1?'s':''}</span>
+          <div className="min-w-0">
+            <h2 className="font-display font-bold text-lg text-[#EAF1F8] truncate">{geo ? 'Nearby parking' : isSearching ? 'Results' : `Parking in ${cityName}`}</h2>
+            {!isSearching && onBrowseTowns && (
+              <button onClick={onBrowseTowns} className="text-xs font-semibold text-[#5BE7DA] flex items-center gap-0.5 hover:text-[#8ff3ea] transition">
+                Browse another town <ChevronRight size={11}/>
+              </button>
+            )}
+          </div>
+          <span className="text-sm font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0">{filtered.length} spot{filtered.length!==1?'s':''}</span>
         </div>
 
         {/* Quick search */}
@@ -2897,15 +2904,17 @@ export default function App() {
           </div>
           <div className="relative">
             <h1 className="font-display text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
-            <button onClick={()=>setShowCityPicker(v=>!v)}
-              className="text-[#5BE7DA] text-[10px] font-semibold flex items-center gap-0.5 hover:text-[#8ff3ea] active:scale-95 transition">
+            <button onClick={()=>setShowCityPicker(v=>!v)} aria-label="Browse by town"
+              className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium flex items-center gap-0.5 hover:text-[#5BE7DA] active:scale-95 transition">
               {currentCity.name} · {citySpots.length} spot{citySpots.length!==1?'s':''}
               <ChevronRight size={10} className={`transition-transform ${showCityPicker?'rotate-90':''}`}/>
             </button>
             {showCityPicker && (
               <>
                 <div className="fixed inset-0 z-40" onClick={()=>setShowCityPicker(false)}/>
-                <div className="absolute top-full left-0 mt-2 rounded-xl overflow-hidden z-50 w-48 max-h-72 overflow-y-auto" style={{background:'#0e1a2c',border:'1px solid rgba(255,255,255,0.12)',boxShadow:'0 12px 40px rgba(0,0,0,0.5)'}}>
+                <div className="absolute top-full left-0 mt-2 rounded-xl overflow-hidden z-50 w-52 max-h-80 overflow-y-auto" style={{background:'#0e1a2c',border:'1px solid rgba(255,255,255,0.12)',boxShadow:'0 12px 40px rgba(0,0,0,0.5)'}}>
+                  <p className="px-3 pt-3 pb-1 text-[11px] font-bold text-[#EAF1F8]">Browse by town</p>
+                  <p className="px-3 pb-2 text-[10px] text-[rgba(234,241,248,0.45)]">Or just search any address above</p>
                   {CITY_REGIONS.map(region=>(
                     <div key={region}>
                       <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-[rgba(234,241,248,0.4)] bg-white/5">{region}</p>
@@ -2970,7 +2979,7 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot} onBrowseTowns={()=>setShowCityPicker(true)}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
