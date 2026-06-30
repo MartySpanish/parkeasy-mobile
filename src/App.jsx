@@ -1098,7 +1098,7 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
 };
 
 // ── Spot detail sheet ─────────────────────────────────────────────────────────
-const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose }) => {
+const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer }) => {
   const [shareDone,setShareDone]=useState(false);
   const [confirmedAt,setConfirmedAt]=useState(()=> spot ? (ls.get('pe_confirmed_at',{})[spot.id]||null) : null);
   if (!spot) return null;
@@ -1162,6 +1162,11 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
             </a>
             <button onClick={share} className="w-[52px] rounded-2xl bg-white/8 border border-white/15 text-[#EAF1F8] flex items-center justify-center">{shareDone?<Check size={18}/>:<Share2 size={18}/>}</button>
           </div>
+          {onStartTimer && (
+            <button onClick={()=>onStartTimer(spot)} className="w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
+              <Timer size={17} className="text-[#5BE7DA]"/>Start parking timer
+            </button>
+          )}
           <div className="mt-4 pt-4 border-t border-white/10">
             <p className="text-xs text-[rgba(234,241,248,0.55)] mb-2.5">
               <Check size={11} className="inline -mt-0.5 text-[#6BEFB9]"/> Confirmed by <strong className="text-[#EAF1F8]">{confirmCount}</strong> driver{confirmCount!==1?'s':''}
@@ -1184,6 +1189,81 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ── Parking session timer ─────────────────────────────────────────────────────
+const fmtHMS = (ms) => {
+  const t = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+};
+
+const SessionModal = ({ session, now, onClose, onEnd }) => {
+  if (!session) return null;
+  const elapsed = Math.max(0, now - session.startedAt);
+  const rate = session.rate || 0;
+  const cost = rate ? (elapsed / 3600000) * rate : null;
+  const R = 52, C = 2 * Math.PI * R;
+  const off = C * (1 - ((elapsed % 3600000) / 3600000)); // fills once per hour
+  const started = new Date(session.startedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center" style={{background:'rgba(6,11,20,0.7)'}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] sm:rounded-[28px] w-full overflow-hidden animate-fade-in-up" style={{maxWidth:440,background:'#0d1626',border:'1px solid rgba(255,255,255,0.14)',boxShadow:'0 -12px 44px rgba(0,0,0,0.5)'}}>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-5">
+            <span className="flex items-center gap-2 text-xs font-bold text-[#6BEFB9]"><span className="w-2 h-2 rounded-full bg-[#34E0A0]" style={{boxShadow:'0 0 8px #34E0A0'}}/>Currently parked</span>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/8 border border-white/12 flex items-center justify-center text-[#cdd9e8]"><X size={15}/></button>
+          </div>
+          <div className="relative w-44 h-44 mx-auto">
+            <svg width="176" height="176" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="7"/>
+              <circle cx="60" cy="60" r={R} fill="none" stroke="#5BE7DA" strokeWidth="7" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off} transform="rotate(-90 60 60)"/>
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[11px] tracking-widest font-bold text-[rgba(234,241,248,0.45)]">TIME PARKED</span>
+              <span className="font-display font-extrabold text-2xl text-[#EAF1F8] tabular-nums">{fmtHMS(elapsed)}</span>
+              <span className="text-[11px] text-[rgba(234,241,248,0.4)] mt-0.5">Started {started}</span>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-6">
+            <div className="flex-1 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+              <div className="text-[11px] text-[rgba(234,241,248,0.5)] font-semibold">Est. cost so far</div>
+              <div className="font-display font-bold text-lg text-[#EAF1F8] mt-0.5">{cost != null ? `£${cost.toFixed(2)}` : 'Free'}</div>
+            </div>
+            <div className="flex-1 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+              <div className="text-[11px] text-[rgba(234,241,248,0.5)] font-semibold">Rate</div>
+              <div className="font-display font-bold text-lg text-[#EAF1F8] mt-0.5">{rate ? `£${rate.toFixed(2)}` : '—'}<span className="text-xs text-[rgba(234,241,248,0.5)]">{rate?'/hr':''}</span></div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mt-3 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+            <div className="w-9 h-9 rounded-xl teal-grad flex items-center justify-center text-[#06231f] font-display font-extrabold">P</div>
+            <div className="font-bold text-sm text-[#EAF1F8] truncate">{session.name}</div>
+          </div>
+          <button onClick={onEnd} className="w-full mt-5 py-3.5 rounded-2xl font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
+            End session
+          </button>
+          <p className="text-[11px] text-center text-[rgba(234,241,248,0.4)] mt-3">A personal reminder only — ParkEasy doesn't charge or pay for parking.</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Compact sticky "currently parked" bar shown across the app while a session runs.
+const ParkBar = ({ session, now, onOpen, onEnd }) => {
+  if (!session) return null;
+  const elapsed = Math.max(0, now - session.startedAt);
+  const cost = session.rate ? (elapsed / 3600000) * session.rate : null;
+  return (
+    <div className="sticky z-40 px-3 py-2 flex items-center gap-2" style={{ top:0, background:'linear-gradient(90deg,#0e6a5f,#0c5248)', borderBottom:'1px solid rgba(255,255,255,0.12)' }}>
+      <button onClick={onOpen} className="flex-1 flex items-center gap-2 text-left min-w-0">
+        <span className="w-2 h-2 rounded-full bg-[#6BEFB9] flex-shrink-0" style={{boxShadow:'0 0 8px #34E0A0'}}/>
+        <span className="text-xs font-bold text-white truncate">Parked at {session.name}</span>
+        <span className="text-xs font-extrabold text-white tabular-nums ml-auto flex-shrink-0">{fmtHMS(elapsed)}{cost!=null?` · ~£${cost.toFixed(2)}`:''}</span>
+      </button>
+      <button onClick={onEnd} className="text-[11px] font-bold text-[#06231f] bg-[#6BEFB9] px-2.5 py-1 rounded-full flex-shrink-0 active:scale-95">End</button>
     </div>
   );
 };
@@ -1309,7 +1389,7 @@ const isGated = (spot) =>
   spot.premium === true ||
   (['free','hidden_gem'].includes(spot.badge) && (spot.id % 4 !== 0));
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot, onBrowseTowns }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot, onCityDetected }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -1330,6 +1410,12 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
 
   // Reset map focus when switching city or search criteria
   useEffect(() => { setFocusSpot(null); }, [cityCenter, query, badgeFilter, evOnly]);
+
+  // Auto-route: when an address is searched, switch the active city to the
+  // nearest NI town so the header + browse context follow the search.
+  useEffect(() => {
+    if (geo) { const c = nearestCity(geo.lat, geo.lng); if (c) onCityDetected?.(c.id); }
+  }, [geo]);
 
   const viewOnMap = (spot) => {
     setFocusSpot(spot);
@@ -1569,14 +1655,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
 
         {/* Sheet header */}
         <div className="flex items-baseline justify-between mb-3">
-          <div className="min-w-0">
-            <h2 className="font-display font-bold text-lg text-[#EAF1F8] truncate">{geo ? 'Nearby parking' : isSearching ? 'Results' : `Parking in ${cityName}`}</h2>
-            {!isSearching && onBrowseTowns && (
-              <button onClick={onBrowseTowns} className="text-xs font-semibold text-[#5BE7DA] flex items-center gap-0.5 hover:text-[#8ff3ea] transition">
-                Browse another town <ChevronRight size={11}/>
-              </button>
-            )}
-          </div>
+          <h2 className="font-display font-bold text-lg text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label.split(',')[0]}` : isSearching ? 'Results' : `Parking in ${cityName}`}</h2>
           <span className="text-sm font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0">{filtered.length} spot{filtered.length!==1?'s':''}</span>
         </div>
 
@@ -2735,6 +2814,9 @@ export default function App() {
   const [city,           setCity]           = useState(()=>ls.get('pe_city', 'belfast'));
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [userSpots,      setUserSpots]      = useState(()=>ls.get('pe_user_spots', []));
+  const [parkSession,    setParkSession]    = useState(()=>ls.get('pe_session', null));
+  const [showSession,    setShowSession]    = useState(false);
+  const [nowTs,          setNowTs]          = useState(()=>Date.now());
 
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
@@ -2858,6 +2940,21 @@ export default function App() {
   };
 
 
+  // Parking session timer — tick every second while a session is active.
+  useEffect(() => {
+    if (!parkSession) return;
+    const id = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [parkSession]);
+
+  const startSession = (spot) => {
+    const rate = spot.price ? (parseFloat(String(spot.price).match(/([\d.]+)/)?.[1]) || 0) : 0;
+    const sess = { spotId: spot.id, name: spot.name, rate, startedAt: Date.now() };
+    setParkSession(sess); ls.set('pe_session', sess);
+    setDetailSpot(null); setShowSession(true); setNowTs(Date.now());
+  };
+  const endSession = () => { setParkSession(null); ls.set('pe_session', null); setShowSession(false); };
+
   const handleSpotAdded = (newSpot) => {
     if (user) {
       const updated = {...user, spotsAdded:(user.spotsAdded||0)+1};
@@ -2882,7 +2979,8 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'linear-gradient(180deg, #0d1626 0%, #0a111e 60%)'}}>
       {/* ── Modals ── */}
-      {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)}/>}
+      {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
+      {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
       {!cookieChoice && <CookieBanner onChoice={(c)=>{ setCookieChoice(c); ls.set('pe_cookie', c); }}/>}
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
@@ -2904,32 +3002,9 @@ export default function App() {
           </div>
           <div className="relative">
             <h1 className="font-display text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
-            <button onClick={()=>setShowCityPicker(v=>!v)} aria-label="Browse by town"
-              className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium flex items-center gap-0.5 hover:text-[#5BE7DA] active:scale-95 transition">
+            <p className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium">
               {currentCity.name} · {citySpots.length} spot{citySpots.length!==1?'s':''}
-              <ChevronRight size={10} className={`transition-transform ${showCityPicker?'rotate-90':''}`}/>
-            </button>
-            {showCityPicker && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={()=>setShowCityPicker(false)}/>
-                <div className="absolute top-full left-0 mt-2 rounded-xl overflow-hidden z-50 w-52 max-h-80 overflow-y-auto" style={{background:'#0e1a2c',border:'1px solid rgba(255,255,255,0.12)',boxShadow:'0 12px 40px rgba(0,0,0,0.5)'}}>
-                  <p className="px-3 pt-3 pb-1 text-[11px] font-bold text-[#EAF1F8]">Browse by town</p>
-                  <p className="px-3 pb-2 text-[10px] text-[rgba(234,241,248,0.45)]">Or just search any address above</p>
-                  {CITY_REGIONS.map(region=>(
-                    <div key={region}>
-                      <p className="px-3 py-2 text-[10px] uppercase tracking-widest font-bold text-[rgba(234,241,248,0.4)] bg-white/5">{region}</p>
-                      {CITIES.filter(c=>c.region===region).map(c=>(
-                        <button key={c.id} onClick={()=>changeCity(c.id)}
-                          className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-white/5 flex items-center justify-between ${c.id===currentCity.id?'text-[#5BE7DA] font-bold':'text-[#cdd9e8]'}`}>
-                          {c.name}
-                          {c.id===currentCity.id && <Check size={12}/>}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+            </p>
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -2974,12 +3049,15 @@ export default function App() {
         </div>
       </header>
 
+      {/* Currently-parked timer bar */}
+      <ParkBar session={parkSession} now={nowTs} onOpen={()=>setShowSession(true)} onEnd={endSession}/>
+
       {/* ── Content ── */}
       <main className="flex-1 overflow-auto pb-24">
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot} onBrowseTowns={()=>setShowCityPicker(true)}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot} onCityDetected={changeCity}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
