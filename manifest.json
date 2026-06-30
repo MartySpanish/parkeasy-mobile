@@ -1,39 +1,19 @@
 {
-  "name": "ParkEasy Belfast",
+  "name": "ParkEasy — Northern Ireland Parking Finder",
   "short_name": "ParkEasy",
-  "description": "Find where locals actually park in Belfast — street spots, hidden gems and official car parks.",
+  "description": "Find where locals actually park across Northern Ireland — street spots, hidden gems and official car parks.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#1a2332",
-  "theme_color": "#1a2332",
+  "background_color": "#0A0F1A",
+  "theme_color": "#0A0F1A",
   "orientation": "portrait-primary",
   "categories": ["navigation", "travel", "utilities"],
   "lang": "en-GB",
   "icons": [
-    {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "label": "ParkEasy Belfast — Search parking spots",
-      "form_factor": "narrow"
-    }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
