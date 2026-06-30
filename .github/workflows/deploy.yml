@@ -29,12 +29,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Generate PNG icons + social share image from SVG
+      # App icons (favicon, PNGs, maskable, apple-touch) are committed brand
+      # assets in /public — do NOT regenerate them here. Only the OG share image.
+      - name: Generate social share image from SVG
         run: |
           sudo apt-get update
           sudo apt-get install -y librsvg2-bin
-          rsvg-convert -w 192 -h 192 public/icon.svg -o public/icon-192.png
-          rsvg-convert -w 512 -h 512 public/icon.svg -o public/icon-512.png
           rsvg-convert -w 1200 -h 630 public/social-card.svg -o public/og-image.png
 
       - name: Install dependencies
