@@ -1,4 +1,4 @@
-const CACHE = 'parkeasy-v5';
+const CACHE = 'parkeasy-v6';
 const BASE = '/';
 
 // Only precache static assets that rarely change. The HTML shell is
