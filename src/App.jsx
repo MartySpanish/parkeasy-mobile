@@ -6,7 +6,7 @@ import {
   MapPin, Search, Crosshair, Plus, Building2, Navigation,
   Bookmark, Camera, Check, X, ChevronRight, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
-  Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText,
+  Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -968,7 +968,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
 const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
     <div className="absolute top-16 right-3 bg-[#0e1a2c] rounded-2xl shadow-2xl border border-white/10 w-64 overflow-hidden" onClick={e=>e.stopPropagation()}>
-      <div style={{background:'#0e1a2c'}} className="p-4 flex items-center gap-3">
+      <div style={{background:'var(--surface-solid)'}} className="p-4 flex items-center gap-3">
         <div className="w-11 h-11 bg-[#5BE7DA] rounded-full flex items-center justify-center text-[#06231f] font-bold text-base flex-shrink-0">
           {user.name.charAt(0).toUpperCase()}
         </div>
@@ -1068,31 +1068,38 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   const [imgErr,setImgErr] = useState(false);
   const img = spot.photo || (GOOGLE_MAPS_KEY ? spotImageUrl(spot.lat, spot.lng) : null);
   const showImg = img && !imgErr;
+  // Availability label as a themable class (light mode re-targets these hexes)
+  const occCls = occ.color==='#FFD27A' ? 'text-[#FFD27A]' : occ.color==='#5BE7DA' ? 'text-[#5BE7DA]' : 'text-[#6BEFB9]';
   return (
     <button onClick={()=>onOpen?.(spot)} className="glass rounded-[20px] w-full text-left p-3 flex items-center gap-3 active:scale-[0.99] transition">
       {/* thumbnail image of the parking spot */}
-      <div className="w-[64px] h-[64px] rounded-2xl overflow-hidden flex-shrink-0 relative flex items-center justify-center" style={{background:theme.grad}}>
+      <div className="w-[60px] h-[60px] rounded-[14px] overflow-hidden flex-shrink-0 flex items-center justify-center" style={{background:theme.grad}}>
         {showImg
           ? <img src={img} alt={spot.name} className="w-full h-full object-cover" onError={()=>setImgErr(true)}/>
-          : <Car size={26} strokeWidth={1.4} className="text-white/45"/>}
-        <span className="absolute bottom-0 inset-x-0 text-center text-[10px] font-extrabold py-0.5 font-display"
-          style={{background:'rgba(6,11,20,0.62)', color: free?'#5BE7DA':'#fff'}}>{pr.big}</span>
+          : <Car size={24} strokeWidth={1.4} className="text-white/45"/>}
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] leading-tight truncate">{spot.name}</h3>
-        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-[rgba(234,241,248,0.55)]">
+        <div className="flex items-center gap-1.5 mt-1 text-[11.5px] text-[rgba(234,241,248,0.55)]">
           <Clock size={11}/>{spot.walk}{spot.dist?` · ${spot.dist} mi`:''}
         </div>
         <div className="flex items-center gap-2 mt-2">
           <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div style={{width:`${Math.round(occ.pct*100)}%`, background:occ.grad}} className="h-full rounded-full"/>
           </div>
-          <span className="text-[11px] font-bold whitespace-nowrap" style={{color:occ.color}}>{occ.label}</span>
+          <span className={`text-[11px] font-bold whitespace-nowrap ${occCls}`}>{occ.label}</span>
         </div>
       </div>
-      <span role="button" onClick={(e)=>{e.stopPropagation();onSave(spot.id);}} className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${saved?'teal-grad':'bg-white/8 border border-white/12'}`}>
-        <Bookmark size={13} className={saved?'text-[#06231f]':'text-[rgba(234,241,248,0.6)]'} fill={saved?'#06231f':'none'}/>
-      </span>
+      <div className="flex flex-col items-end justify-between self-stretch flex-shrink-0 py-0.5">
+        <div className="font-display font-bold text-[16px] leading-none whitespace-nowrap">
+          <span className={free?'text-[#5BE7DA]':'text-[#EAF1F8]'}>{pr.big}</span>
+          <span className="text-[10px] font-semibold text-[rgba(234,241,248,0.5)]">{pr.small}</span>
+        </div>
+        <span role="button" aria-label={saved?'Remove from saved spots':'Save this spot'} onClick={(e)=>{e.stopPropagation();onSave(spot.id);}}
+          className={`w-7 h-7 rounded-full flex items-center justify-center ${saved?'teal-grad':'bg-white/8 border border-white/12'}`}>
+          <Bookmark size={12} className={saved?'text-[#06231f]':'text-[rgba(234,241,248,0.6)]'} fill={saved?'#06231f':'none'}/>
+        </span>
+      </div>
     </button>
   );
 };
@@ -1115,7 +1122,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   const heroImg = spot.photo || (GOOGLE_MAPS_KEY ? spotImageUrl(spot.lat, spot.lng) : null);
   return (
     <div className="fixed inset-0 z-[70] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.6)'}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] overflow-hidden animate-fade-in-up" style={{maxWidth:680,width:'100%',margin:'0 auto',maxHeight:'92vh',background:'rgba(13,20,33,0.97)',borderTop:'1px solid rgba(255,255,255,0.14)',boxShadow:'0 -12px 44px rgba(0,0,0,0.5)'}}>
+      <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] overflow-hidden animate-fade-in-up" style={{maxWidth:680,width:'100%',margin:'0 auto',maxHeight:'92vh',background:'var(--sheet)',borderTop:'1px solid var(--hairline)',boxShadow:'var(--sheet-shadow)'}}>
         <div className="relative h-40 flex items-end" style={{background:theme.grad}}>
           {heroImg
             ? <img src={heroImg} alt={spot.name} className="absolute inset-0 w-full h-full object-cover" onError={e=>{e.currentTarget.style.display='none';}}/>
@@ -1139,6 +1146,12 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               <div className="font-bold text-[#EAF1F8]">{occ.label}{spot.total?` of ${spot.total}`:''}</div>
               <div className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5">{spot.restriction}</div>
             </div>
+            {spot.available!=null && spot.total && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#34E0A0]/12 border border-[#34E0A0]/30 flex-shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#34E0A0]" style={{boxShadow:'0 0 8px #34E0A0'}}/>
+                <span className="text-[10px] font-bold tracking-[0.15em] text-[#6BEFB9]">LIVE</span>
+              </span>
+            )}
           </div>
           <div className="flex gap-3 mt-3">
             <div className="flex-1 p-3.5 rounded-2xl bg-white/5 border border-white/10">
@@ -1210,7 +1223,7 @@ const SessionModal = ({ session, now, onClose, onEnd }) => {
   const started = new Date(session.startedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center" style={{background:'rgba(6,11,20,0.7)'}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] sm:rounded-[28px] w-full overflow-hidden animate-fade-in-up" style={{maxWidth:440,background:'#0d1626',border:'1px solid rgba(255,255,255,0.14)',boxShadow:'0 -12px 44px rgba(0,0,0,0.5)'}}>
+      <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] sm:rounded-[28px] w-full overflow-hidden animate-fade-in-up" style={{maxWidth:440,background:'var(--sheet)',border:'1px solid var(--hairline)',boxShadow:'var(--sheet-shadow)'}}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-5">
             <span className="flex items-center gap-2 text-xs font-bold text-[#6BEFB9]"><span className="w-2 h-2 rounded-full bg-[#34E0A0]" style={{boxShadow:'0 0 8px #34E0A0'}}/>Currently parked</span>
@@ -1257,7 +1270,7 @@ const ParkBar = ({ session, now, onOpen, onEnd }) => {
   const elapsed = Math.max(0, now - session.startedAt);
   const cost = session.rate ? (elapsed / 3600000) * session.rate : null;
   return (
-    <div className="sticky z-40 px-3 py-2 flex items-center gap-2" style={{ top:0, background:'linear-gradient(90deg,#0e6a5f,#0c5248)', borderBottom:'1px solid rgba(255,255,255,0.12)' }}>
+    <div className="sticky z-40 px-3 py-2 flex items-center gap-2" style={{ top:0, background:'linear-gradient(90deg,#0e6a5f,#0c5248)', borderBottom:'1px solid var(--hairline)' }}>
       <button onClick={onOpen} className="flex-1 flex items-center gap-2 text-left min-w-0">
         <span className="w-2 h-2 rounded-full bg-[#6BEFB9] flex-shrink-0" style={{boxShadow:'0 0 8px #34E0A0'}}/>
         <span className="text-xs font-bold text-white truncate">Parked at {session.name}</span>
@@ -1278,14 +1291,16 @@ const RecenterMap = ({ center, zoom }) => {
 
 // Map markers rendered as price pills — teal when selected, dark otherwise.
 const pricePin = (spot, selected) => {
+  const light = typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light';
   const free = ['free','hidden_gem'].includes(spot.badge);
   const label = spot.price ? String(spot.price).split('/')[0].trim() : (free ? 'Free' : '£');
-  const bg = selected ? 'linear-gradient(135deg,#54E6D8,#2ED3C6)' : 'rgba(16,24,40,0.92)';
-  const color = selected ? '#06231f' : '#EAF1F8';
-  const border = selected ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.18)';
+  const bg = selected ? 'linear-gradient(135deg,#54E6D8,#2ED3C6)' : light ? 'rgba(255,255,255,0.96)' : 'rgba(16,24,40,0.92)';
+  const color = selected ? '#06231f' : light ? '#0B1220' : '#EAF1F8';
+  const border = selected ? 'rgba(255,255,255,0.5)' : light ? 'rgba(13,27,54,0.18)' : 'rgba(255,255,255,0.18)';
+  const shadow = light && !selected ? '0 4px 12px rgba(13,27,54,0.2)' : '0 6px 16px rgba(0,0,0,0.45)';
   return L.divIcon({
     className: 'pe-price-pin',
-    html: `<div style="padding:4px 9px;border-radius:999px;font:700 12px/1 Manrope,system-ui,sans-serif;color:${color};background:${bg};border:1px solid ${border};box-shadow:0 6px 16px rgba(0,0,0,0.45);white-space:nowrap;backdrop-filter:blur(6px)">${label}</div>`,
+    html: `<div style="padding:4px 9px;border-radius:999px;font:700 12px/1 Manrope,system-ui,sans-serif;color:${color};background:${bg};border:1px solid ${border};box-shadow:${shadow};white-space:nowrap;backdrop-filter:blur(6px)">${label}</div>`,
     iconSize: [44, 22], iconAnchor: [22, 11],
   });
 };
@@ -1585,7 +1600,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
               <input ref={inputRef} aria-label="Search any address or place" value={query}
                 onChange={e=>onQueryChange(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
                 placeholder="Where are you headed?"
-                style={{background:'rgba(13,20,33,0.82)',backdropFilter:'blur(18px) saturate(160%)',WebkitBackdropFilter:'blur(18px) saturate(160%)'}}
+                style={{background:'var(--float)',backdropFilter:'blur(18px) saturate(160%)',WebkitBackdropFilter:'blur(18px) saturate(160%)'}}
                 className="w-full pl-10 pr-10 py-3.5 rounded-full border border-white/18 text-sm text-[#EAF1F8] placeholder-[rgba(234,241,248,0.6)] shadow-lg focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60 transition"/>
               {geoBusy && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/25 border-t-[#5BE7DA] rounded-full animate-spin"/>}
               {!geoBusy && (query || geo) && (
@@ -1594,7 +1609,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
               {/* Address / place autocomplete */}
               {sugs.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl overflow-hidden z-[10]"
-                  style={{background:'rgba(13,20,33,0.97)',border:'1px solid rgba(255,255,255,0.14)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',boxShadow:'0 16px 44px rgba(0,0,0,0.55)'}}>
+                  style={{background:'var(--sheet)',border:'1px solid var(--hairline)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',boxShadow:'var(--pop-shadow)'}}>
                   {sugs.map((s,i)=>(
                     <button key={i} onClick={()=>pickSuggestion(s)}
                       className="w-full text-left px-3.5 py-3 flex items-start gap-3 hover:bg-white/5 transition border-b border-white/5 last:border-0">
@@ -1612,7 +1627,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
           <div className="flex gap-2 overflow-x-auto no-scrollbar">
             {BADGE_FILTERS.map(f => (
               <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
-                style={badgeFilter!==f.id?{background:'rgba(13,20,33,0.78)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}:{}}
+                style={badgeFilter!==f.id?{background:'var(--float)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}:{}}
                 className={`text-sm px-4 py-1.5 rounded-full whitespace-nowrap font-bold flex-shrink-0 transition-all active:scale-95 shadow ${
                   badgeFilter===f.id ? 'teal-grad text-[#06231f]' : 'border border-white/15 text-[#dbe4f0]'}`}>
                 {f.label}
@@ -1624,13 +1639,13 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
         {/* Locate me */}
         <button onClick={locateMe} aria-label="Find parking near me"
           className="absolute right-4 bottom-4 z-[5] w-12 h-12 rounded-full flex items-center justify-center text-[#5BE7DA] shadow-lg active:scale-95 transition"
-          style={{background:'rgba(13,20,33,0.85)',border:'1px solid rgba(255,255,255,0.18)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}}>
+          style={{background:'var(--float)',border:'1px solid var(--hairline)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}}>
           <Crosshair size={20}/>
         </button>
       </div>
 
       {/* ── Bottom sheet ── */}
-      <div className="relative z-[6] -mt-5 rounded-t-[24px] px-4 pt-3 pb-6" style={{background:'#0d1626',boxShadow:'0 -14px 40px rgba(0,0,0,0.55)'}}>
+      <div className="relative z-[6] -mt-5 rounded-t-[24px] px-4 pt-3 pb-6" style={{background:'var(--sheet)',boxShadow:'var(--sheet-shadow)'}}>
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
 
         {/* Location banners */}
@@ -2767,8 +2782,8 @@ const InfoOverlay = ({ page, onClose }) => {
   if (!p) return null;
   const { Icon } = p;
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col" style={{background:'#0a111e'}}>
-      <div className="sticky top-0 flex items-center gap-3 px-4 py-4 border-b border-white/10" style={{paddingTop:'calc(env(safe-area-inset-top) + 14px)',background:'#0b1422'}}>
+    <div className="fixed inset-0 z-[70] flex flex-col" style={{background:'var(--bg-solid)'}}>
+      <div className="sticky top-0 flex items-center gap-3 px-4 py-4 border-b border-white/10" style={{paddingTop:'calc(env(safe-area-inset-top) + 14px)',background:'var(--surface-solid)'}}>
         <button onClick={onClose} aria-label="Back" className="w-9 h-9 rounded-full bg-white/8 border border-white/15 flex items-center justify-center text-[#EAF1F8] active:scale-90 transition"><X size={16}/></button>
         <div className="flex items-center gap-2">
           <Icon size={18} className="text-[#5BE7DA]"/>
@@ -2817,6 +2832,15 @@ export default function App() {
   const [parkSession,    setParkSession]    = useState(()=>ls.get('pe_session', null));
   const [showSession,    setShowSession]    = useState(false);
   const [nowTs,          setNowTs]          = useState(()=>Date.now());
+  const [theme,          setTheme]          = useState(()=>ls.get('pe_theme', 'dark'));
+
+  // Apply the theme to the document root and keep the browser chrome colour
+  // in sync so the status bar matches in both modes.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    ls.set('pe_theme', theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#F5F7FA' : '#0A0F1A');
+  }, [theme]);
 
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
@@ -2977,7 +3001,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'linear-gradient(180deg, #0d1626 0%, #0a111e 60%)'}}>
+    <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'var(--app-grad)'}}>
       {/* ── Modals ── */}
       {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
@@ -2995,7 +3019,7 @@ export default function App() {
       )}
 
       {/* ── Header ── */}
-      <header style={{background:'linear-gradient(135deg, #0b1422 0%, #0e1a2c 55%, #112338 100%)', paddingTop:'env(safe-area-inset-top)'}} className="sticky top-0 z-50 shadow-xl border-b border-white/5">
+      <header style={{background:'var(--header-grad)', paddingTop:'env(safe-area-inset-top)'}} className="sticky top-0 z-50 shadow-xl border-b border-white/5">
         <div className="px-4 py-3 flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'linear-gradient(135deg, #54E6D8 0%, #2ED3C6 100%)', boxShadow:'0 4px 16px rgba(46,211,198,0.5)'}}>
             <MapPin size={20} className="text-[#06231f]" strokeWidth={2.6}/>
@@ -3008,6 +3032,10 @@ export default function App() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <button aria-label="Toggle light or dark theme" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/15 bg-white/10 text-white hover:bg-white/20">
+              {theme==='dark' ? <Sun size={15}/> : <Moon size={15}/>}
+            </button>
             <button aria-label="Saved spots" onClick={()=>setTab('saved')}
               className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/15 ${
                 tab==='saved' ? 'text-[#06231f] teal-grad' : 'bg-white/10 text-white hover:bg-white/20'
@@ -3066,7 +3094,7 @@ export default function App() {
       </main>
 
       {/* ── Bottom Navigation ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10" style={{maxWidth:680,margin:'0 auto',background:'rgba(13,20,33,0.78)',backdropFilter:'saturate(180%) blur(24px)',WebkitBackdropFilter:'saturate(180%) blur(24px)',boxShadow:'0 -10px 36px rgba(0,0,0,0.45)'}}>
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10" style={{maxWidth:680,margin:'0 auto',background:'var(--float)',backdropFilter:'saturate(180%) blur(24px)',WebkitBackdropFilter:'saturate(180%) blur(24px)',boxShadow:'var(--nav-shadow)'}}>
         <div className="flex" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
           {TABS.map(({id,label,Icon})=>{
             const active = tab===id;
