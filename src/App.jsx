@@ -1080,7 +1080,12 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] leading-tight truncate">{spot.name}</h3>
-        <div className="flex items-center gap-1.5 mt-1 text-[11.5px] text-[rgba(234,241,248,0.55)]">
+        {spot.near && (
+          <div className="flex items-center gap-1 mt-0.5 text-[11.5px] text-[rgba(234,241,248,0.55)] min-w-0">
+            <MapPin size={11} className="flex-shrink-0"/><span className="truncate">{spot.near}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5 mt-0.5 text-[11.5px] text-[rgba(234,241,248,0.55)]">
           <Clock size={11}/>{spot.walk}{spot.dist?` · ${spot.dist} mi`:''}
         </div>
         <div className="flex items-center gap-2 mt-2">
@@ -1670,7 +1675,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
 
         {/* Sheet header */}
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="font-display font-bold text-lg text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label.split(',')[0]}` : isSearching ? 'Results' : `Parking in ${cityName}`}</h2>
+          <h2 className="font-display font-bold text-lg text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label}` : isSearching ? 'Results' : 'Parking spots'}</h2>
           <span className="text-sm font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0">{filtered.length} spot{filtered.length!==1?'s':''}</span>
         </div>
 
@@ -1689,7 +1694,7 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
         {filtered.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3"><Search size={24} className="text-[rgba(234,241,248,0.3)]"/></div>
-            <p className="font-bold text-[#EAF1F8]">{citySpots.length===0?`No spots in ${cityName} yet`:'No spots found'}</p>
+            <p className="font-bold text-[#EAF1F8]">{citySpots.length===0?'No spots here yet':'No spots found'}</p>
             <p className="text-sm text-[rgba(234,241,248,0.5)] mt-1">{citySpots.length===0?'Be the first — tap Add Spot below.':'Try a fuller address or a different filter.'}</p>
             {citySpots.length>0 && <button onClick={()=>{clearSearch();setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#5BE7DA] font-semibold underline">Clear filters</button>}
           </div>
@@ -1804,19 +1809,19 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, cityName, on
       {fallback && (
         <div className="flex items-start gap-2 bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 text-[#5BE7DA] text-xs px-3.5 py-3 rounded-xl">
           <Info size={14} className="mt-0.5 flex-shrink-0"/>
-          <span>No community spots in <strong>{fallback}</strong> yet — showing the closest spots in Belfast. Know a good spot near you? Add it from the "Add Spot" tab and be the first!</span>
+          <span>No community spots in <strong>{fallback}</strong> yet — showing the closest spots we have. Know a good one near you? Add it from the "Add Spot" tab and be the first!</span>
         </div>
       )}
       <div ref={mapRef}>
         <ParkingMap spots={isPremium ? nearby : nearby.filter(s=>!isGated(s))} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240} selectedId={focusSpot?.id}/>
       </div>
       <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-[#EAF1F8]">{nearby.length ? `${(isPremium?nearby:nearby.filter(s=>!isGated(s))).length} closest spots in ${cityName}` : `No spots near you yet`}</p>
+        <p className="text-sm font-bold text-[#EAF1F8]">{nearby.length ? `${(isPremium?nearby:nearby.filter(s=>!isGated(s))).length} spots near you` : `No spots near you yet`}</p>
         <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);setFallback(null);}} className="text-xs text-[#5BE7DA] font-semibold">Refresh</button>
       </div>
       {nearby.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-sm text-[#6b7d96] max-w-xs mx-auto leading-relaxed">No community spots in {cityName} yet — be the first to add one from the "Add Spot" tab!</p>
+          <p className="text-sm text-[#6b7d96] max-w-xs mx-auto leading-relaxed">No community spots here yet — be the first to add one from the "Add Spot" tab!</p>
         </div>
       )}
       <div className="space-y-4">
@@ -3027,7 +3032,7 @@ export default function App() {
           <div className="relative">
             <h1 className="font-display text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
             <p className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium">
-              {currentCity.name} · {citySpots.length} spot{citySpots.length!==1?'s':''}
+              Northern Ireland · {ALL_SPOTS.length} spots
             </p>
           </div>
 
