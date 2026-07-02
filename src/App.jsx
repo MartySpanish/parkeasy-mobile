@@ -1863,6 +1863,9 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">Find parking</h1>
         </div>
         {searchBlock}
+        <div className="px-4 pt-3">
+          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id}/>
+        </div>
         <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
           <p className="text-[12.5px] text-[rgba(234,241,248,0.5)] font-semibold"><strong className="text-[#EAF1F8]">{filtered.length}</strong> spot{filtered.length!==1?'s':''}{geo?` near ${geo.label.split(',')[0]}`:''}</p>
           <div className="relative">
@@ -3277,14 +3280,14 @@ export default function App() {
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'linear-gradient(135deg, #54E6D8 0%, #2ED3C6 100%)', boxShadow:'0 4px 16px rgba(46,211,198,0.5)'}}>
             <MapPin size={20} className="text-[#06231f]" strokeWidth={2.6}/>
           </div>
-          <div className="relative">
-            <h1 className="font-display text-white font-extrabold text-base leading-tight tracking-tight">ParkEasy</h1>
-            <p className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium">
+          <div className="relative min-w-0 flex-1">
+            <h1 className="font-display text-white font-extrabold text-[15px] leading-tight tracking-tight whitespace-nowrap">ParkEasy</h1>
+            <p className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium truncate whitespace-nowrap">
               Northern Ireland · {ALL_SPOTS.length} spots
             </p>
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1 flex-shrink-0">
             <button aria-label="Toggle light or dark theme" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}
               className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/15 bg-white/10 text-white hover:bg-white/20">
               {theme==='dark' ? <Sun size={15}/> : <Moon size={15}/>}
@@ -3302,13 +3305,13 @@ export default function App() {
             </button>
             {!isStandalone && (
               <button onClick={()=>isIOS ? setShowIOSGuide(true) : handleInstall()}
-                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 flex items-center gap-1">
-                <Download size={11}/>Install
+                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 hidden min-[400px]:flex items-center gap-1">
+                <Download size={11}/><span className="hidden min-[430px]:inline">Install</span>
               </button>
             )}
             {!isPremium && (
               <button onClick={()=>setShowPricing(true)}
-                className="text-[11px] text-[#06231f] px-2.5 py-1.5 rounded-full font-bold active:scale-95 transition-all btn-teal">
+                className="text-[11px] text-[#06231f] px-2 py-1.5 rounded-full font-bold active:scale-95 transition-all btn-teal whitespace-nowrap">
                 ★ Premium
               </button>
             )}
@@ -3322,7 +3325,7 @@ export default function App() {
               </button>
             ) : (
               <button onClick={()=>setShowWelcome(true)}
-                className="text-[11px] bg-white/10 text-white px-3 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15">
+                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 whitespace-nowrap">
                 Sign in
               </button>
             )}
