@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -1287,6 +1287,97 @@ const ParkBar = ({ session, now, onOpen, onEnd }) => {
 };
 
 
+// ── Fleadh Cheoil 2026 event parking (source: Belfast City Council, 16 Jun 2026)
+const FLEADH = {
+  on: Date.now() < new Date('2026-08-13T00:00:00').getTime(),
+  zone: [ // indicative pedestrianised zone — north of City Hall incl. Smithfield & Cathedral Quarter
+    [54.6045,-5.9370],[54.6055,-5.9305],[54.6050,-5.9255],[54.6015,-5.9235],
+    [54.5975,-5.9245],[54.5978,-5.9310],[54.5990,-5.9360],
+  ],
+  pr: [
+    { name:'Park & Ride — Eikon Exhibition Centre', note:'Close to the M1 · £10/day · free shuttle to Grand Central / Laganside', lat:54.4867, lng:-6.1094 },
+    { name:"Park & Ride — Giant's Park", note:'Close to the M2 · £10/day · free shuttle to Grand Central / Laganside', lat:54.6360, lng:-5.9180 },
+    { name:'Park & Ride — Belfast Harbour', note:'Near the M3 · £10/day · free shuttle to Grand Central / Laganside', lat:54.6170, lng:-5.9220 },
+  ],
+  camps: [
+    { name:'Titanic camp', lat:54.6050, lng:-5.9090 },
+    { name:'Ormeau camp', lat:54.5905, lng:-5.9105 },
+    { name:'Falls camp', lat:54.5852, lng:-5.9705 },
+  ],
+  walkIns: [25, 43, 46, 36], // good spots just outside the closed zone
+};
+
+const EventBanner = ({ onOpen }) => !FLEADH.on ? null : (
+  <button onClick={onOpen} className="w-full flex items-center gap-3 text-left rounded-2xl px-3.5 py-3 mb-3 active:scale-[0.985] transition"
+    style={{background:'linear-gradient(135deg, rgba(201,167,255,0.15), rgba(91,231,218,0.10))', border:'1px solid rgba(201,167,255,0.35)'}}>
+    <span className="text-xl">🎻</span>
+    <span className="flex-1 min-w-0">
+      <span className="block font-display font-bold text-[13.5px] text-[#EAF1F8]">Fleadh Cheoil · 2–9 Aug</span>
+      <span className="block text-[11.5px] text-[#cdd9e8] mt-0.5">City centre roads closed — see event parking</span>
+    </span>
+    <ChevronRight size={16} className="text-[#C9A7FF] flex-shrink-0"/>
+  </button>
+);
+
+const prPin = () => L.divIcon({ className:'', html:`<div style="padding:4px 9px;border-radius:999px;font:700 12px/1 Manrope,system-ui,sans-serif;color:#06231f;background:linear-gradient(135deg,#54E6D8,#2ED3C6);border:1px solid rgba(255,255,255,0.5);box-shadow:0 6px 16px rgba(0,0,0,0.45);white-space:nowrap">P+R</div>`, iconSize:[40,22], iconAnchor:[20,11] });
+const campPin = (label) => L.divIcon({ className:'', html:`<div style="padding:4px 9px;border-radius:999px;font:700 11px/1 Manrope,system-ui,sans-serif;color:#C9A7FF;background:rgba(16,24,40,0.92);border:1px solid rgba(201,167,255,0.5);box-shadow:0 6px 16px rgba(0,0,0,0.45);white-space:nowrap">⛺ ${label}</div>`, iconSize:[70,22], iconAnchor:[35,11] });
+
+const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot }) => {
+  const walkIns = FLEADH.walkIns.map(id => ALL_SPOTS.find(s => s.id === id)).filter(Boolean);
+  return (
+    <div className="fixed inset-0 z-[65] flex flex-col overflow-auto" style={{background:'var(--bg-solid)'}}>
+      <div className="relative h-56 flex-shrink-0">
+        <MapContainer center={[54.606,-5.928]} zoom={12} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} dragging={false} attributionControl={false}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+          <Polygon positions={FLEADH.zone} pathOptions={{color:'#FF7A7A',weight:2,dashArray:'6 6',fillColor:'#FF5C5C',fillOpacity:0.16}}/>
+          {FLEADH.pr.slice(1).map((p,i)=>(<Marker key={i} position={[p.lat,p.lng]} icon={prPin()}/>))}
+          {FLEADH.camps.map((c,i)=>(<Marker key={'c'+i} position={[c.lat,c.lng]} icon={campPin(c.name)}/>))}
+        </MapContainer>
+        <button onClick={onClose} aria-label="Back" className="absolute top-3 left-3 z-[600] w-10 h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white backdrop-blur"><X size={18}/></button>
+      </div>
+      <div className="relative -mt-6 rounded-t-[28px] px-5 pt-3 pb-10 flex-1" style={{background:'var(--sheet)', border:'1px solid var(--hairline)', borderBottom:'none', maxWidth:680, width:'100%', margin:'-24px auto 0'}}>
+        <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
+        <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">Event parking</p>
+        <h2 className="font-display font-extrabold text-2xl text-[#EAF1F8] mt-1">Fleadh Cheoil 2026</h2>
+        <div className="flex items-center gap-1.5 mt-1.5 text-[13px] text-[#8da2bd]"><Clock size={14}/>Sun 2 – Sun 9 Aug · ~800,000 visitors expected</div>
+        <span className="inline-block mt-3 text-[11px] font-extrabold px-2.5 py-1 rounded-full" style={{color:'#FF8A8A', border:'1px solid rgba(255,122,122,0.4)', background:'rgba(255,92,92,0.12)'}}>Roads closed 6am 2 Aug → 5am 10 Aug</span>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3.5 text-[11.5px] font-semibold text-[#cdd9e8]">
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{background:'rgba(255,92,92,0.7)'}}/>Pedestrianised zone (indicative)</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{background:'#34E0A0'}}/>Park &amp; Ride</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{background:'rgba(201,167,255,0.9)'}}/>Campsites</span>
+        </div>
+        <div className="mt-3.5 text-[13.5px] leading-relaxed text-[#cdd9e8] bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5">
+          <strong className="text-[#EAF1F8]">Don&rsquo;t drive into the city centre.</strong> The centre — including Smithfield and the Cathedral Quarter — is pedestrianised for the week. Most city-centre car parks stay open, but expect diversions and heavy traffic. Deliveries only 4–8am. The red zone is indicative — check the official map at belfastcity.gov.uk/fleadh.
+        </div>
+        <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5">Official Park &amp; Ride · £10/day</h3>
+        {FLEADH.pr.map((p,i)=>(
+          <div key={i} className="flex items-center gap-3 rounded-2xl px-3.5 py-3 mt-2.5 bg-white/5 border border-white/10">
+            <div className="flex-1 min-w-0">
+              <p className="font-display font-bold text-[14px] text-[#EAF1F8]">{p.name}</p>
+              <p className="text-[12px] text-[#8da2bd] mt-0.5 leading-snug">{p.note}</p>
+            </div>
+            <a href={directionsUrl(p.lat,p.lng)} target="_blank" rel="noreferrer" aria-label={`Directions to ${p.name}`}
+              className="w-10 h-10 rounded-full teal-grad text-[#06231f] flex items-center justify-center flex-shrink-0 active:scale-95 transition"><Navigation size={17}/></a>
+          </div>
+        ))}
+        <div className="mt-3.5 text-[13px] leading-relaxed text-[#cdd9e8] bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5">
+          Pre-booking opens <strong className="text-[#EAF1F8]">Mon 6 July</strong> at fleadhcheoil.ie/travel — strongly advised. Free accessible shuttles run to Grand Central Station and Laganside. Blue badge holders get allocated disabled parking when pre-booking.
+        </div>
+        <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2.5">Good walk-in spots (outside the zone)</h3>
+        <div className="space-y-3">
+          {walkIns.map(s=>(
+            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
+          ))}
+        </div>
+        <a href="https://fleadhcheoil.ie/travel" target="_blank" rel="noreferrer"
+          className="mt-5 w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[15px] text-[#06231f] btn-teal active:scale-95 transition">
+          <Navigation size={17}/>Official travel info
+        </a>
+      </div>
+    </div>
+  );
+};
+
 // ── Map helpers ───────────────────────────────────────────────────────────────
 const RecenterMap = ({ center, zoom }) => {
   const map = useMap();
@@ -1409,7 +1500,7 @@ const isGated = (spot) =>
   spot.premium === true ||
   (['free','hidden_gem'].includes(spot.badge) && (spot.id % 4 !== 0));
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot, onCityDetected }) => {
+const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot, onCityDetected, onEvent }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -1652,6 +1743,9 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
       {/* ── Bottom sheet ── */}
       <div className="relative z-[6] -mt-5 rounded-t-[24px] px-4 pt-3 pb-6" style={{background:'var(--sheet)',boxShadow:'var(--sheet-shadow)'}}>
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
+
+        {/* Event parking banner */}
+        {!isSearching && onEvent && <EventBanner onOpen={onEvent}/>}
 
         {/* Location banners */}
         {!geo && !geoBusy && query.trim() && (
@@ -2838,6 +2932,7 @@ export default function App() {
   const [showSession,    setShowSession]    = useState(false);
   const [nowTs,          setNowTs]          = useState(()=>Date.now());
   const [theme,          setTheme]          = useState(()=>ls.get('pe_theme', 'dark'));
+  const [showEvent,      setShowEvent]      = useState(false);
 
   // Apply the theme to the document root and keep the browser chrome colour
   // in sync so the status bar matches in both modes.
@@ -3008,6 +3103,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'var(--app-grad)'}}>
       {/* ── Modals ── */}
+      {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={setDetailSpot}/>}
       {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
@@ -3090,7 +3186,7 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot} onCityDetected={changeCity}/>}
+        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
         {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
