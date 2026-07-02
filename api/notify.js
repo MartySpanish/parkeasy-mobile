@@ -39,7 +39,7 @@ export default async function handler(req, res) {
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; }
   }
-  const { type = 'contact', ...data } = body || {};
+  const { type = 'contact', photoData, ...data } = body || {};
   const tpl = (TEMPLATES[type] || TEMPLATES.contact)(data);
 
   const rowsHtml = tpl.rows
@@ -56,7 +56,13 @@ export default async function handler(req, res) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to: [TO], subject: tpl.subject, html, reply_to: data.email || undefined }),
+      body: JSON.stringify({
+        from: FROM, to: [TO], subject: tpl.subject, html, reply_to: data.email || undefined,
+        // Spot-verification photo (compressed client-side) rides along as an attachment
+        attachments: (typeof photoData === 'string' && photoData.startsWith('data:image/') && photoData.length < 900000)
+          ? [{ filename: 'spot-photo.jpg', content: photoData.split(',')[1] }]
+          : undefined,
+      }),
     });
     if (!r.ok) {
       const detail = await r.text().catch(() => '');

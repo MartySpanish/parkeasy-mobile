@@ -90,9 +90,9 @@ const VIP_CODE = 'PARKEASY-VIP';
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
 const SPOTS = [
-  { id:1,  name:'Directly outside — Gransha Grill',   near:'Gransha Grill',    tags:['gransha grill','gransha road'],                                          badge:'free',       dist:0.00, walk:'Right outside', restriction:'No restrictions',              notes:'Park right outside the door — 2–3 cars fit easily. Free all day, no signage spotted.', lat:54.5825, lng:-5.9758, by:'GranshaLocal',        votes:61, photo:null, price:null,      spaces:3    },
-  { id:2,  name:'Gransha Road Lay-by (north side)',    near:'Gransha Grill',    tags:['gransha grill','gransha road'],                                          badge:'free',       dist:0.04, walk:'1 min',          restriction:'Free all day',                 notes:'Wider lay-by fits 4+ cars, 1 min walk back. Locals use this daily — never seen a warden.', lat:54.5830, lng:-5.9762, by:'RegularDiner',        votes:44, photo:null, price:null,      spaces:5    },
-  { id:3,  name:'Side road off Gransha Road',          near:'Gransha Grill',    tags:['gransha grill','gransha'],                                              badge:'hidden_gem', dist:0.07, walk:'2 min',          restriction:'Evenings & weekends fine',     notes:'Quiet residential street, no wardens ever spotted. Walk right back to the Grill.', lat:54.5835, lng:-5.9768, by:'ParkingPro_BT',      votes:29, photo:null,                                                                                          price:null,      spaces:8    },
+  { id:1,  name:'Directly outside — Gransha Grill',   near:'Gransha Grill',    tags:['gransha grill','gransha road','turf lodge','gransha park'],                                          badge:'free',       dist:0.00, walk:'Right outside', restriction:'No restrictions',              notes:'Park right outside the door — 2–3 cars fit easily. Free all day, no signage spotted.', lat:54.5901, lng:-5.9942, by:'GranshaLocal',        votes:61, photo:null, price:null,      spaces:3    },
+  { id:2,  name:'Gransha Road Lay-by (north side)',    near:'Gransha Grill',    tags:['gransha grill','gransha road','turf lodge','gransha park'],                                          badge:'free',       dist:0.04, walk:'1 min',          restriction:'Free all day',                 notes:'Wider lay-by fits 4+ cars, 1 min walk back. Locals use this daily — never seen a warden.', lat:54.5908, lng:-5.9950, by:'RegularDiner',        votes:44, photo:null, price:null,      spaces:5    },
+  { id:3,  name:'Side road off Gransha Road',          near:'Gransha Grill',    tags:['gransha grill','gransha','turf lodge','gransha park'],                                              badge:'hidden_gem', dist:0.07, walk:'2 min',          restriction:'Evenings & weekends fine',     notes:'Quiet residential street, no wardens ever spotted. Walk right back to the Grill.', lat:54.5896, lng:-5.9928, by:'ParkingPro_BT',      votes:29, photo:null,                                                                                          price:null,      spaces:8    },
   { id:4,  name:'Trailhead gravel area',               near:'Black Mountain',   tags:['black mountain','black mountain walk','hiking'],                        badge:'free',       dist:0.00, walk:'Trail start',    restriction:'Free all day',                 notes:"Gets busy weekends — arrive before 10am or you'll be circling. Gravel surface, 15–20 cars.", lat:54.6198, lng:-6.0225, by:'HikerBelfast',       votes:88, photo:null, price:null,      spaces:20   },
   { id:5,  name:'Hannahstown Hill roadside verge',     near:'Black Mountain',   tags:['black mountain','black mountain walk','hannahstown'],                   badge:'hidden_gem', dist:0.25, walk:'~5 min',         restriction:'No restrictions',              notes:'Wide verge fits 6+ easily. Better than the main area on busy days — most tourists miss it.', lat:54.6175, lng:-6.0190, by:'DogWalkerDermot',   votes:52, photo:null, price:null,      spaces:7    },
   { id:6,  name:'Whiterock Road lay-by',               near:'Black Mountain',   tags:['black mountain','black mountain walk','whiterock'],                     badge:'free',       dist:0.38, walk:'~8 min',         restriction:'Free all day',                 notes:'Alternative start point, less crowded. Walk up through Whiterock — great views on the way.', lat:54.6150, lng:-6.0150, by:'Springfield_Regular',votes:31, photo:null,                                                                                          price:null,      spaces:6    },
@@ -544,7 +544,7 @@ const WELCOME_STATS = [
 
 const BUSINESSES = [
   { id:1,  name:"Tommy's Barber",       area:'Glen Road',         addr:'245 Glen Road, West Belfast BT11',    cat:'Barber',         icon:'✂️',  key:'glen road barber',   lat:54.5935, lng:-6.0012 },
-  { id:2,  name:'Gransha Grill',        area:'Hannahstown',       addr:'Gransha Road, BT17',                  cat:'Restaurant',     icon:'🍽️',  key:'gransha grill',      lat:54.5825, lng:-5.9758 },
+  { id:2,  name:'Gransha Grill',        area:'Hannahstown',       addr:'Gransha Road, BT17',                  cat:'Restaurant',     icon:'🍽️',  key:'gransha grill',      lat:54.5901, lng:-5.9942 },
   { id:3,  name:'West Belfast Fitness', area:'Falls Road',        addr:'Falls Road, West Belfast BT12',       cat:'Gym',            icon:'💪',  key:'falls road',         lat:54.5965, lng:-5.9720 },
   { id:4,  name:'The Felons Club',      area:'Andersonstown',     addr:'Andersonstown Road, BT11',            cat:'Social Club',    icon:'🍺',  key:'falls road',         lat:54.5870, lng:-5.9870 },
   { id:5,  name:"Roma's Pizza",         area:'Andersonstown',     addr:'Andersonstown Road, BT11',            cat:'Restaurant',     icon:'🍕',  key:'falls road',         lat:54.5875, lng:-5.9875 },
@@ -594,21 +594,42 @@ const nearestCity = (lat, lng) => {
   return best;
 };
 
-const isFreeNow = (spot) => {
-  if (['free','hidden_gem'].includes(spot.badge)) return null;
+// Time-aware "Free right now" engine (per merge brief, ported verbatim).
+const isSpotFree = (s) => !s.price;
+function parseWindow(r){
+  if(!r) return null;
+  const days=/Mon\s*[–—-]\s*Sat/i.test(r)?[1,6]:/Mon\s*[–—-]\s*Fri/i.test(r)?[1,5]:null;
+  const t=r.match(/(\d{1,2})(?::(\d{2}))?\s*([ap]m)\s*[–—-]\s*(\d{1,2})(?::(\d{2}))?\s*([ap]m)/i);
+  if(!days||!t) return null;
+  const h=(n,mn,ap)=>{let x=(+n)%12;if(/pm/i.test(ap))x+=12;return x+(mn?+mn/60:0);};
+  return {d0:days[0],d1:days[1],h0:h(t[1],t[2],t[3]),h1:h(t[4],t[5],t[6])};
+}
+function isFreeNow(s){
+  if(s.badge==='official') return isSpotFree(s);
+  const w=parseWindow(s.restriction);
+  if(!w) return isSpotFree(s);
+  const n=new Date(),d=n.getDay(),hr=n.getHours()+n.getMinutes()/60;
+  return !(d>=w.d0&&d<=w.d1&&hr>=w.h0&&hr<w.h1);
+}
+
+// Spot-type badge pills (semantic accents from the approved reference).
+const TYPE_BADGES = {
+  free:       { label:'Free',           c:'#34E0A0' },
+  hidden_gem: { label:'✨ Hidden gem',  c:'#C9A7FF' },
+  timed:      { label:'Timed',          c:'#FFC24B' },
+  paid:       { label:'Pay & Display',  c:'#FF9D4B' },
+  official:   { label:'Car park',       c:'#7CC4FF' },
+};
+const TypeBadge = ({ badge }) => {
+  const b = TYPE_BADGES[badge]; if (!b) return null;
+  return <span className="inline-flex items-center text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
+    style={{color:b.c, border:`1px solid ${b.c}59`, background:`${b.c}1a`}}>{b.label}</span>;
+};
+const FreeNowBadge = ({ spot }) => {
   if (spot.badge === 'official') return null;
-  const r = (spot.restriction||'').toLowerCase();
-  if (r.includes('24/7')||r.includes('no restrict')||r.includes('unrestrict')) return null;
-  const now = new Date();
-  const day = now.getDay();
-  const h = now.getHours() + now.getMinutes()/60;
-  const monSat = r.includes('mon')&&r.includes('sat');
-  const monFri = r.includes('mon')&&r.includes('fri');
-  const restrictedToday = monSat ? day>=1&&day<=6 : monFri ? day>=1&&day<=5 : true;
-  if (!restrictedToday) return true;
-  const m = r.match(/(\d+)am[–\-](\d+)pm/);
-  if (m) { const s=parseInt(m[1]), e=parseInt(m[2])+12; if (h<s||h>=e) return true; }
-  return false;
+  if (!isSpotFree(spot) && isFreeNow(spot)) return <span className="inline-flex items-center text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap" style={{color:'#34E0A0',border:'1px solid rgba(52,224,160,0.35)',background:'rgba(52,224,160,0.10)'}}>Free right now</span>;
+  if (!isFreeNow(spot)) return <span className="inline-flex items-center text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap" style={{color:'#FFC24B',border:'1px solid rgba(255,194,75,0.35)',background:'rgba(255,194,75,0.10)'}}>Restrictions now</span>;
+  return null;
 };
 
 const directionsUrl = (lat, lng) => {
@@ -678,7 +699,9 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
 
   const submit = async (e) => {
     e.preventDefault();
-    setError(''); setNotice(''); setLoading(true);
+    setError(''); setNotice('');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) { setError('Please enter a valid email address.'); return; }
+    setLoading(true);
 
     // Fallback: real accounts not configured yet → keep the simple
     // "remember me on this device" behaviour so the app still works.
@@ -811,6 +834,7 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
           <button onClick={onSkip} className="w-full text-center text-xs text-[#6b7d96] hover:text-[#aebfd4] py-1 transition-colors">
             Browse without an account
           </button>
+          <p className="text-center text-[10.5px] text-[#6b7d96] leading-relaxed">Free, no spam — we only use your email for your account and spot updates.</p>
         </div>
       </div>
     </div>
@@ -1123,22 +1147,22 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   const ring = spot.available!=null && spot.total ? spot.available/spot.total : occ.pct;
   const C = 2*Math.PI*26; const off = C*(1-Math.max(0.05,Math.min(1,ring)));
   const amen = amenitiesOf(spot);
-  const share=async()=>{ const url='https://parkeasy.uk/'; const text=`${spot.name} — ${(spot.notes||'').slice(0,90)}`; if(navigator.share){try{await navigator.share({title:'ParkEasy',text,url});}catch{}}else{navigator.clipboard?.writeText(`${spot.name}\n${url}`);setShareDone(true);setTimeout(()=>setShareDone(false),2000);} };
-  const heroImg = spot.photo || (GOOGLE_MAPS_KEY ? spotImageUrl(spot.lat, spot.lng) : null);
+  const share=async()=>{ const url=location.origin+location.pathname+'#s='+spot.id; const text=`${spot.name} — ${(spot.notes||'').slice(0,90)}`; if(navigator.share){try{await navigator.share({title:'ParkEasy',text,url});}catch{}}else{navigator.clipboard?.writeText(url);setShareDone(true);setTimeout(()=>setShareDone(false),2000);} };
   return (
     <div className="fixed inset-0 z-[70] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.6)'}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] overflow-hidden animate-fade-in-up" style={{maxWidth:680,width:'100%',margin:'0 auto',maxHeight:'92vh',background:'var(--sheet)',borderTop:'1px solid var(--hairline)',boxShadow:'var(--sheet-shadow)'}}>
-        <div className="relative h-40 flex items-end" style={{background:theme.grad}}>
-          {heroImg
-            ? <img src={heroImg} alt={spot.name} className="absolute inset-0 w-full h-full object-cover" onError={e=>{e.currentTarget.style.display='none';}}/>
-            : <><div className="absolute inset-0 opacity-[0.18]" style={{backgroundImage:'radial-gradient(circle at 1px 1px, white 1.5px, transparent 0)',backgroundSize:'15px 15px'}}/><Car size={120} strokeWidth={1.1} className="absolute -right-4 -bottom-5 text-white/20"/></>}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent pointer-events-none"/>
-          <button onClick={onClose} className="absolute top-3 left-3 w-9 h-9 rounded-full bg-black/40 border border-white/20 flex items-center justify-center text-white backdrop-blur"><X size={16}/></button>
-          <button onClick={()=>onSave(spot.id)} className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center ${saved?'bg-white text-[#06231f]':'bg-black/40 border border-white/20 text-white backdrop-blur'}`}><Bookmark size={15} fill={saved?'#06231f':'none'}/></button>
+        <div className="relative h-44">
+          <MapContainer key={spot.id} center={[spot.lat,spot.lng]} zoom={15} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+            <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
+          </MapContainer>
+          <button onClick={onClose} aria-label="Back" className="absolute top-3 left-3 z-[600] w-10 h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white backdrop-blur"><X size={17}/></button>
+          <button onClick={()=>onSave(spot.id)} aria-label={saved?'Remove from saved':'Save spot'} className={`absolute top-3 right-3 z-[600] w-10 h-10 rounded-full flex items-center justify-center ${saved?'bg-white text-[#06231f]':'bg-black/50 border border-white/20 text-white backdrop-blur'}`}><Bookmark size={16} fill={saved?'#06231f':'none'}/></button>
         </div>
         <div className="overflow-auto p-5" style={{maxHeight:'calc(92vh - 112px)'}}>
           <h2 className="font-display font-bold text-2xl text-[#EAF1F8] leading-tight">{spot.name}</h2>
           <div className="flex items-center gap-1.5 mt-1.5 text-sm text-[rgba(234,241,248,0.55)]"><MapPin size={14}/>{spot.near}</div>
+          <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/></div>
           <div className="flex items-center gap-4 mt-4 p-4 rounded-2xl bg-white/5 border border-white/10">
             <div className="relative w-16 h-16 flex-shrink-0">
               <svg width="64" height="64" viewBox="0 0 64 64">
@@ -1148,15 +1172,13 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               <div className="absolute inset-0 flex items-center justify-center font-display font-extrabold text-[#EAF1F8]">{spot.available!=null?spot.available:(spot.spaces!=null?spot.spaces:'✓')}</div>
             </div>
             <div className="flex-1">
-              <div className="font-bold text-[#EAF1F8]">{occ.label}{spot.total?` of ${spot.total}`:''}</div>
-              <div className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5">{spot.restriction}</div>
+              <div className="font-bold text-[#EAF1F8]">{(spot.available??spot.spaces)!=null ? `${spot.available??spot.spaces} spaces typically free` : 'Usually has space'}</div>
+              <div className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5">{spot.total?`of ${spot.total} · `:''}community estimate</div>
             </div>
-            {spot.available!=null && spot.total && (
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#34E0A0]/12 border border-[#34E0A0]/30 flex-shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#34E0A0]" style={{boxShadow:'0 0 8px #34E0A0'}}/>
-                <span className="text-[10px] font-bold tracking-[0.15em] text-[#6BEFB9]">LIVE</span>
-              </span>
-            )}
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#34E0A0]/12 border border-[#34E0A0]/30 flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#34E0A0]" style={{boxShadow:'0 0 8px #34E0A0'}}/>
+              <span className="text-[10px] font-bold tracking-[0.15em] text-[#6BEFB9]">TYPICAL</span>
+            </span>
           </div>
           <div className="flex gap-3 mt-3">
             <div className="flex-1 p-3.5 rounded-2xl bg-white/5 border border-white/10">
@@ -1173,6 +1195,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               {amen.map(a=>(<span key={a} className="text-xs font-semibold text-[#cdd9e8] bg-white/6 border border-white/10 px-3 py-1.5 rounded-full">{a}</span>))}
             </div>
           )}
+          {spot.photo && <img src={spot.photo} alt={spot.name} className="w-full h-40 object-cover rounded-2xl mt-3.5 border border-white/10"/>}
           {spot.notes && <p className="text-sm text-[rgba(234,241,248,0.65)] leading-relaxed mt-4 italic border-l-[3px] border-[#2ED3C6] pl-3">{spot.notes}</p>}
           <div className="flex gap-3 mt-5">
             <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer" className="flex-1 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[#06231f] btn-teal active:scale-95 transition">
@@ -1401,8 +1424,8 @@ const pricePin = (spot, selected) => {
   });
 };
 
-const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId }) => (
-  <div style={{height}} className="rounded-2xl overflow-hidden border border-white/10 shadow-sm">
+const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat }) => (
+  <div style={{height}} className={flat ? 'overflow-hidden border-y border-white/10' : 'rounded-2xl overflow-hidden border border-white/10 shadow-sm'}>
     <MapContainer center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -1432,7 +1455,8 @@ const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId }) => (
 // Filter chips match the approved design: All · Cheapest · Covered · EV.
 const BADGE_FILTERS = [
   { id:'all',      label:'All' },
-  { id:'cheapest', label:'Cheapest' },
+  { id:'freenow',  label:'Free now' },
+  { id:'free',     label:'Free' },
   { id:'covered',  label:'Covered' },
   { id:'ev',       label:'EV' },
 ];
@@ -1450,18 +1474,24 @@ const isCovered = (s) => {
 };
 // Apply a chip filter (not the sort) to a spot list.
 const applyChip = (arr, chip) => {
+  if (chip === 'freenow') return arr.filter(isFreeNow);
+  if (chip === 'free')    return arr.filter(isSpotFree);
   if (chip === 'covered') return arr.filter(isCovered);
   if (chip === 'ev')      return arr.filter(s => s.ev?.available);
-  return arr; // 'all' and 'cheapest' don't remove rows ('cheapest' only re-sorts)
+  return arr;
 };
 
 const SORT_OPTIONS_FREE    = [
   { id:'popular', label:'Most Popular' },
+  { id:'cheap',   label:'Cheapest' },
+  { id:'spaces',  label:'Most spaces' },
   { id:'free',    label:'Free First' },
   { id:'alpha',   label:'A–Z' },
 ];
 const SORT_OPTIONS_PREMIUM = [
   { id:'popular',  label:'Most Popular' },
+  { id:'cheap',    label:'Cheapest' },
+  { id:'spaces',   label:'Most spaces' },
   { id:'free',     label:'Free First' },
   { id:'distance', label:'📍 Nearest' },
   { id:'alpha',    label:'A–Z' },
@@ -1500,7 +1530,70 @@ const isGated = (spot) =>
   spot.premium === true ||
   (['free','hidden_gem'].includes(spot.badge) && (spot.id % 4 !== 0));
 
-const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot, onCityDetected, onEvent }) => {
+// ── Sheet row (map screen): price chip | name + caption | availability dot ──
+const RowItem = ({ spot, isPremium, onUpgrade, onOpen }) => {
+  if (spot.premium && !isPremium) return (
+    <button onClick={onUpgrade} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
+      <div className="min-w-[56px] h-[46px] rounded-[13px] flex items-center justify-center bg-[#2ED3C6]/12 border border-[#2ED3C6]/25 text-lg">💎</div>
+      <div className="flex-1 min-w-0"><p className="text-[14.5px] font-bold text-[#EAF1F8]">Premium spot</p><p className="text-xs text-[rgba(234,241,248,0.5)]">Tap to unlock this hidden gem</p></div>
+      <span className="text-[#5BE7DA] text-xs font-bold flex-shrink-0">Unlock ★</span>
+    </button>
+  );
+  const occ = occupancyOf(spot); const pr = priceParts(spot); const free = isSpotFree(spot);
+  const occCls = occ.color==='#FFD27A' ? 'text-[#FFD27A]' : 'text-[#6BEFB9]';
+  const n = spot.available ?? spot.spaces;
+  const availTxt = n != null ? `${n} ${free ? 'spaces' : 'free'}` : 'Available';
+  return (
+    <button onClick={()=>onOpen?.(spot)} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-2xl text-left active:bg-white/5 transition border-b border-white/5 last:border-0">
+      <div className={`min-w-[56px] h-[46px] px-2 rounded-[13px] flex items-center justify-center font-display font-extrabold text-[13.5px] flex-shrink-0 ${free ? 'text-[#5BE7DA] bg-[#2ED3C6]/12 border border-[#2ED3C6]/25' : 'text-[#EAF1F8] bg-white/5 border border-white/12'}`}>{pr.big}</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[14.5px] font-bold text-[#EAF1F8] truncate">{spot.badge==='hidden_gem'?'✨ ':''}{spot.name}</p>
+        <p className="flex items-center gap-1.5 text-[12px] text-[rgba(234,241,248,0.5)] mt-0.5 truncate"><Clock size={12} className="flex-shrink-0"/>{spot.walk}{spot.dist?` · ${spot.dist} mi`:''}</p>
+      </div>
+      <span className={`flex items-center gap-1.5 text-[12.5px] font-bold flex-shrink-0 ${occCls}`}><span className="w-[7px] h-[7px] rounded-full" style={{background:occ.color}}/>{availTxt}</span>
+    </button>
+  );
+};
+
+// ── List card (search screen): name/price top row, badges, availability bar ──
+const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
+  if (spot.premium && !isPremium) return (
+    <button onClick={onUpgrade} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
+      <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">💎</div>
+      <div className="flex-1"><p className="font-bold text-[#EAF1F8] text-sm">Premium spot</p><p className="text-xs text-[rgba(234,241,248,0.5)]">Tap to unlock this hidden gem</p></div>
+      <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal">Unlock ★</span>
+    </button>
+  );
+  const occ = occupancyOf(spot); const pr = priceParts(spot); const free = isSpotFree(spot);
+  const occCls = occ.color==='#FFD27A' ? 'text-[#FFD27A]' : 'text-[#6BEFB9]';
+  return (
+    <div onClick={()=>onOpen?.(spot)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter')onOpen?.(spot);}}
+      className="glass rounded-[22px] p-4 cursor-pointer active:scale-[0.985] transition">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-display font-bold text-[16px] text-[#EAF1F8] leading-tight">{spot.name}</h3>
+          <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] font-semibold mt-1 truncate">{spot.near}{spot.walk?` · ${spot.walk}`:''}{spot.dist?` · ${spot.dist} mi`:''}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="font-display font-extrabold text-[18px] whitespace-nowrap">
+            <span className={free?'text-[#5BE7DA]':'text-[#EAF1F8]'}>{pr.big}</span><span className="text-[11px] font-semibold text-[rgba(234,241,248,0.5)]">{pr.small}</span>
+          </div>
+          <span role="button" aria-label={saved?'Remove from saved spots':'Save this spot'} onClick={e=>{e.stopPropagation();onSave(spot.id);}}
+            className={`w-8 h-8 rounded-full flex items-center justify-center ${saved?'teal-grad':'bg-white/8 border border-white/12'}`}>
+            <Bookmark size={13} className={saved?'text-[#06231f]':'text-[rgba(234,241,248,0.6)]'} fill={saved?'#06231f':'none'}/>
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/></div>
+      <div className="flex items-center gap-2.5 mt-3">
+        <div className="flex-1 h-[7px] rounded-full bg-white/10 overflow-hidden"><div style={{width:`${Math.round(occ.pct*100)}%`,background:occ.grad}} className="h-full rounded-full"/></div>
+        <span className={`text-[12px] font-bold whitespace-nowrap ${occCls}`}>{occ.label}</span>
+      </div>
+    </div>
+  );
+};
+
+const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot, onCityDetected, onEvent }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -1560,7 +1653,6 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
         .sort((a, b) => a._d - b._d);
       spots = applyChip(spots, badgeFilter);
       if (evOnly) spots = spots.filter(s => s.ev?.available);
-      if (badgeFilter === 'cheapest') spots = [...spots].sort((a,b)=>priceVal(a)-priceVal(b));
       return spots.slice(0, 25);
     }
 
@@ -1594,7 +1686,8 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
     }
 
     return [...spots].sort((a, b) => {
-      if (badgeFilter === 'cheapest') return priceVal(a) - priceVal(b);
+      if (sortBy === 'cheap') return priceVal(a) - priceVal(b);
+      if (sortBy === 'spaces') return ((b.available??b.spaces)||0) - ((a.available??a.spaces)||0);
       if (sortBy === 'popular') return b.votes - a.votes;
       if (sortBy === 'free') {
         const fa = ['free','hidden_gem'].includes(a.badge) ? 0 : 1;
@@ -1682,138 +1775,162 @@ const SearchTab = ({ saved, onSave, ratings, onRate, votes, onVote, isPremium, o
 
   const freeCount = citySpots.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
 
-  return (
-    <div className="relative">
-      {/* ── Map (dominant, with floating controls over it) ── */}
-      <div ref={mapRef} className="relative">
-        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={showMap ? 440 : 150} selectedId={focusSpot?.id}/>
-
-        {/* Floating search + chips */}
-        <div className="absolute top-3 left-3 right-3 z-[5] space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[rgba(234,241,248,0.6)] pointer-events-none"/>
-              <input ref={inputRef} aria-label="Search any address or place" value={query}
-                onChange={e=>onQueryChange(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
-                placeholder="Where are you headed?"
-                style={{background:'var(--float)',backdropFilter:'blur(18px) saturate(160%)',WebkitBackdropFilter:'blur(18px) saturate(160%)'}}
-                className="w-full pl-10 pr-10 py-3.5 rounded-full border border-white/18 text-sm text-[#EAF1F8] placeholder-[rgba(234,241,248,0.6)] shadow-lg focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60 transition"/>
-              {geoBusy && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/25 border-t-[#5BE7DA] rounded-full animate-spin"/>}
-              {!geoBusy && (query || geo) && (
-                <button aria-label="Clear search" onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white/15 rounded-full flex items-center justify-center text-[rgba(234,241,248,0.7)] hover:bg-white/25 transition"><X size={12}/></button>
-              )}
-              {/* Address / place autocomplete */}
-              {sugs.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl overflow-hidden z-[10]"
-                  style={{background:'var(--sheet)',border:'1px solid var(--hairline)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',boxShadow:'var(--pop-shadow)'}}>
-                  {sugs.map((s,i)=>(
-                    <button key={i} onClick={()=>pickSuggestion(s)}
-                      className="w-full text-left px-3.5 py-3 flex items-start gap-3 hover:bg-white/5 transition border-b border-white/5 last:border-0">
-                      <MapPin size={15} className="text-[#5BE7DA] mt-0.5 flex-shrink-0"/>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-[#EAF1F8] truncate">{s.label}</span>
-                        {s.sub && <span className="block text-xs text-[rgba(234,241,248,0.5)] truncate">{s.sub}</span>}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
-            {BADGE_FILTERS.map(f => (
-              <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
-                style={badgeFilter!==f.id?{background:'var(--float)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}:{}}
-                className={`text-sm px-4 py-1.5 rounded-full whitespace-nowrap font-bold flex-shrink-0 transition-all active:scale-95 shadow ${
-                  badgeFilter===f.id ? 'teal-grad text-[#06231f]' : 'border border-white/15 text-[#dbe4f0]'}`}>
-                {f.label}
+  // ── Shared search header (pill search → chips → event banner → notices) ──
+  const searchBlock = (
+    <div className="px-4 space-y-2.5">
+      <div className="relative">
+        <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-[rgba(234,241,248,0.5)] pointer-events-none"/>
+        <input ref={inputRef} aria-label="Search any address or place" value={query}
+          onChange={e=>onQueryChange(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
+          placeholder={mode==='map' ? 'Where are you headed?' : 'Street, postcode or place'}
+          className="w-full pl-11 pr-10 py-3.5 rounded-full border border-white/12 bg-white/[0.055] text-[15px] text-[#EAF1F8] placeholder-[rgba(234,241,248,0.5)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/50 transition"/>
+        {geoBusy && <span className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/25 border-t-[#5BE7DA] rounded-full animate-spin"/>}
+        {!geoBusy && (query || geo) && (
+          <button aria-label="Clear search" onClick={clearSearch} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-white/10 rounded-full flex items-center justify-center text-[rgba(234,241,248,0.7)] hover:bg-white/20 transition"><X size={12}/></button>
+        )}
+        {sugs.length > 0 && (
+          <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl overflow-hidden z-[20]"
+            style={{background:'var(--sheet)',border:'1px solid var(--hairline)',boxShadow:'var(--pop-shadow)'}}>
+            {sugs.map((s,i)=>(
+              <button key={i} onClick={()=>pickSuggestion(s)}
+                className="w-full text-left px-3.5 py-3 flex items-start gap-3 hover:bg-white/5 transition border-b border-white/5 last:border-0">
+                <MapPin size={15} className="text-[#5BE7DA] mt-0.5 flex-shrink-0"/>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-[#EAF1F8] truncate">{s.label}</span>
+                  {s.sub && <span className="block text-xs text-[rgba(234,241,248,0.5)] truncate">{s.sub}</span>}
+                </span>
               </button>
             ))}
           </div>
+        )}
+      </div>
+      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4">
+        {BADGE_FILTERS.map(f => (
+          <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
+            className={`text-[13.5px] px-4 py-2 rounded-full whitespace-nowrap font-bold flex-shrink-0 transition-all active:scale-95 ${
+              badgeFilter===f.id ? 'teal-grad text-[#06231f]' : 'bg-white/[0.05] border border-white/12 text-[#cdd9e8]'}`}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+      {onEvent && <EventBanner onOpen={onEvent}/>}
+      {!geo && !geoBusy && query.trim() && (
+        <button onClick={()=>doSearch(query)} className="w-full flex items-center gap-2 text-xs font-semibold text-[#5BE7DA] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 px-3.5 py-2.5 rounded-2xl hover:bg-[#2ED3C6]/15 transition">
+          <Navigation size={13}/> Find parking near &ldquo;{query.trim()}&rdquo; — press Enter
+        </button>
+      )}
+      {geo && (
+        <div className="flex items-start gap-2 bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 text-[#cdeef0] text-xs px-3.5 py-3 rounded-2xl">
+          <MapPin size={14} className="mt-0.5 flex-shrink-0 text-[#5BE7DA]"/>
+          <span className="flex-1">Nearest parking to <strong className="text-[#EAF1F8]">{geo.label}</strong>, closest first.</span>
+          <button onClick={clearSearch} className="font-bold underline whitespace-nowrap text-[#5BE7DA]">Clear</button>
         </div>
+      )}
+      {geoMiss && query.trim() && (
+        <div className="flex items-start gap-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 text-[#FFD27A] text-xs px-3.5 py-3 rounded-2xl">
+          <Info size={14} className="mt-0.5 flex-shrink-0"/>
+          <span>Couldn&rsquo;t find &ldquo;{query.trim()}&rdquo;. Showing keyword matches — try a fuller address.</span>
+        </div>
+      )}
+    </div>
+  );
 
-        {/* Locate me */}
+  const emptyState = (
+    <div className="text-center py-12">
+      <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3"><Search size={24} className="text-[rgba(234,241,248,0.3)]"/></div>
+      <p className="font-bold text-[#EAF1F8]">{citySpots.length===0?'No spots here yet':'No spots found'}</p>
+      <p className="text-sm text-[rgba(234,241,248,0.5)] mt-1">{citySpots.length===0?'Be the first — tap Add Spot below.':'Try a fuller address or a different filter.'}</p>
+      {citySpots.length>0 && <button onClick={()=>{clearSearch();setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#5BE7DA] font-semibold underline">Clear filters</button>}
+    </div>
+  );
+
+  const premiumTeaser = hiddenCount > 0 && (
+    <div onClick={onUpgrade} className="rounded-[22px] border-2 border-dashed border-[#2ED3C6]/40 bg-[#2ED3C6]/8 p-5 text-center cursor-pointer hover:bg-[#2ED3C6]/12 transition-colors">
+      <p className="text-2xl mb-1">💎</p>
+      <p className="font-bold text-[#EAF1F8] text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available with Premium</p>
+      <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">They&rsquo;re around here too — unlock Premium to reveal their exact locations</p>
+      <span className="inline-block text-[#06231f] text-xs font-bold px-4 py-2 rounded-full btn-teal">★ Unlock Premium</span>
+    </div>
+  );
+
+  // ── LIST mode (Search tab): kicker + heading, count + sort, full-width cards ──
+  if (mode === 'list') {
+    const sortLabel = SORT_OPTIONS.find(s=>s.id===sortBy)?.label || 'Sort';
+    return (
+      <div className="pb-6 pt-2">
+        <div className="px-4 pb-3">
+          <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">Northern Ireland</p>
+          <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">Find parking</h1>
+        </div>
+        {searchBlock}
+        <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
+          <p className="text-[12.5px] text-[rgba(234,241,248,0.5)] font-semibold"><strong className="text-[#EAF1F8]">{filtered.length}</strong> spot{filtered.length!==1?'s':''}{geo?` near ${geo.label.split(',')[0]}`:''}</p>
+          <div className="relative">
+            <button onClick={()=>setShowSort(v=>!v)} className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-full border border-white/12 bg-white/[0.05] text-[#cdd9e8] font-semibold hover:border-white/25 transition">
+              <Filter size={12}/>{sortLabel}
+            </button>
+            {showSort && (
+              <div className="absolute right-0 top-full mt-1 rounded-xl z-50 overflow-hidden w-40" style={{background:'var(--surface-solid)',border:'1px solid var(--hairline)',boxShadow:'var(--pop-shadow)'}}>
+                {SORT_OPTIONS.map(o=>(
+                  <button key={o.id} onClick={()=>{setSortBy(o.id);setShowSort(false);}}
+                    className={`w-full text-left px-3 py-2.5 text-xs font-medium transition-colors hover:bg-white/5 ${sortBy===o.id?'text-[#5BE7DA] font-bold':'text-[#cdd9e8]'}`}>
+                    {sortBy===o.id && '✓ '}{o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="px-4 pt-2 space-y-3">
+          {filtered.length === 0 ? emptyState : (
+            <>
+              {visibleSpots.map((s,i)=>(
+                <React.Fragment key={s.id}>
+                  <ListCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
+                  {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
+                </React.Fragment>
+              ))}
+              {premiumTeaser}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── MAP mode (Nearby tab): full-bleed map + slide-up "Nearby parking" sheet ──
+  return (
+    <div className="pt-2">
+      {searchBlock}
+      <div ref={mapRef} className="relative mt-2.5">
+        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={380} selectedId={focusSpot?.id} flat/>
         <button onClick={locateMe} aria-label="Find parking near me"
-          className="absolute right-4 bottom-4 z-[5] w-12 h-12 rounded-full flex items-center justify-center text-[#5BE7DA] shadow-lg active:scale-95 transition"
+          className="absolute right-4 bottom-10 z-[5] w-12 h-12 rounded-full flex items-center justify-center text-[#5BE7DA] shadow-lg active:scale-95 transition"
           style={{background:'var(--float)',border:'1px solid var(--hairline)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}}>
           <Crosshair size={20}/>
         </button>
       </div>
-
-      {/* ── Bottom sheet ── */}
-      <div className="relative z-[6] -mt-5 rounded-t-[24px] px-4 pt-3 pb-6" style={{background:'var(--sheet)',boxShadow:'var(--sheet-shadow)'}}>
+      <div className="relative z-[6] -mt-7 rounded-t-[28px] px-4 pt-3 pb-6" style={{background:'var(--sheet)',border:'1px solid var(--hairline)',borderBottom:'none',boxShadow:'var(--sheet-shadow)'}}>
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
-
-        {/* Event parking banner */}
-        {!isSearching && onEvent && <EventBanner onOpen={onEvent}/>}
-
-        {/* Location banners */}
-        {!geo && !geoBusy && query.trim() && (
-          <button onClick={()=>doSearch(query)} className="w-full flex items-center gap-2 text-xs font-semibold text-[#5BE7DA] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 px-3.5 py-2.5 rounded-xl hover:bg-[#2ED3C6]/15 transition mb-3">
-            <Navigation size={13}/> Find parking near &ldquo;{query.trim()}&rdquo; — press Enter
-          </button>
-        )}
-        {geo && (
-          <div className="flex items-start gap-2 bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 text-[#cdeef0] text-xs px-3.5 py-3 rounded-xl mb-3">
-            <MapPin size={14} className="mt-0.5 flex-shrink-0 text-[#5BE7DA]"/>
-            <span className="flex-1">Nearest parking to <strong className="text-[#EAF1F8]">{geo.label}</strong>, closest first.</span>
-            <button onClick={clearSearch} className="font-bold underline whitespace-nowrap text-[#5BE7DA]">Clear</button>
-          </div>
-        )}
-        {geoMiss && query.trim() && (
-          <div className="flex items-start gap-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 text-[#FFD27A] text-xs px-3.5 py-3 rounded-xl mb-3">
-            <Info size={14} className="mt-0.5 flex-shrink-0"/>
-            <span>Couldn&rsquo;t find &ldquo;{query.trim()}&rdquo;. Showing keyword matches — try a fuller address.</span>
-          </div>
-        )}
-
-        {/* Sheet header */}
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="font-display font-bold text-lg text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label}` : isSearching ? 'Results' : 'Parking spots'}</h2>
-          <span className="text-sm font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0">{filtered.length} spot{filtered.length!==1?'s':''}</span>
+        <div className="flex items-baseline justify-between mb-2 px-1">
+          <h2 className="font-display font-bold text-[17px] text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label}` : 'Nearby parking'}</h2>
+          <span className="text-[12.5px] font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0 pl-2">{filtered.length} spot{filtered.length!==1?'s':''}</span>
         </div>
-
-        {/* Quick search */}
-        {!isSearching && (
-          <div className="-mx-4 px-4 overflow-x-auto no-scrollbar mb-4">
-            <div className="grid grid-flow-col auto-cols-max grid-rows-2 gap-2 w-max pb-1">
-              {SEARCH_KEYWORDS.map(a=>(
-                <button key={a} onClick={()=>doSearch(a)} className="text-xs font-semibold bg-white/[0.06] border border-white/12 text-[#cdd9e8] px-3.5 py-2 rounded-xl hover:border-[#5BE7DA] hover:text-[#5BE7DA] active:scale-95 transition-all whitespace-nowrap">{a}</button>
+        {filtered.length === 0 ? emptyState : (
+          <>
+            <div>
+              {visibleSpots.map(s=>(
+                <RowItem key={s.id} spot={s} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* List */}
-        {filtered.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3"><Search size={24} className="text-[rgba(234,241,248,0.3)]"/></div>
-            <p className="font-bold text-[#EAF1F8]">{citySpots.length===0?'No spots here yet':'No spots found'}</p>
-            <p className="text-sm text-[rgba(234,241,248,0.5)] mt-1">{citySpots.length===0?'Be the first — tap Add Spot below.':'Try a fuller address or a different filter.'}</p>
-            {citySpots.length>0 && <button onClick={()=>{clearSearch();setBadgeFilter('all');setEvOnly(false);}} className="mt-3 text-xs text-[#5BE7DA] font-semibold underline">Clear filters</button>}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {visibleSpots.map((s,i)=>(
-              <React.Fragment key={s.id}>
-                <SpotCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
-                {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
-              </React.Fragment>
-            ))}
-            {hiddenCount > 0 && (
-              <div onClick={onUpgrade} className="rounded-2xl border-2 border-dashed border-[#2ED3C6]/40 bg-[#2ED3C6]/8 p-5 text-center cursor-pointer hover:bg-[#2ED3C6]/12 transition-colors">
-                <p className="text-2xl mb-1">💎</p>
-                <p className="font-bold text-[#EAF1F8] text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available with Premium</p>
-                <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">They're around here too — unlock Premium to reveal their exact locations</p>
-                <span className="inline-block text-[#06231f] text-xs font-bold px-4 py-2 rounded-full btn-teal">★ Unlock Premium</span>
-              </div>
-            )}
-          </div>
+            <div className="pt-3">{premiumTeaser}</div>
+          </>
         )}
       </div>
     </div>
   );
 };
+
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
 const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, cityName, onCityDetected, userSpots = [], isPremium, onUpgrade, onOpenSpot }) => {
@@ -2114,7 +2231,7 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, allSpots = SP
 // ── AddSpotTab ────────────────────────────────────────────────────────────────
 const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   const [form, setForm] = useState({near:'',street:'',type:'',restriction:'',notes:''});
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState(null);   // compressed JPEG dataURL of the space
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [coords, setCoords] = useState(null);   // [lat, lng] captured from GPS
@@ -2169,7 +2286,7 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
       lat, lng,
       by: user.name,
       votes: 0,
-      photo: null,
+      photo: preview,
       price: null,
       spaces: null,
       city: city.id,
@@ -2186,7 +2303,8 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
       name: form.near,
       near: form.street,
       email: user.email,
-      message: `Submitted by: ${user.name}\nType: ${form.type}\nRestrictions: ${form.restriction}\nNotes: ${form.notes || 'None'}\nCoordinates: ${coords ? `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}` : 'Not captured'}`,
+      message: `Submitted by: ${user.name}\nType: ${form.type}\nRestrictions: ${form.restriction}\nNotes: ${form.notes || 'None'}\nCoordinates: ${coords ? `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}` : 'Not captured'}\nPhoto attached: ${preview ? 'yes' : 'no'}`,
+      photoData: preview || undefined,
     });
     setDone(true);
     onSpotAdded(newSpot);
@@ -2261,7 +2379,20 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
               : <><Camera size={28}/><span className="text-sm font-medium">Tap to upload a photo</span><span className="text-xs text-[#55657d]">JPG, PNG, HEIC</span></>}
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
-            onChange={e=>{const f=e.target.files[0];if(f)setPreview(URL.createObjectURL(f));}}/>
+            onChange={e=>{
+              const f=e.target.files[0]; if(!f) return;
+              const img=new Image();
+              img.onload=()=>{
+                const scale=Math.min(1, 720/Math.max(img.width,img.height));
+                const c=document.createElement('canvas');
+                c.width=Math.round(img.width*scale); c.height=Math.round(img.height*scale);
+                c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+                setPreview(c.toDataURL('image/jpeg',0.8));
+                URL.revokeObjectURL(img.src);
+              };
+              img.src=URL.createObjectURL(f);
+            }}/>
+          <p className="text-[11px] text-[#6b7d96] mt-1.5">📸 Add a photo of the space — verified hidden gems with a photo earn a <strong className="text-[#5BE7DA]">free month of Premium</strong>.</p>
         </div>
 
         <div>
@@ -2921,6 +3052,18 @@ export default function App() {
   const [infoPage,      setInfoPage]      = useState(null);
   const [cookieChoice,  setCookieChoice]  = useState(()=>ls.get('pe_cookie', null));
   const [detailSpot,    setDetailSpot]    = useState(null);
+
+  // Deep links: #s=<id> opens that spot; the hash tracks the open detail sheet.
+  useEffect(() => {
+    const m = location.hash.match(/#s=(\d+)/);
+    if (m) { const sp = ALL_SPOTS.find(x => x.id === +m[1]); if (sp) setDetailSpot(sp); }
+  }, []);
+  useEffect(() => {
+    try {
+      if (detailSpot) history.replaceState(null, '', '#s=' + detailSpot.id);
+      else if (location.hash.startsWith('#s=')) history.replaceState(null, '', location.pathname + location.search);
+    } catch { /* ignore */ }
+  }, [detailSpot]);
   const [votes,          setVotes]          = useState(()=>ls.get('pe_votes', {}));
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstall,    setShowInstall]    = useState(false);
@@ -3036,7 +3179,15 @@ export default function App() {
     setShowWelcome(true);
   };
 
+  // §1: nudge skipped users to sign up at value moments (once per session).
+  const promptSignup = () => {
+    if (user || sessionStorage.getItem('pe_prompted')) return;
+    try { sessionStorage.setItem('pe_prompted', '1'); } catch { /* ignore */ }
+    setShowWelcome(true);
+  };
+
   const toggleSave = (id) => {
+    promptSignup();
     setSaved(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -3055,6 +3206,7 @@ export default function App() {
   };
 
   const voteSpot = (id) => {
+    promptSignup();
     setVotes(prev => {
       if (prev[id]) return prev;
       const next = { ...prev, [id]: true };
@@ -3186,8 +3338,8 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
-        {tab==='nearby'     && <NearbyTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} cityName={currentCity.name} onCityDetected={changeCity} userSpots={userSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
+        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
@@ -3202,13 +3354,10 @@ export default function App() {
             const pill   = id==='saved' && saved.size>0 ? saved.size : null;
             return (
               <button key={id} onClick={()=>setTab(id)}
-                className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors active:bg-white/5 ${
-                  active ? 'text-[#5BE7DA]' : 'text-[rgba(234,241,248,0.45)] hover:text-[rgba(234,241,248,0.7)]'
+                className={`flex-1 flex flex-col items-center gap-0.5 py-2 mx-1 my-1 rounded-2xl transition-colors ${
+                  active ? 'text-[#5BE7DA] bg-[#5BE7DA]/10' : 'text-[rgba(234,241,248,0.45)] hover:text-[rgba(234,241,248,0.7)] active:bg-white/5'
                 }`}>
                 <div className="relative">
-                  {active && (
-                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-[#5BE7DA] rounded-full"/>
-                  )}
                   <Icon size={22} strokeWidth={active ? 2.5 : 1.8}/>
                   {pill && (
                     <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 text-[#06231f] text-[9px] font-bold rounded-full flex items-center justify-center px-1 teal-grad">
