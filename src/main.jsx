@@ -2,6 +2,11 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import { inject } from '@vercel/analytics'
+
+// Vercel Web Analytics — visitor/page-view tracking, viewable in the Vercel
+// dashboard (parkeasy project → Analytics). No-ops outside Vercel hosting.
+if (!window.Capacitor && /(vercel\.app|parkeasy\.uk)$/.test(location.hostname)) inject()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
