@@ -2932,7 +2932,7 @@ const AdminOverlay = ({ onClose }) => {
           <button onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-full bg-white/8 border border-white/15 flex items-center justify-center text-[#EAF1F8] active:scale-90 transition"><X size={16}/></button>
           <div>
             <h2 className="font-display font-bold text-lg text-[#EAF1F8] leading-tight">Admin dashboard</h2>
-            <p className="text-[11px] text-[rgba(234,241,248,0.5)]">Master account · live from Supabase</p>
+            <p className="text-[11px] text-[rgba(234,241,248,0.5)]">Master account · build {new Date(__BUILD_TIME__).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
           </div>
         </div>
         <div className="px-4 py-5 pb-16 space-y-5">
@@ -3159,6 +3159,7 @@ const Footer = ({ onOpen }) => (
       ))}
     </div>
     <p className="text-[10px] text-[rgba(234,241,248,0.3)] mt-3">© 2026 ParkEasy · Made in Northern Ireland</p>
+    <p className="text-[9.5px] text-[rgba(234,241,248,0.25)] mt-1">Version {new Date(__BUILD_TIME__).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p>
   </footer>
 );
 
