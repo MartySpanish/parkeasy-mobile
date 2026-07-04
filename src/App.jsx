@@ -11,7 +11,7 @@ import {
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
 import { suggestPlaces, resolvePlace, geocodeText } from './geo';
-import { notify } from './notify';
+import { notify, apiFetch } from './notify';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -2911,7 +2911,7 @@ const AdminOverlay = ({ onClose }) => {
           token = data?.session?.access_token || null;
         }
         if (!token) { setState({ loading:false, error:'Sign in with the master account (Supabase login) to load analytics.' }); return; }
-        const r = await fetch('/api/admin', { headers: { Authorization: `Bearer ${token}` } });
+        const r = await apiFetch('/api/admin', { headers: { Authorization: `Bearer ${token}` } });
         const d = await r.json().catch(()=>({}));
         if (!r.ok) { setState({ loading:false, error: d.error || `Request failed (${r.status})` }); return; }
         setState({ loading:false, data:d });
