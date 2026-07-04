@@ -83,6 +83,9 @@ const STRIPE_ANNUAL  = 'https://buy.stripe.com/5kQ6oA1C5eiQ0GJg660kE00';
 // Accounts that sign in with one of these emails are always Premium, on any
 // device — no Stripe checkout needed. Add more emails here as needed.
 const VIP_EMAILS = ['martinrooney3@hotmail.com'];
+// Master accounts that can open the in-app analytics dashboard.
+const ADMIN_EMAILS = ['martinrooney3@hotmail.com', 'parkeasyuk@gmail.com'];
+const isAdminUser = (u) => !!u?.email && ADMIN_EMAILS.includes(u.email.toLowerCase());
 // Shared invite code you can hand out to influencers etc. for free Premium.
 // This lives in the client bundle, so treat it as a "thank you" perk rather
 // than a secure paywall — anyone determined could find it in the page source.
@@ -535,11 +538,13 @@ const CITY_SPOTS = {
 
 const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []) ];
 
-// Welcome-screen stats — derived from SPOTS so they never go stale as spots are added.
+// Welcome-screen stats — derived from every town's spots so they never go stale.
+const ALL_SPOTS_STATS = CITIES.flatMap(c => getCitySpots(c.id));
 const WELCOME_STATS = [
-  ['🟢', SPOTS.length, 'Spots'],
-  ['💎', SPOTS.filter(s => s.badge === 'hidden_gem').length, 'Hidden Gems'],
-  ['🅿', SPOTS.filter(s => s.badge === 'official').length, 'Car Parks'],
+  [ALL_SPOTS_STATS.length, 'Spots', '#34E0A0'],
+  [ALL_SPOTS_STATS.filter(s => s.badge === 'hidden_gem').length, 'Hidden gems', '#C9A7FF'],
+  [ALL_SPOTS_STATS.filter(s => s.badge === 'official').length, 'Car parks', '#7CC4FF'],
+  [CITIES.length, 'Towns', '#5BE7DA'],
 ];
 
 const BUSINESSES = [
@@ -762,21 +767,22 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4 overflow-y-auto">
       <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl my-auto">
-        <div style={{ background: 'linear-gradient(135deg,#0e1a2c 0%,#2d4a6e 100%)' }} className="px-6 pt-8 pb-6 text-center">
-          <div className="w-16 h-16 bg-[#5BE7DA] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <MapPin size={30} className="text-white" strokeWidth={2.5}/>
+        <div className="relative px-6 pt-8 pb-6 text-center overflow-hidden" style={{background:'var(--header-grad)'}}>
+          <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full pointer-events-none" style={{background:'radial-gradient(circle, rgba(46,211,198,0.20), rgba(46,211,198,0) 65%)'}}/>
+          <div className="relative w-16 h-16 rounded-[20px] flex items-center justify-center mx-auto mb-4 teal-grad" style={{boxShadow:'0 12px 32px rgba(46,211,198,0.45), inset 0 1.5px 0 rgba(255,255,255,0.4)'}}>
+            <MapPin size={30} className="text-[#06231f]" strokeWidth={2.6}/>
           </div>
-          <h2 className="text-white font-extrabold text-2xl tracking-tight">ParkEasy Belfast</h2>
-          <p className="text-[#5BE7DA] text-sm mt-1">Find where locals actually park</p>
+          <h2 className="relative font-display text-white font-extrabold text-2xl tracking-tight">ParkEasy</h2>
+          <p className="relative text-[#5BE7DA] text-[13px] font-semibold mt-1">Find where locals actually park — across Northern Ireland</p>
         </div>
 
         <div className="p-6 space-y-5">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {WELCOME_STATS.map(([e,n,l])=>(
-              <div key={l} className="bg-white/5 rounded-xl py-2.5">
-                <p className="text-lg">{e}</p>
-                <p className="font-extrabold text-[#EAF1F8] text-sm">{n}</p>
-                <p className="text-[#6b7d96] text-[10px]">{l}</p>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            {WELCOME_STATS.map(([n,l,c])=>(
+              <div key={l} className="bg-white/5 border border-white/10 rounded-2xl py-3">
+                <span className="block w-1.5 h-1.5 rounded-full mx-auto mb-1.5" style={{background:c, boxShadow:`0 0 8px ${c}66`}}/>
+                <p className="font-display font-extrabold text-[#EAF1F8] text-lg leading-none">{n}</p>
+                <p className="text-[#6b7d96] text-[9.5px] font-semibold mt-1 whitespace-nowrap">{l}</p>
               </div>
             ))}
           </div>
@@ -786,7 +792,7 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
               {[['signup','Sign up'],['login','Log in']].map(([m,label])=>(
                 <button key={m} type="button"
                   onClick={()=>{ setMode(m); setError(''); setNotice(''); }}
-                  className={`flex-1 py-2 rounded-lg transition-all ${mode===m ? 'bg-[#0e1a2c] text-[#0e1a2c] shadow-sm' : 'text-[#6b7d96]'}`}>
+                  className={`flex-1 py-2 rounded-lg transition-all ${mode===m ? 'teal-grad text-[#06231f] shadow-sm' : 'text-[#6b7d96]'}`}>
                   {label}
                 </button>
               ))}
@@ -989,7 +995,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
 };
 
 // ── User Menu ─────────────────────────────────────────────────────────────────
-const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }) => (
+const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
     <div className="absolute top-16 right-3 bg-[#0e1a2c] rounded-2xl shadow-2xl border border-white/10 w-64 overflow-hidden" onClick={e=>e.stopPropagation()}>
       <div style={{background:'var(--surface-solid)'}} className="p-4 flex items-center gap-3">
@@ -1018,6 +1024,11 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose }
         {!isPremium && (
           <button onClick={onUpgrade} className="w-full bg-yellow-400 text-[#FFD27A] py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
             ★ Upgrade to Premium — £2.99/mo
+          </button>
+        )}
+        {onAdmin && (
+          <button onClick={onAdmin} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-xs text-[#06231f] btn-teal active:scale-95 transition">
+            📊 Admin dashboard
           </button>
         )}
         <div className="border-t border-white/10 pt-2">
@@ -2888,6 +2899,115 @@ const TABS = [
 ];
 
 // ── Main App ──────────────────────────────────────────────────────────────────
+// ── Master-account analytics dashboard ───────────────────────────────────────
+const AdminOverlay = ({ onClose }) => {
+  const [state, setState] = useState({ loading: true });
+  useEffect(() => {
+    (async () => {
+      try {
+        let token = null;
+        if (isSupabaseEnabled) {
+          const { data } = await supabase.auth.getSession();
+          token = data?.session?.access_token || null;
+        }
+        if (!token) { setState({ loading:false, error:'Sign in with the master account (Supabase login) to load analytics.' }); return; }
+        const r = await fetch('/api/admin', { headers: { Authorization: `Bearer ${token}` } });
+        const d = await r.json().catch(()=>({}));
+        if (!r.ok) { setState({ loading:false, error: d.error || `Request failed (${r.status})` }); return; }
+        setState({ loading:false, data:d });
+      } catch (e) { setState({ loading:false, error: e.message || 'Failed to load' }); }
+    })();
+  }, []);
+  const d = state.data;
+  const Tile = ({ label, value, accent }) => (
+    <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-center">
+      <p className="font-display font-extrabold text-2xl leading-none" style={accent?{color:accent}:{}}>{value}</p>
+      <p className="text-[10px] font-semibold text-[#6b7d96] mt-1.5">{label}</p>
+    </div>
+  );
+  return (
+    <div className="fixed inset-0 z-[85] overflow-auto" style={{background:'var(--bg-solid)'}}>
+      <div className="mx-auto" style={{maxWidth:680}}>
+        <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-4 border-b border-white/10" style={{background:'var(--surface-solid)', paddingTop:'calc(env(safe-area-inset-top) + 14px)'}}>
+          <button onClick={onClose} aria-label="Close" className="w-9 h-9 rounded-full bg-white/8 border border-white/15 flex items-center justify-center text-[#EAF1F8] active:scale-90 transition"><X size={16}/></button>
+          <div>
+            <h2 className="font-display font-bold text-lg text-[#EAF1F8] leading-tight">Admin dashboard</h2>
+            <p className="text-[11px] text-[rgba(234,241,248,0.5)]">Master account · live from Supabase</p>
+          </div>
+        </div>
+        <div className="px-4 py-5 pb-16 space-y-5">
+          {state.loading && <p className="text-sm text-[#8da2bd] py-10 text-center">Loading analytics…</p>}
+          {state.error && (
+            <div className="text-sm text-[#FFD27A] bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-2xl px-4 py-3.5 leading-relaxed">{state.error}</div>
+          )}
+          {d && !d.configured && (
+            <div className="text-sm text-[#FFD27A] bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-2xl px-4 py-3.5 leading-relaxed">
+              Almost there — add <strong className="text-[#EAF1F8]">SUPABASE_SERVICE_ROLE_KEY</strong> to the Vercel project env (Supabase → Settings → API → service_role) to unlock user analytics.
+            </div>
+          )}
+          {d?.configured && (
+            <>
+              <div>
+                <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Users</h3>
+                <div className="grid grid-cols-4 gap-2">
+                  <Tile label="Total" value={d.users.total} accent="#5BE7DA"/>
+                  <Tile label="New · 7d" value={d.users.last7} accent="#34E0A0"/>
+                  <Tile label="New · 30d" value={d.users.last30}/>
+                  <Tile label="Active · 7d" value={d.users.activeLast7}/>
+                </div>
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Latest signups</h3>
+                <div className="glass rounded-2xl divide-y divide-white/5 overflow-hidden">
+                  {d.users.latest.length === 0 && <p className="text-sm text-[#8da2bd] px-4 py-4">No signups yet.</p>}
+                  {d.users.latest.map((u,i)=>(
+                    <div key={i} className="px-4 py-2.5 flex items-center gap-3">
+                      <span className="w-7 h-7 rounded-full teal-grad text-[#06231f] font-bold text-xs flex items-center justify-center flex-shrink-0">{(u.name||u.email||'?').charAt(0).toUpperCase()}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-semibold text-[#EAF1F8] truncate">{u.name || u.email}</span>
+                        {u.name && <span className="block text-[11px] text-[rgba(234,241,248,0.5)] truncate">{u.email}</span>}
+                      </span>
+                      <span className="text-[11px] text-[rgba(234,241,248,0.45)] flex-shrink-0">{new Date(u.created).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Space listings</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <Tile label="Total listings" value={d.listings.total} accent="#C9A7FF"/>
+                  <Tile label="Latest shown" value={d.listings.latest.length}/>
+                </div>
+                {d.listings.latest.length > 0 && (
+                  <div className="glass rounded-2xl divide-y divide-white/5 overflow-hidden mt-2">
+                    {d.listings.latest.map((l,i)=>(
+                      <div key={i} className="px-4 py-2.5">
+                        <p className="text-[13px] font-semibold text-[#EAF1F8] truncate">{l.title}</p>
+                        <p className="text-[11px] text-[rgba(234,241,248,0.5)] truncate">{l.address} · {new Date(l.created_at).toLocaleDateString('en-GB')}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          <div>
+            <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">App data</h3>
+            <div className="grid grid-cols-3 gap-2">
+              <Tile label="Parking spots" value={ALL_SPOTS.length} accent="#5BE7DA"/>
+              <Tile label="Hidden gems" value={ALL_SPOTS.filter(s=>s.badge==='hidden_gem').length} accent="#C9A7FF"/>
+              <Tile label="Towns covered" value={CITIES.length}/>
+            </div>
+          </div>
+          <div className="text-[12px] leading-relaxed text-[#8da2bd] bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5">
+            <strong className="text-[#EAF1F8]">Traffic analytics:</strong> page views, visitors and referrers are tracked by Vercel Web Analytics — open your Vercel dashboard → <em>parkeasy</em> → Analytics. (Enable it once under the project's Analytics tab.)
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Cookie consent ────────────────────────────────────────────────────────────
 const CookieBanner = ({ onChoice }) => (
   <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-24px)]" style={{maxWidth:640}}>
@@ -3079,6 +3199,7 @@ export default function App() {
   const [nowTs,          setNowTs]          = useState(()=>Date.now());
   const [theme,          setTheme]          = useState(()=>ls.get('pe_theme', 'dark'));
   const [showEvent,      setShowEvent]      = useState(false);
+  const [showAdmin,      setShowAdmin]      = useState(false);
 
   // Apply the theme to the document root and keep the browser chrome colour
   // in sync so the status bar matches in both modes.
@@ -3258,6 +3379,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'var(--app-grad)'}}>
       {/* ── Modals ── */}
+      {showAdmin && <AdminOverlay onClose={()=>setShowAdmin(false)}/>}
       {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={setDetailSpot}/>}
       {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
@@ -3271,6 +3393,7 @@ export default function App() {
         <UserMenu user={user} spotsAdded={user?.spotsAdded||0} isPremium={isPremium}
           onSignOut={handleSignOut}
           onUpgrade={()=>{setShowUserMenu(false);setShowPricing(true);}}
+          onAdmin={isAdminUser(user) ? ()=>{setShowUserMenu(false);setShowAdmin(true);} : undefined}
           onClose={()=>setShowUserMenu(false)}/>
       )}
 
