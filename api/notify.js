@@ -28,7 +28,24 @@ const TEMPLATES = {
     rows: [['Spot', d.name], ['Near', d.near], ['Notes', d.message], ['By', d.email]] }),
 };
 
+
+// CORS: the static site on parkeasy.uk (GitHub Pages) calls these functions
+// cross-origin on the Vercel deployment.
+const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
+function applyCors(req, res) {
+  const origin = req.headers.origin || '';
+  if (ALLOWED_ORIGINS.test(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+  if (req.method === 'OPTIONS') { res.status(204).end(); return true; }
+  return false;
+}
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const TO = process.env.CONTACT_EMAIL;

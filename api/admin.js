@@ -13,7 +13,24 @@
 
 const DEFAULT_ADMINS = 'martinrooney3@hotmail.com,parkeasyuk@gmail.com';
 
+
+// CORS: the static site on parkeasy.uk (GitHub Pages) calls these functions
+// cross-origin on the Vercel deployment.
+const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
+function applyCors(req, res) {
+  const origin = req.headers.origin || '';
+  if (ALLOWED_ORIGINS.test(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+  if (req.method === 'OPTIONS') { res.status(204).end(); return true; }
+  return false;
+}
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return;
   const URL_ = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const ANON = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
