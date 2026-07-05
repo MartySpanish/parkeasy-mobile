@@ -56,6 +56,46 @@ export default async function handler(req, res) {
       hint: 'Add SUPABASE_SERVICE_ROLE_KEY to Vercel env to unlock user analytics.' });
   }
 
+  const svcH = { Authorization: `Bearer ${SERVICE}`, apikey: SERVICE, 'Content-Type': 'application/json' };
+
+  // ── Founder actions: approve / reject organization listings ──
+  if (req.method === 'POST') {
+    let body = req.body;
+    if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+    const { action, id, reason } = body || {};
+    if (!id || !['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Bad request' });
+    if (action === 'reject' && !(reason || '').trim()) return res.status(400).json({ error: 'Rejection requires a reason' });
+
+    const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${encodeURIComponent(id)}&select=*`, { headers: svcH });
+    const listing = (await lr.json())?.[0];
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+
+    const patch = action === 'approve'
+      ? { approved_by_founder: true, status: 'active', published_at: new Date().toISOString(), rejection_reason: null }
+      : { status: 'rejected', rejection_reason: reason.trim() };
+    const up = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: svcH, body: JSON.stringify(patch),
+    });
+    if (!up.ok) return res.status(502).json({ error: 'Update failed', detail: await up.text().catch(() => '') });
+
+    // Tell the host by email (approval or rejection with reason)
+    const hostEmail = listing.contact_email || listing.owner_email;
+    if (hostEmail && process.env.RESEND_API_KEY) {
+      const subj = action === 'approve'
+        ? `✅ Your ParkEasy listing is live: ${listing.title}`
+        : `Your ParkEasy listing needs changes: ${listing.title}`;
+      const html = action === 'approve'
+        ? `<p>Good news — your listing <strong>${listing.title}</strong> has been approved and is now live on ParkEasy.</p>`
+        : `<p>Thanks for submitting <strong>${listing.title}</strong>. We can't publish it yet:</p><blockquote>${(reason || '').replace(/</g, '&lt;')}</blockquote><p>Update the listing in the ParkEasy app and resubmit — we review within 24 hours.</p>`;
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>', to: [hostEmail], subject: subj, html }),
+      }).catch(() => {});
+    }
+    return res.status(200).json({ ok: true });
+  }
+
   // 2) Pull analytics with the service key (server-side only)
   const svc = { Authorization: `Bearer ${SERVICE}`, apikey: SERVICE };
   try {
@@ -89,8 +129,16 @@ export default async function handler(req, res) {
       }
     } catch { /* table may not exist yet */ }
 
+    // Organization listings awaiting founder approval
+    let pending = [];
+    try {
+      const pr = await fetch(`${URL_}/rest/v1/rental_listings?status=eq.pending_approval&select=*&order=created_at.asc`, { headers: svcH });
+      if (pr.ok) pending = await pr.json();
+    } catch { /* ignore */ }
+
     return res.status(200).json({
       ok: true, configured: true,
+      pending,
       users: {
         total: users.length,
         last7: users.filter(u => within(u, 7)).length,
