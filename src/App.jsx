@@ -2602,166 +2602,338 @@ const ListingCard = ({ listing }) => {
   );
 };
 
-const ListSpaceForm = ({ user, onBack, onSuccess }) => {
-  const [form, setForm] = useState({
-    title:'', description:'', address:'', space_type:'driveway',
-    price_per_hour:'', price_per_day:'', price_per_month:'',
-    contact_email: user?.email || '', contact_phone:'',
-    amenities:[], photos:[''], spaces:1,
+// ── Listing requirements (client mirror of api/publish-listing.js) ───────────
+const PHOTO_SLOTS = {
+  residential: [
+    { key:'space',    label:'The space itself' },
+    { key:'entrance', label:'Entrance from the street' },
+    { key:'street',   label:'Street view / how to approach' },
+  ],
+  organization: [
+    { key:'overview', label:'Space overview' },
+    { key:'entrance', label:'Entrance' },
+    { key:'barrier',  label:'Barrier / gate' },
+    { key:'signage',  label:'Signage' },
+    { key:'street',   label:'Street approach' },
+  ],
+};
+const ORG_TYPES = ['school','church','sports club','business','community centre','other'];
+const AVAILABILITY_PRESETS = ['Event dates only','Weekdays','Weekends','Always'];
+
+// Suggested £/hr for the area (no zone_pricing table yet — city heuristic).
+const suggestedPrice = (lat, lng) => {
+  if (lat == null) return 1.5;
+  const c = nearestCity(lat, lng);
+  return ['belfast','derry'].includes(c?.id) ? 2.0 : 1.2;
+};
+
+const checkRequirements = (l) => {
+  const missing = [];
+  const photos = l.photos || [];
+  const minPhotos = l.host_type === 'organization' ? 5 : 3;
+  if (photos.length < minPhotos) missing.push(`${minPhotos - photos.length} more photo${minPhotos-photos.length!==1?'s':''} (min ${minPhotos})`);
+  if (photos.length > 10) missing.push('Maximum 10 photos');
+  if ((l.instructions||'').trim().length < 30) missing.push(`"How to find it" too short — ${(l.instructions||'').trim().length}/30 characters`);
+  if (l.lat == null || l.lng == null) missing.push('Verified address (pick a suggestion)');
+  if (!(l.price_per_hour ?? l.price_per_day ?? l.price_per_month)) missing.push('A price');
+  if (!l.availability) missing.push('Availability preset');
+  if (!(l.contact_phone||'').trim()) missing.push('Your mobile number');
+  const cap = l.spaces ?? 1;
+  if (!(cap >= 1 && cap <= 200)) missing.push('Capacity between 1 and 200');
+  if (l.host_type === 'organization') {
+    if (!(l.org_name||'').trim()) missing.push('Organization legal name');
+    if (!l.org_type) missing.push('Organization type');
+    if (!(l.org_registration||'').trim()) missing.push('Registration number (or "none — explain")');
+    if (!(l.access_contact_name||'').trim() || !(l.access_contact_phone||'').trim()) missing.push('Named access contact (name + mobile)');
+    if ((l.access_method||'').trim().length < 30) missing.push(`Access method too short — ${(l.access_method||'').trim().length}/30 characters`);
+  }
+  return missing;
+};
+
+// Compress an image file and upload it to Supabase Storage; returns public URL.
+const uploadListingPhoto = async (file, uid, slotKey) => {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 1100 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
   });
-  const [saving, setSaving] = useState(false);
-  const [err,    setErr]    = useState('');
+  const blob = await (await fetch(dataUrl)).blob();
+  const path = `${uid}/${Date.now()}-${slotKey}.jpg`;
+  const { error } = await supabase.storage.from('listing-photos').upload(path, blob, { contentType:'image/jpeg', upsert:true });
+  if (error) throw error;
+  return supabase.storage.from('listing-photos').getPublicUrl(path).data.publicUrl;
+};
 
-  const f = (key, val) => setForm(prev => ({...prev, [key]: val}));
-  const toggleAmenity = id => setForm(prev => ({
-    ...prev,
-    amenities: prev.amenities.includes(id)
-      ? prev.amenities.filter(a => a !== id)
-      : [...prev.amenities, id],
-  }));
+const ListSpaceForm = ({ user, onBack, onSuccess }) => {
+  const [step, setStep]       = useState(0);            // 0 = host type, 1 = form
+  const [hostType, setHostType] = useState('residential');
+  const [slots, setSlots]     = useState({});           // slotKey -> url
+  const [extras, setExtras]   = useState([]);           // extra photo urls
+  const [uploading, setUploading] = useState(null);     // slotKey while uploading
+  const [f, setF]             = useState({ title:'', description:'', address:'', lat:null, lng:null,
+    space_type:'driveway', price_per_hour:'', spaces:1, contact_phone:'', contact_email:user?.email||'',
+    instructions:'', availability:null, org_name:'', org_type:null, org_registration:'',
+    access_contact_name:'', access_contact_phone:'', access_method:'' });
+  const [addrSugs, setAddrSugs] = useState([]);
+  const [draftId, setDraftId] = useState(null);
+  const [busy, setBusy]       = useState(false);
+  const [err, setErr]         = useState('');
+  const sugTimer = useRef(null);
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
 
-  const submit = async () => {
-    if (!form.title.trim() || !form.address.trim() || !form.contact_email.trim()) {
-      setErr('Title, address and contact email are required.');
-      return;
+  const requiredSlots = PHOTO_SLOTS[hostType];
+  const photos = [...requiredSlots.map(s=>slots[s.key]).filter(Boolean), ...extras];
+  const listingShape = { ...f, host_type: hostType, photos,
+    price_per_hour: f.price_per_hour ? parseFloat(f.price_per_hour) : null,
+    spaces: hostType==='organization' ? (parseInt(f.spaces)||1) : 1 };
+  const missing = checkRequirements(listingShape);
+  const canPublish = missing.length === 0;
+
+  const authed = isSupabaseEnabled && user?.id;
+
+  const onAddr = (v) => {
+    set('address', v); set('lat', null); set('lng', null);
+    clearTimeout(sugTimer.current);
+    if (v.trim().length < 3) { setAddrSugs([]); return; }
+    sugTimer.current = setTimeout(async () => setAddrSugs(await suggestPlaces(v)), 300);
+  };
+  const pickAddr = async (sug) => {
+    setAddrSugs([]);
+    const loc = await resolvePlace(sug);
+    if (loc) {
+      setF(p => ({ ...p, address: sug.sub ? `${sug.label}, ${sug.sub}` : sug.label, lat: loc.lat, lng: loc.lng,
+        price_per_hour: p.price_per_hour || String(suggestedPrice(loc.lat, loc.lng).toFixed(2)) }));
     }
-    if (!form.price_per_hour && !form.price_per_day && !form.price_per_month) {
-      setErr('Please enter at least one price.');
-      return;
-    }
-    setSaving(true); setErr('');
-    try {
-      const payload = {
-        owner_id:        user?.id || null,
-        owner_email:     user?.email || form.contact_email,
-        title:           form.title.trim(),
-        description:     form.description.trim() || null,
-        address:         form.address.trim(),
-        space_type:      form.space_type,
-        price_per_hour:  form.price_per_hour  ? parseFloat(form.price_per_hour)  : null,
-        price_per_day:   form.price_per_day   ? parseFloat(form.price_per_day)   : null,
-        price_per_month: form.price_per_month ? parseFloat(form.price_per_month) : null,
-        spaces:          parseInt(form.spaces) || 1,
-        amenities:       form.amenities,
-        photos:          form.photos.filter(Boolean),
-        contact_email:   form.contact_email.trim(),
-        contact_phone:   form.contact_phone.trim() || null,
-        status:          'active',
-      };
-      if (isSupabaseEnabled) {
-        const { error } = await supabase.from('rental_listings').insert(payload);
-        if (error) throw error;
-      }
-      notify('listing', {
-        title: payload.title, address: payload.address, spaceType: payload.space_type,
-        price: payload.price_per_hour ? `£${payload.price_per_hour}/hr` : payload.price_per_day ? `£${payload.price_per_day}/day` : payload.price_per_month ? `£${payload.price_per_month}/mo` : '—',
-        email: payload.contact_email,
-      });
-      onSuccess();
-    } catch(e) {
-      setErr(e.message || 'Something went wrong. Please try again.');
-    }
-    setSaving(false);
   };
 
-  return (
+  const onPickPhoto = (slotKey, isExtra) => async (e) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setErr(''); setUploading(slotKey);
+    try {
+      const url = await uploadListingPhoto(file, user.id, slotKey);
+      if (isExtra) setExtras(p => [...p, url].slice(0, 10 - requiredSlots.length));
+      else setSlots(p => ({ ...p, [slotKey]: url }));
+    } catch (ex) { setErr('Photo upload failed — ' + (ex.message || 'try again')); }
+    setUploading(null);
+  };
+
+  const buildRow = (status) => ({
+    owner_id: user.id, owner_email: user.email,
+    title: f.title.trim() || (hostType==='organization' ? f.org_name.trim() : 'Private space'),
+    description: f.description.trim() || null,
+    address: f.address.trim(), lat: f.lat, lng: f.lng,
+    space_type: f.space_type, price_per_hour: listingShape.price_per_hour,
+    spaces: listingShape.spaces, photos,
+    contact_email: (f.contact_email || user.email || '').trim(), contact_phone: f.contact_phone.trim() || null,
+    instructions: f.instructions.trim() || null, availability: f.availability,
+    host_type: hostType,
+    org_name: f.org_name.trim() || null, org_type: f.org_type,
+    org_registration: f.org_registration.trim() || null,
+    access_contact_name: f.access_contact_name.trim() || null,
+    access_contact_phone: f.access_contact_phone.trim() || null,
+    access_method: f.access_method.trim() || null,
+    status,
+  });
+
+  const saveDraft = async (silent) => {
+    setErr('');
+    try {
+      const row = buildRow('draft');
+      if (draftId) {
+        const { error } = await supabase.from('rental_listings').update(row).eq('id', draftId);
+        if (error) throw error;
+        return draftId;
+      }
+      const { data, error } = await supabase.from('rental_listings').insert(row).select('id').single();
+      if (error) throw error;
+      setDraftId(data.id);
+      return data.id;
+    } catch (ex) { if (!silent) setErr(ex.message || 'Could not save draft'); return null; }
+  };
+
+  const publish = async () => {
+    if (!canPublish || busy) return;
+    setBusy(true); setErr('');
+    const id = await saveDraft(false);
+    if (!id) { setBusy(false); return; }
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess?.session?.access_token;
+      const r = await apiFetch('/api/publish-listing', {
+        method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+        body: JSON.stringify({ id }),
+      });
+      const d = await r.json().catch(()=>({}));
+      if (!r.ok) { setErr(d.missing ? 'Still missing: ' + d.missing.join(' · ') : (d.error || 'Publish failed')); setBusy(false); return; }
+      notify('listing', { title: buildRow('x').title, address: f.address, spaceType: f.space_type,
+        price: listingShape.price_per_hour ? `£${listingShape.price_per_hour}/hr` : '—', email: user.email });
+      onSuccess(hostType, d.status);
+    } catch (ex) { setErr(ex.message || 'Publish failed'); }
+    setBusy(false);
+  };
+
+  const inp = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3.5 py-3 text-sm text-[#EAF1F8] placeholder-[rgba(234,241,248,0.45)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
+  const lbl = "block text-xs font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-4";
+
+  if (!authed) return (
+    <div className="p-6 text-center pb-28">
+      <button onClick={onBack} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center mb-6"><X size={16} className="text-[#aebfd4]"/></button>
+      <div className="w-16 h-16 bg-[#2ED3C6]/12 border border-[#2ED3C6]/30 rounded-full flex items-center justify-center mx-auto mb-4"><Key size={26} className="text-[#5BE7DA]"/></div>
+      <h3 className="font-display font-bold text-[#EAF1F8] text-lg">Sign in to list a space</h3>
+      <p className="text-sm text-[#8da2bd] mt-2 max-w-xs mx-auto leading-relaxed">Listing a space needs an account so drivers can book with confidence and you can manage your listing.</p>
+    </div>
+  );
+
+  // ── Step 0: host type ──
+  if (step === 0) return (
     <div className="p-4 pb-28">
-      <div className="flex items-center gap-3 mb-5">
-        <button onClick={onBack} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center">
-          <X size={16} className="text-[#aebfd4]"/>
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center"><X size={16} className="text-[#aebfd4]"/></button>
+        <h2 className="font-display font-bold text-[#EAF1F8] text-lg">Who&rsquo;s listing this space?</h2>
+      </div>
+      {[
+        ['residential','🏠',"I'm a homeowner",'A driveway, garage or private space at your home'],
+        ['organization','🏛️','I represent an organization','School, church, sports club, business or community centre'],
+      ].map(([id,icon,title,sub])=>(
+        <button key={id} onClick={()=>{ setHostType(id); setStep(1); setSlots({}); setExtras([]); }}
+          className="w-full glass rounded-[22px] p-5 mb-3 text-left flex items-center gap-4 active:scale-[0.985] transition">
+          <span className="text-3xl">{icon}</span>
+          <span className="flex-1">
+            <span className="block font-display font-bold text-[#EAF1F8] text-[15px]">{title}</span>
+            <span className="block text-xs text-[rgba(234,241,248,0.55)] mt-1">{sub}</span>
+          </span>
+          <ChevronRight size={18} className="text-[#5BE7DA]"/>
         </button>
-        <h2 className="font-bold text-[#EAF1F8] text-lg">List Your Space</h2>
-      </div>
-
-      <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-2">Space Type</label>
-      <div className="grid grid-cols-4 gap-2 mb-5">
-        {RENTAL_SPACE_TYPES.map(t => (
-          <button key={t.id} onClick={() => f('space_type', t.id)}
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition text-xs font-semibold
-              ${form.space_type === t.id ? 'border-[#5BE7DA] bg-[#2ED3C6]/10 text-[#5BE7DA]' : 'border-white/12 text-[#8da2bd]'}`}>
-            <span className="text-2xl">{t.emoji}</span>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {[
-        { key:'title',   label:'Listing Title', placeholder:'e.g. Private Driveway near City Centre' },
-        { key:'address', label:'Full Address',   placeholder:'e.g. 12 Main Street, Belfast, BT1 1AA' },
-      ].map(({key, label, placeholder}) => (
-        <div key={key} className="mb-4">
-          <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">{label}</label>
-          <input value={form[key]} onChange={e => f(key, e.target.value)} placeholder={placeholder}
-            className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
-        </div>
       ))}
+      <p className="text-[11px] text-[#6b7d96] mt-3 leading-relaxed">Organization listings are reviewed by ParkEasy before they go live (within 24 hours).</p>
+    </div>
+  );
 
-      <div className="mb-4">
-        <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">Description</label>
-        <textarea value={form.description} onChange={e => f('description', e.target.value)} rows={3}
-          placeholder="Access instructions, height restrictions, nearby landmarks..."
-          className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"/>
+  // ── Step 1: full form with live checklist ──
+  return (
+    <div className="p-4 pb-32">
+      <div className="flex items-center gap-3 mb-5">
+        <button onClick={()=>setStep(0)} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center"><X size={16} className="text-[#aebfd4]"/></button>
+        <div>
+          <h2 className="font-display font-bold text-[#EAF1F8] text-lg leading-tight">List your space</h2>
+          <p className="text-[11px] text-[#8da2bd]">{hostType==='organization' ? 'Organization listing · reviewed within 24h' : 'Homeowner listing'}</p>
+        </div>
       </div>
 
-      <div className="mb-5">
-        <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">Number of Spaces</label>
-        <input type="number" min="1" max="20" value={form.spaces} onChange={e => f('spaces', e.target.value)}
-          className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
-      </div>
+      <label className={lbl}>Listing title</label>
+      <input className={inp} placeholder={hostType==='organization'?'e.g. St Mary’s Church car park':'e.g. Private driveway near City Centre'} value={f.title} onChange={e=>set('title',e.target.value)}/>
 
-      <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-2">Pricing (£ — fill at least one)</label>
-      <div className="grid grid-cols-3 gap-2 mb-5">
-        {[
-          {key:'price_per_hour',  label:'Per Hour' },
-          {key:'price_per_day',   label:'Per Day'  },
-          {key:'price_per_month', label:'Per Month'},
-        ].map(({key, label}) => (
-          <div key={key}>
-            <label className="block text-[10px] text-[#6b7d96] font-semibold mb-1">{label}</label>
-            <div className="relative">
-              <span className="absolute left-2.5 top-2.5 text-[#6b7d96] text-sm">£</span>
-              <input type="number" min="0" step="0.50" value={form[key]}
-                onChange={e => f(key, e.target.value)} placeholder="0.00"
-                className="w-full border border-white/12 rounded-xl pl-6 pr-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
-            </div>
+      {hostType==='organization' && (<>
+        <label className={lbl}>Organization legal name *</label>
+        <input className={inp} placeholder="Registered name" value={f.org_name} onChange={e=>set('org_name',e.target.value)}/>
+        <label className={lbl}>Organization type *</label>
+        <div className="flex flex-wrap gap-2">
+          {ORG_TYPES.map(t=>(
+            <button key={t} type="button" onClick={()=>set('org_type',t)}
+              className={`text-xs px-3 py-2 rounded-full border font-semibold capitalize transition ${f.org_type===t?'teal-grad text-[#06231f] border-transparent':'bg-white/[0.05] border-white/12 text-[#cdd9e8]'}`}>{t}</button>
+          ))}
+        </div>
+        <label className={lbl}>Registration number *</label>
+        <input className={inp} placeholder='Charity no., Companies House no., or "none — explain"' value={f.org_registration} onChange={e=>set('org_registration',e.target.value)}/>
+        <label className={lbl}>Access contact on the day *</label>
+        <div className="grid grid-cols-2 gap-2">
+          <input className={inp} placeholder="Name (e.g. caretaker)" value={f.access_contact_name} onChange={e=>set('access_contact_name',e.target.value)}/>
+          <input className={inp} type="tel" placeholder="Their mobile" value={f.access_contact_phone} onChange={e=>set('access_contact_phone',e.target.value)}/>
+        </div>
+        <label className={lbl}>Access method * <span className="normal-case font-medium text-[#6b7d96]">({(f.access_method||'').trim().length}/30 min)</span></label>
+        <textarea className={inp} rows={2} placeholder='e.g. "Text the caretaker on arrival and he’ll open the barrier"' value={f.access_method} onChange={e=>set('access_method',e.target.value)}/>
+        <label className={lbl}>Capacity — number of spaces *</label>
+        <input className={inp} type="number" min={1} max={200} value={f.spaces} onChange={e=>set('spaces',e.target.value)}/>
+      </>)}
+
+      <label className={lbl}>Address * <span className="normal-case font-medium text-[#6b7d96]">(pick a suggestion so we can pin it)</span></label>
+      <div className="relative">
+        <input className={inp} placeholder="Start typing the address…" value={f.address} onChange={e=>onAddr(e.target.value)}/>
+        {f.lat!=null && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6BEFB9]"><Check size={16}/></span>}
+        {addrSugs.length>0 && (
+          <div className="absolute top-full left-0 right-0 mt-1.5 rounded-xl overflow-hidden z-30" style={{background:'var(--surface-solid)',border:'1px solid var(--hairline)',boxShadow:'var(--pop-shadow)'}}>
+            {addrSugs.map((sg,i)=>(
+              <button key={i} type="button" onClick={()=>pickAddr(sg)} className="w-full text-left px-3.5 py-2.5 flex items-start gap-2.5 hover:bg-white/5 border-b border-white/5 last:border-0">
+                <MapPin size={13} className="text-[#5BE7DA] mt-0.5 flex-shrink-0"/>
+                <span className="min-w-0"><span className="block text-[13px] font-semibold text-[#EAF1F8] truncate">{sg.label}</span>{sg.sub&&<span className="block text-[11px] text-[rgba(234,241,248,0.5)] truncate">{sg.sub}</span>}</span>
+              </button>
+            ))}
           </div>
+        )}
+      </div>
+
+      <label className={lbl}>Photos * <span className="normal-case font-medium text-[#6b7d96]">(min {requiredSlots.length}, max 10)</span></label>
+      <div className="grid grid-cols-3 gap-2">
+        {requiredSlots.map(sl=>(
+          <label key={sl.key} className={`relative aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center p-1.5 cursor-pointer overflow-hidden transition ${slots[sl.key]?'border-[#34E0A0]/50':'border-white/15 hover:border-[#5BE7DA]/50'}`}>
+            {slots[sl.key]
+              ? <img src={slots[sl.key]} alt={sl.label} className="absolute inset-0 w-full h-full object-cover"/>
+              : uploading===sl.key
+                ? <span className="w-5 h-5 border-2 border-white/25 border-t-[#5BE7DA] rounded-full animate-spin"/>
+                : <><Camera size={16} className="text-[#6b7d96] mb-1"/><span className="text-[9px] font-semibold text-[#8da2bd] leading-tight">{sl.label}</span></>}
+            {slots[sl.key] && <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[#34E0A0] text-[#06231f] flex items-center justify-center"><Check size={11}/></span>}
+            <input type="file" accept="image/*" className="hidden" onChange={onPickPhoto(sl.key,false)}/>
+          </label>
+        ))}
+        {photos.length < 10 && (
+          <label className="aspect-square rounded-xl border-2 border-dashed border-white/15 hover:border-[#5BE7DA]/50 flex flex-col items-center justify-center cursor-pointer">
+            {uploading==='extra' ? <span className="w-5 h-5 border-2 border-white/25 border-t-[#5BE7DA] rounded-full animate-spin"/> : <><Plus size={16} className="text-[#6b7d96]"/><span className="text-[9px] font-semibold text-[#8da2bd] mt-1">More</span></>}
+            <input type="file" accept="image/*" className="hidden" onChange={onPickPhoto('extra',true)}/>
+          </label>
+        )}
+        {extras.map((u,i)=>(<div key={i} className="relative aspect-square rounded-xl overflow-hidden"><img src={u} alt="" className="w-full h-full object-cover"/><button type="button" onClick={()=>setExtras(p=>p.filter((_,j)=>j!==i))} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center"><X size={11}/></button></div>))}
+      </div>
+
+      <label className={lbl}>How to find it * <span className="normal-case font-medium text-[#6b7d96]">({(f.instructions||'').trim().length}/30 min)</span></label>
+      <textarea className={inp} rows={3} placeholder="e.g. Turn right at the red gate, first driveway on the left. Ring the doorbell if the gate is closed." value={f.instructions} onChange={e=>set('instructions',e.target.value)}/>
+
+      <label className={lbl}>Price (£/hour) * <span className="normal-case font-medium text-[#6b7d96]">{f.lat!=null?`· suggested £${suggestedPrice(f.lat,f.lng).toFixed(2)} for this area`:''}</span></label>
+      <input className={inp} type="number" min="0" step="0.10" placeholder="2.00" value={f.price_per_hour} onChange={e=>set('price_per_hour',e.target.value)}/>
+
+      <label className={lbl}>Availability *</label>
+      <div className="flex flex-wrap gap-2">
+        {AVAILABILITY_PRESETS.map(a=>(
+          <button key={a} type="button" onClick={()=>set('availability',a)}
+            className={`text-xs px-3 py-2 rounded-full border font-semibold transition ${f.availability===a?'teal-grad text-[#06231f] border-transparent':'bg-white/[0.05] border-white/12 text-[#cdd9e8]'}`}>{a}</button>
         ))}
       </div>
 
-      <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-2">Amenities</label>
-      <div className="flex flex-wrap gap-2 mb-5">
-        {RENTAL_AMENITIES.map(a => (
-          <button key={a.id} onClick={() => toggleAmenity(a.id)}
-            className={`text-xs px-3 py-1.5 rounded-full border-2 font-semibold transition
-              ${form.amenities.includes(a.id) ? 'border-[#5BE7DA] bg-[#2ED3C6]/10 text-[#5BE7DA]' : 'border-white/12 text-[#8da2bd]'}`}>
-            {a.label}
-          </button>
-        ))}
+      <label className={lbl}>Your mobile number * <span className="normal-case font-medium text-[#6b7d96]">(for booking notifications)</span></label>
+      <input className={inp} type="tel" placeholder="+44 7…" value={f.contact_phone} onChange={e=>set('contact_phone',e.target.value)}/>
+
+      <label className={lbl}>Description (optional)</label>
+      <textarea className={inp} rows={2} placeholder="Anything else drivers should know" value={f.description} onChange={e=>set('description',e.target.value)}/>
+
+      {/* Live requirements checklist */}
+      <div className="mt-5 rounded-2xl bg-white/[0.04] border border-white/10 p-4">
+        <p className="font-display font-bold text-[13px] text-[#EAF1F8] mb-2">Ready to publish?</p>
+        {canPublish
+          ? <p className="text-[13px] text-[#6BEFB9] font-semibold">✓ All requirements met{hostType==='organization'?' — goes to review on submit':''}</p>
+          : <ul className="space-y-1">{missing.map((m,i)=>(<li key={i} className="text-[12.5px] text-[#FFD27A]">✗ {m}</li>))}</ul>}
       </div>
 
-      <div className="mb-4">
-        <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">Photo URL (optional)</label>
-        <input value={form.photos[0] || ''} onChange={e => f('photos', [e.target.value])} placeholder="https://..."
-          className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+      {err && <p className="text-red-300 text-xs mt-3 bg-red-500/12 border border-red-400/40 rounded-xl px-3 py-2.5">{err}</p>}
+
+      <div className="flex gap-2.5 mt-4">
+        <button type="button" onClick={()=>saveDraft(false).then(id=>id&&setErr(''))} disabled={busy}
+          className="flex-1 py-3 rounded-2xl font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] disabled:opacity-50">
+          Save draft
+        </button>
+        <button type="button" onClick={publish} disabled={!canPublish||busy}
+          title={canPublish?'':'Missing: '+missing.join(', ')}
+          className="flex-[2] py-3 rounded-2xl font-display font-bold text-sm text-[#06231f] btn-teal disabled:opacity-40 disabled:cursor-not-allowed">
+          {busy ? 'Publishing…' : hostType==='organization' ? 'Submit for review' : 'Publish listing'}
+        </button>
       </div>
-
-      {[
-        {key:'contact_email', label:'Contact Email',              type:'email', placeholder:'your@email.com'},
-        {key:'contact_phone', label:'Contact Phone (optional)',    type:'tel',   placeholder:'+44 7...'},
-      ].map(({key, label, type, placeholder}) => (
-        <div key={key} className="mb-4">
-          <label className="block text-xs font-bold text-[#8da2bd] uppercase tracking-wide mb-1">{label}</label>
-          <input type={type} value={form[key]} onChange={e => f(key, e.target.value)} placeholder={placeholder}
-            className="w-full border border-white/12 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
-        </div>
-      ))}
-
-      {err && <p className="text-red-300 text-xs mb-3 font-medium">{err}</p>}
-
-      <button onClick={submit} disabled={saving}
-        className="w-full bg-[#5BE7DA] text-[#06231f] font-bold py-3 rounded-2xl text-sm disabled:opacity-60 hover:bg-blue-600 transition">
-        {saving ? 'Submitting...' : 'List My Space'}
-      </button>
     </div>
   );
 };
@@ -2770,8 +2942,9 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
   const [view,      setView]      = useState('browse');
   const [listings,  setListings]  = useState([]);
   const [loading,   setLoading]   = useState(true);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(null);   // {hostType, status}
   const [filter,    setFilter]    = useState('all');
+  const [needsFix,  setNeedsFix]  = useState([]);      // own listings flagged needs_update
 
   useEffect(() => {
     let active = true;
@@ -2784,6 +2957,13 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
         .order('created_at', { ascending: false })
         .limit(50);
       if (active) { setListings(data || []); setLoading(false); }
+      // §6 grace-period banner: the host's own listings flagged needs_update
+      if (user?.id) {
+        const { data: mine } = await supabase.from('rental_listings')
+          .select('id,title,host_type,photos,instructions')
+          .eq('owner_id', user.id).eq('needs_update', true);
+        if (active) setNeedsFix(mine || []);
+      }
     })();
     return () => { active = false; };
   }, [view]);
@@ -2794,21 +2974,26 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
 
   if (view === 'list') {
     if (submitted) {
+      const pending = submitted.status === 'pending_approval';
       return (
         <div className="p-6 flex flex-col items-center justify-center min-h-64 text-center pb-28">
           <div className="w-16 h-16 bg-[#34E0A0]/15 rounded-full flex items-center justify-center mb-4">
-            <Check size={28} className="text-[#6BEFB9]"/>
+            {pending ? <Clock size={28} className="text-[#FFD27A]"/> : <Check size={28} className="text-[#6BEFB9]"/>}
           </div>
-          <h3 className="font-bold text-[#EAF1F8] text-lg mb-2">Space Listed!</h3>
-          <p className="text-[#8da2bd] text-sm mb-5">Your listing is now live. Renters can contact you directly by email.</p>
-          <button onClick={() => { setSubmitted(false); setView('browse'); }}
-            className="bg-[#5BE7DA] text-[#06231f] font-bold px-6 py-2.5 rounded-2xl text-sm hover:bg-blue-600 transition">
+          <h3 className="font-display font-bold text-[#EAF1F8] text-lg mb-2">{pending ? 'Submitted for review' : 'Space listed!'}</h3>
+          <p className="text-[#8da2bd] text-sm mb-5 max-w-xs leading-relaxed">
+            {pending
+              ? 'Thanks — we review organization listings within 24 hours before they go live. We\u2019ll email you as soon as it\u2019s approved.'
+              : 'Your listing is now live. Drivers can contact you directly.'}
+          </p>
+          <button onClick={() => { setSubmitted(null); setView('browse'); }}
+            className="btn-teal text-[#06231f] font-bold px-6 py-2.5 rounded-2xl text-sm transition">
             Browse Spaces
           </button>
         </div>
       );
     }
-    return <ListSpaceForm user={user} onBack={() => setView('browse')} onSuccess={() => setSubmitted(true)}/>;
+    return <ListSpaceForm user={user} onBack={() => setView('browse')} onSuccess={(hostType,status) => setSubmitted({hostType,status})}/>;
   }
 
   const FILTERS = [
@@ -2821,6 +3006,16 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
 
   return (
     <div className="p-4 pb-28">
+      {needsFix.map(l=>{
+        const minP = l.host_type==='organization' ? 5 : 3;
+        const short = Math.max(0, minP - (l.photos?.length||0));
+        return (
+          <div key={l.id} className="flex items-start gap-2.5 bg-[#FFC24B]/10 border border-[#FFC24B]/30 text-[#FFD27A] text-xs px-3.5 py-3 rounded-2xl mb-3">
+            <Info size={14} className="mt-0.5 flex-shrink-0"/>
+            <span className="flex-1"><strong className="text-[#EAF1F8]">{l.title}</strong>: {short>0?`add ${short} more photo${short!==1?'s':''}`:'update the missing details'} to keep your listing visible for the Fleadh. 14-day grace period, then it\u2019s hidden until updated.</span>
+          </div>
+        );
+      })}
       <div className="bg-gradient-to-br from-[#5BE7DA] to-indigo-600 rounded-2xl p-5 mb-5 text-white">
         <div className="flex items-center gap-2 mb-1">
           <Key size={18}/>
@@ -2902,6 +3097,26 @@ const TABS = [
 // ── Master-account analytics dashboard ───────────────────────────────────────
 const AdminOverlay = ({ onClose }) => {
   const [state, setState] = useState({ loading: true });
+  const [refresh, setRefresh] = useState(0);
+  const [acting, setActing] = useState(null);
+  const act = async (action, id) => {
+    let reason;
+    if (action === 'reject') {
+      reason = window.prompt('Reason for rejection (sent to the host by email):');
+      if (!reason || !reason.trim()) return;
+    }
+    setActing(id);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess?.session?.access_token;
+      const r = await apiFetch('/api/admin', { method:'POST',
+        headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+        body: JSON.stringify({ action, id, reason }) });
+      if (r.ok) setRefresh(x=>x+1);
+      else { const d = await r.json().catch(()=>({})); alert(d.error || 'Action failed'); }
+    } catch (e) { alert(e.message || 'Action failed'); }
+    setActing(null);
+  };
   useEffect(() => {
     (async () => {
       try {
@@ -2917,7 +3132,7 @@ const AdminOverlay = ({ onClose }) => {
         setState({ loading:false, data:d });
       } catch (e) { setState({ loading:false, error: e.message || 'Failed to load' }); }
     })();
-  }, []);
+  }, [refresh]);
   const d = state.data;
   const Tile = ({ label, value, accent }) => (
     <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-center">
@@ -2956,6 +3171,33 @@ const AdminOverlay = ({ onClose }) => {
                   <Tile label="Active · 7d" value={d.users.activeLast7}/>
                 </div>
               </div>
+              {(d.pending?.length > 0) && (
+                <div>
+                  <h3 className="font-display font-bold text-[13px] text-[#FFD27A] uppercase tracking-widest mb-2.5">⏳ Organization listings awaiting approval ({d.pending.length})</h3>
+                  <div className="space-y-3">
+                    {d.pending.map(l=>(
+                      <div key={l.id} className="glass rounded-2xl p-4">
+                        <p className="font-display font-bold text-[15px] text-[#EAF1F8]">{l.title}</p>
+                        <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-0.5">{l.org_name} · {l.org_type} · reg: {l.org_registration}</p>
+                        <p className="text-[12px] text-[rgba(234,241,248,0.55)]">{l.address} · {l.spaces} spaces · £{l.price_per_hour}/hr · {l.availability}</p>
+                        <p className="text-[12px] text-[rgba(234,241,248,0.55)]">Access: {l.access_contact_name} ({l.access_contact_phone}) — {l.access_method}</p>
+                        <p className="text-[12px] text-[rgba(234,241,248,0.55)]">Host: {l.contact_email} · {l.contact_phone}</p>
+                        {(l.photos?.length > 0) && (
+                          <div className="flex gap-1.5 mt-2.5 overflow-x-auto no-scrollbar">
+                            {l.photos.map((u,i)=>(<a key={i} href={u} target="_blank" rel="noreferrer" className="flex-shrink-0"><img src={u} alt="" className="w-16 h-16 object-cover rounded-lg border border-white/10"/></a>))}
+                          </div>
+                        )}
+                        <div className="flex gap-2 mt-3">
+                          <button onClick={()=>act('approve', l.id)} disabled={acting===l.id}
+                            className="flex-1 py-2.5 rounded-xl font-bold text-xs text-[#06231f] btn-teal disabled:opacity-50">✓ Approve & publish</button>
+                          <button onClick={()=>act('reject', l.id)} disabled={acting===l.id}
+                            className="flex-1 py-2.5 rounded-xl font-bold text-xs text-red-300 bg-red-500/12 border border-red-400/40 disabled:opacity-50">✗ Reject…</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Latest signups</h3>
                 <div className="glass rounded-2xl divide-y divide-white/5 overflow-hidden">
