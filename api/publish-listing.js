@@ -30,6 +30,11 @@ export function listingRequirements(l) {
   if (!(l.contact_phone || '').trim()) missing.push('Host mobile number');
   const cap = l.spaces ?? 1;
   if (!(cap >= 1 && cap <= 200)) missing.push('Capacity between 1 and 200');
+  if (l.space_type === 'ev_charger') {
+    const a = l.amenities || [];
+    if (!a.some(x => String(x).startsWith('speed:'))) missing.push('Charger speed');
+    if (!a.some(x => String(x).startsWith('connector:'))) missing.push('Connector type');
+  }
   if (l.host_type === 'organization') {
     if (!(l.org_name || '').trim()) missing.push('Organization legal name');
     if (!l.org_type) missing.push('Organization type');

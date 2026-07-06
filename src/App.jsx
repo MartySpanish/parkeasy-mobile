@@ -2542,11 +2542,14 @@ const InstallBanner = ({ onInstall, onDismiss, isIOS }) => (
 
 // ── Private Space Rental ──────────────────────────────────────────────────────
 const RENTAL_SPACE_TYPES = [
-  { id:'driveway', label:'Driveway', emoji:'🏠' },
-  { id:'garage',   label:'Garage',   emoji:'🚗' },
-  { id:'covered',  label:'Covered',  emoji:'🏢' },
-  { id:'open',     label:'Open Bay', emoji:'⬜' },
+  { id:'driveway',   label:'Driveway',   emoji:'🏠' },
+  { id:'garage',     label:'Garage',     emoji:'🚗' },
+  { id:'covered',    label:'Covered',    emoji:'🏢' },
+  { id:'open',       label:'Open Bay',   emoji:'⬜' },
+  { id:'ev_charger', label:'EV charger', emoji:'⚡' },
 ];
+const EV_SPEEDS = ['3.6kW','7kW','22kW','50kW+ rapid'];
+const EV_CONNECTORS = ['Type 2 (tethered)','Type 2 (socket)','CCS','CHAdeMO','3-pin'];
 
 const RENTAL_AMENITIES = [
   { id:'ev_charging',     label:'EV Charging' },
@@ -2583,11 +2586,17 @@ const ListingCard = ({ listing }) => {
         </div>
         {listing.amenities?.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
-            {listing.amenities.slice(0,3).map(a => (
-              <span key={a} className="text-[10px] bg-white/8 text-[#8da2bd] px-2 py-0.5 rounded-full">
-                {RENTAL_AMENITIES.find(x => x.id === a)?.label || a}
-              </span>
-            ))}
+            {listing.amenities.slice(0,4).map(a => {
+              const label = String(a).startsWith('speed:') ? `⚡ ${String(a).slice(6)}`
+                : String(a).startsWith('connector:') ? String(a).slice(10)
+                : a === 'ev_charging' ? '⚡ EV charging'
+                : (RENTAL_AMENITIES.find(x => x.id === a)?.label || a);
+              return (
+                <span key={a} className={`text-[10px] px-2 py-0.5 rounded-full ${String(a).startsWith('speed:')||a==='ev_charging' ? 'bg-[#2ED3C6]/12 text-[#5BE7DA] border border-[#2ED3C6]/25' : 'bg-white/8 text-[#8da2bd]'}`}>
+                  {label}
+                </span>
+              );
+            })}
           </div>
         )}
         {listing.description && (
@@ -2641,6 +2650,11 @@ const checkRequirements = (l) => {
   if (!(l.contact_phone||'').trim()) missing.push('Your mobile number');
   const cap = l.spaces ?? 1;
   if (!(cap >= 1 && cap <= 200)) missing.push('Capacity between 1 and 200');
+  if (l.space_type === 'ev_charger') {
+    const a = l.amenities || [];
+    if (!a.some(x=>String(x).startsWith('speed:'))) missing.push('Charger speed');
+    if (!a.some(x=>String(x).startsWith('connector:'))) missing.push('Connector type');
+  }
   if (l.host_type === 'organization') {
     if (!(l.org_name||'').trim()) missing.push('Organization legal name');
     if (!l.org_type) missing.push('Organization type');
@@ -2682,7 +2696,7 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   const [f, setF]             = useState({ title:'', description:'', address:'', lat:null, lng:null,
     space_type:'driveway', price_per_hour:'', spaces:1, contact_phone:'', contact_email:user?.email||'',
     instructions:'', availability:null, org_name:'', org_type:null, org_registration:'',
-    access_contact_name:'', access_contact_phone:'', access_method:'' });
+    access_contact_name:'', access_contact_phone:'', access_method:'', ev_speed:null, ev_connector:null });
   const [addrSugs, setAddrSugs] = useState([]);
   const [draftId, setDraftId] = useState(null);
   const [busy, setBusy]       = useState(false);
@@ -2692,7 +2706,10 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
 
   const requiredSlots = PHOTO_SLOTS[hostType];
   const photos = [...requiredSlots.map(s=>slots[s.key]).filter(Boolean), ...extras];
-  const listingShape = { ...f, host_type: hostType, photos,
+  const evAmenities = f.space_type==='ev_charger'
+    ? ['ev_charging', ...(f.ev_speed?[`speed:${f.ev_speed}`]:[]), ...(f.ev_connector?[`connector:${f.ev_connector}`]:[])]
+    : [];
+  const listingShape = { ...f, host_type: hostType, photos, amenities: evAmenities,
     price_per_hour: f.price_per_hour ? parseFloat(f.price_per_hour) : null,
     spaces: hostType==='organization' ? (parseInt(f.spaces)||1) : 1 };
   const missing = checkRequirements(listingShape);
@@ -2733,7 +2750,7 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
     description: f.description.trim() || null,
     address: f.address.trim(), lat: f.lat, lng: f.lng,
     space_type: f.space_type, price_per_hour: listingShape.price_per_hour,
-    spaces: listingShape.spaces, photos,
+    spaces: listingShape.spaces, photos, amenities: evAmenities,
     contact_email: (f.contact_email || user.email || '').trim(), contact_phone: f.contact_phone.trim() || null,
     instructions: f.instructions.trim() || null, availability: f.availability,
     host_type: hostType,
@@ -2831,7 +2848,35 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
       </div>
 
       <label className={lbl}>Listing title</label>
-      <input className={inp} placeholder={hostType==='organization'?'e.g. St Mary’s Church car park':'e.g. Private driveway near City Centre'} value={f.title} onChange={e=>set('title',e.target.value)}/>
+      <input className={inp} placeholder={hostType==='organization'?'e.g. St Mary’s Church car park':f.space_type==='ev_charger'?'e.g. 7kW home charger with driveway':'e.g. Private driveway near City Centre'} value={f.title} onChange={e=>set('title',e.target.value)}/>
+
+      <label className={lbl}>What are you listing? *</label>
+      <div className="grid grid-cols-5 gap-1.5">
+        {RENTAL_SPACE_TYPES.map(t=>(
+          <button key={t.id} type="button" onClick={()=>set('space_type',t.id)}
+            className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border text-[10px] font-semibold transition ${f.space_type===t.id?'border-[#2ED3C6] bg-[#2ED3C6]/10 text-[#5BE7DA]':'border-white/12 bg-white/[0.04] text-[#8da2bd]'}`}>
+            <span className="text-lg">{t.emoji}</span>{t.label}
+          </button>
+        ))}
+      </div>
+
+      {f.space_type==='ev_charger' && (<>
+        <label className={lbl}>Charger speed *</label>
+        <div className="flex flex-wrap gap-2">
+          {EV_SPEEDS.map(sp=>(
+            <button key={sp} type="button" onClick={()=>set('ev_speed',sp)}
+              className={`text-xs px-3 py-2 rounded-full border font-semibold transition ${f.ev_speed===sp?'teal-grad text-[#06231f] border-transparent':'bg-white/[0.05] border-white/12 text-[#cdd9e8]'}`}>{sp}</button>
+          ))}
+        </div>
+        <label className={lbl}>Connector *</label>
+        <div className="flex flex-wrap gap-2">
+          {EV_CONNECTORS.map(cn=>(
+            <button key={cn} type="button" onClick={()=>set('ev_connector',cn)}
+              className={`text-xs px-3 py-2 rounded-full border font-semibold transition ${f.ev_connector===cn?'teal-grad text-[#06231f] border-transparent':'bg-white/[0.05] border-white/12 text-[#cdd9e8]'}`}>{cn}</button>
+          ))}
+        </div>
+        <p className="text-[11px] text-[#6b7d96] mt-2 leading-relaxed">⚡ Tip: set your hourly price to cover electricity (a 7kW charger uses ~£2 of electricity per hour at ~28p/kWh) plus your margin.</p>
+      </>)}
 
       {hostType==='organization' && (<>
         <label className={lbl}>Organization legal name *</label>
@@ -3022,7 +3067,7 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
           <Key size={18}/>
           <h2 className="font-black text-xl">Private Spaces</h2>
         </div>
-        <p className="text-blue-100 text-sm mb-4">Rent a driveway or garage from a local — cheaper than car parks, guaranteed spot.</p>
+        <p className="text-blue-100 text-sm mb-4">Rent a driveway, garage or home EV charger from a local — cheaper than car parks, guaranteed spot.</p>
         <div className="flex gap-2">
           <button onClick={() => setView('list')}
             className="bg-[#0e1a2c] text-[#5BE7DA] font-bold text-sm px-4 py-2 rounded-xl hover:bg-[#2ED3C6]/10 transition">
