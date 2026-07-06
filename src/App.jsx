@@ -917,6 +917,11 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
     if (ok) { onClose(); } else { setCodeError(true); }
   };
 
+  // Time-limited Premium (the reward for an approved hidden gem) shows its
+  // expiry; subscriptions / VIP (pe_premium) are open-ended.
+  const rewardUntil = !ls.get('pe_premium', false) && ls.get('pe_premium_until', 0) > Date.now()
+    ? ls.get('pe_premium_until', 0) : null;
+
   if (isPremium) return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
       <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
@@ -925,6 +930,9 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
         </div>
         <h3 className="text-xl font-bold text-[#EAF1F8]">You're Premium ★</h3>
         <p className="text-sm text-[#8da2bd] leading-relaxed">Full access to all ParkEasy Premium features. Thanks for supporting Belfast's community!</p>
+        {rewardUntil && (
+          <p className="text-xs font-semibold text-[#5BE7DA]">🏆 Hidden-gem reward — Premium until {new Date(rewardUntil).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}</p>
+        )}
         <button onClick={onClose} className="w-full bg-[#0e1a2c] text-white py-3 rounded-xl font-bold hover:bg-[#16243a] transition">Done</button>
       </div>
     </div>
@@ -3512,7 +3520,10 @@ export default function App() {
   const [showWelcome,   setShowWelcome]   = useState(()=>!ls.get('pe_user',null) && !ls.get('pe_skipped',false));
   const [showUserMenu,  setShowUserMenu]  = useState(false);
   const [showBizModal,  setShowBizModal]  = useState(false);
-  const [isPremium,     setIsPremium]     = useState(()=>ls.get('pe_premium', false));
+  // Premium is either lifetime/subscription (pe_premium) or time-limited
+  // (pe_premium_until) — the reward for an approved community hidden gem.
+  const [isPremium,     setIsPremium]     = useState(()=>ls.get('pe_premium', false) || ls.get('pe_premium_until', 0) > Date.now());
+  const [rewardUntil,   setRewardUntil]   = useState(null);   // timestamp → shows the congrats sheet
   const [showPricing,   setShowPricing]   = useState(false);
   const [infoPage,      setInfoPage]      = useState(null);
   const [cookieChoice,  setCookieChoice]  = useState(()=>ls.get('pe_cookie', null));
@@ -3599,6 +3610,17 @@ export default function App() {
     if (p.get('premium') === 'success') {
       setIsPremium(true);
       ls.set('pe_premium', true);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // Hidden-gem reward: when a community spot is approved, the founder emails
+    // the submitter this link — it activates 1 month of Premium. A second
+    // approval extends from whatever is left, so months stack.
+    if (p.get('reward') === 'gem30') {
+      const base = Math.max(ls.get('pe_premium_until', 0), Date.now());
+      const until = base + 30 * 86400000;
+      ls.set('pe_premium_until', until);
+      setIsPremium(true);
+      setRewardUntil(until);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -3738,6 +3760,19 @@ export default function App() {
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
       {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)} onRedeem={redeemVipCode}/>}
+      {rewardUntil && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[210] flex items-center justify-center p-4" onClick={()=>setRewardUntil(null)}>
+          <div onClick={e=>e.stopPropagation()} className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
+            <p className="text-4xl">🏆</p>
+            <h3 className="text-xl font-bold text-[#EAF1F8]">Spot approved — 1 month Premium unlocked!</h3>
+            <p className="text-sm text-[#8da2bd] leading-relaxed">
+              Thanks for sharing a hidden gem with the community. Every ✨ gem and ⚡ EV charger spot across NI
+              is yours until <strong className="text-[#5BE7DA]">{new Date(rewardUntil).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}</strong>.
+            </p>
+            <button onClick={()=>setRewardUntil(null)} className="w-full btn-teal text-[#06231f] py-3 rounded-xl font-bold active:scale-[0.98] transition">Start exploring ✨</button>
+          </div>
+        </div>
+      )}
       {showIOSGuide && <IOSGuide onClose={()=>setShowIOSGuide(false)}/>}
       {showUserMenu && (
         <UserMenu user={user} spotsAdded={user?.spotsAdded||0} isPremium={isPremium}
