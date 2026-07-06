@@ -25,7 +25,10 @@ const TEMPLATES = {
   business: (d) => ({ subject: `🏪 New business listing enquiry: ${d.name || ''}`,
     rows: [['Business', d.name], ['Email', d.email], ['Message', d.message]] }),
   spot:     (d) => ({ subject: `🅿️ New spot submitted: ${d.name || ''}`,
-    rows: [['Spot', d.name], ['Near', d.near], ['Notes', d.message], ['By', d.email]] }),
+    rows: [['Spot', d.name], ['Near', d.near], ['Notes', d.message], ['By', d.email],
+      // Approving = reply to the submitter with this link; it activates their
+      // free month of Premium in the app (30 days, stacks with a prior reward).
+      ['To approve', `Reply to ${d.email || 'the submitter'} with their reward link: https://parkeasy.uk/?reward=gem30`]] }),
 };
 
 
