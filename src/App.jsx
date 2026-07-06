@@ -161,7 +161,7 @@ const SPOTS = [
   { id:64, name:'Cave Hill Country Park (Upper Cavehill Rd)', near:'Cave Hill', tags:['cave hill','cavehill','country park','walks','hiking','napoleons nose','free parking','north belfast','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — dawn to dusk', notes:'Alternative free car park higher up on Upper Cavehill Road — quicker route to the summit and Napoleon\'s Nose than the castle. Stunning views over the city and lough. Less crowded on busy weekends.', lat:54.6420, lng:-5.9560, by:'CaveHillHiker', votes:54, photo:null, price:null, spaces:40 },
   { id:65, name:'Whiterock Leisure Centre car park', near:'Whiterock Road', tags:['whiterock','whiterock leisure centre','west belfast','ev charging','falls','leisure centre','free parking'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Free car park at Whiterock Leisure Centre with 2 EV charging points — one of the few charging spots in West Belfast. Handy for the gym, pool and Falls Park. Community estimate on charger availability.', lat:54.6002, lng:-5.9840, by:'WhiterockLocal', votes:0, photo:null, price:null, spaces:60, ev:{available:true, ports:2, speed:'7kW'}, premium:true },
   { id:66, name:'LORAG centre / Shaftesbury Rec kerbside', near:'Lower Ormeau / Gasworks', tags:['lorag','shaftesbury','lower ormeau','gasworks','south belfast','free parking','city centre walk'], badge:'hidden_gem', dist:0.30, walk:'8 min', restriction:'Free all day', notes:'Founder pick: free kerbside and community-centre parking around LORAG on the Lower Ormeau, beside the Gasworks. Park up and walk into the city centre in minutes — ideal on match and gig days.', lat:54.5900, lng:-5.9235, by:'ParkEasy', votes:0, photo:null, price:null, spaces:null, premium:true },
-  { id:67, name:'Westwood Centre car park', near:'Kennedy Way', tags:['westwood','westwood centre','kennedy way','west belfast','ev charging','andersonstown','falls','shopping'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Free shopping-centre car park at the Westwood Centre on Kennedy Way with EV charging points — handy West Belfast charging option beside the Kennedy Centre. Community estimate on charger speed and availability.', lat:54.5896, lng:-5.9870, by:'WestBelfastLocal', votes:0, photo:null, price:null, spaces:250, ev:{available:true, ports:2, speed:'22kW'}, premium:true },
+  { id:67, name:'Kennedy Centre car park', near:'Falls Road', tags:['kennedy centre','kennedy center','falls road','west belfast','ev charging','andersonstown','shopping centre','free parking'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Free customer car park at the Kennedy Centre on the Falls Road with EV charging points — a handy West Belfast charging stop while you shop. Community estimate on charger speed and availability.', lat:54.5943, lng:-5.9808, by:'WestBelfastLocal', votes:0, photo:null, price:null, spaces:400, ev:{available:true, ports:2, speed:'22kW'}, premium:true },
 ];
 
 // ── Cities ───────────────────────────────────────────────────────────────────
@@ -1568,6 +1568,54 @@ const spotImageUrl = (lat, lng) =>
 // address returns the nearest spots regardless of which city is selected.
 const ALL_SPOTS = CITIES.flatMap(c => getCitySpots(c.id));
 
+// ── Local landmark search ─────────────────────────────────────────────────────
+// Remote geocoders miss plenty of NI landmarks ("Kennedy Centre") and users
+// type US spellings ("center"). Before asking Nominatim/Google, try to match
+// the query against our own spot names/tags/areas — a hit gives us coordinates
+// instantly and works offline.
+const normalizePlace = (s) => String(s || '').toLowerCase()
+  .replace(/center/g, 'centre')
+  .replace(/[^a-z0-9 ]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+// Gated spots (hidden gems / premium EV picks) still work as landmarks for
+// free users — their tags/areas are public place names ("kennedy centre") —
+// but only via area+tags, with APPROXIMATE coordinates and the area as the
+// label, so a gem's exact name and kerb position never leak through search.
+const landmarkMatches = (term, includeGated) => {
+  const q = normalizePlace(term);
+  if (q.length < 3) return [];
+  const words = q.split(' ');
+  const out = [];
+  for (const s of ALL_SPOTS) {
+    const hide = !includeGated && isGated(s);
+    const hay = normalizePlace(hide
+      ? `${s.near} ${(s.tags || []).join(' ')}`
+      : `${s.name} ${s.near} ${(s.tags || []).join(' ')}`);
+    // exact-phrase beats all-words-present; anything less is no match
+    const score = hay.includes(q) ? 2 : words.every(w => hay.includes(w)) ? 1 : 0;
+    if (score) out.push({
+      score,
+      spot: s,
+      label: hide ? s.near : s.name,
+      lat: hide ? approxCoord(s.lat) : s.lat,
+      lng: hide ? approxCoord(s.lng) : s.lng,
+    });
+  }
+  return out.sort((a, b) => b.score - a.score || b.spot.votes - a.spot.votes);
+};
+
+const localLandmark = (term, includeGated) => {
+  const best = landmarkMatches(term, includeGated)[0];
+  return best ? { lat: best.lat, lng: best.lng, label: term.trim() } : null;
+};
+
+const localSuggestions = (term, includeGated) =>
+  landmarkMatches(term, includeGated).slice(0, 3).map((m) => ({
+    label: m.label, sub: m.spot.near === m.label ? '' : m.spot.near, lat: m.lat, lng: m.lng,
+  }));
+
 // Geocode a free-text place/address to coordinates. Uses Google when a key is
 // configured, otherwise the free OpenStreetMap Nominatim service, biased to
 // Northern Ireland first and then falling back to a UK-wide lookup.
@@ -1793,8 +1841,11 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     inputRef.current?.blur();
     const term = (q || '').trim();
     if (!term) { setGeo(null); setGeoMiss(false); return; }
+    // Our own landmarks first (instant, spells "center" fine), then remote.
+    const local = localLandmark(term, isPremium);
+    if (local) { setGeo(local); setFocusSpot(null); return; }
     setGeoBusy(true); setGeoMiss(false);
-    const loc = await geocodeText(term);
+    const loc = await geocodeText(normalizePlace(term));
     setGeoBusy(false);
     if (loc) { setGeo(loc); setFocusSpot(null); }
     else { setGeo(null); setGeoMiss(true); }
@@ -1809,8 +1860,9 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     clearTimeout(sugTimer.current);
     if (v.trim().length < 3) { setSugs([]); return; }
     sugTimer.current = setTimeout(async () => {
+      const local = localSuggestions(v, isPremium);
       const list = await suggestPlaces(v);
-      setSugs(list);
+      setSugs([...local, ...list].slice(0, 6));
     }, 300);
   };
 
@@ -1822,6 +1874,8 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     setGeoMiss(false);
     setFocusSpot(null);
     inputRef.current?.blur();
+    // Local landmark suggestions carry their coordinates — no lookup needed.
+    if (s.lat != null && s.lng != null) { setGeo({ lat: s.lat, lng: s.lng, label: s.label }); return; }
     setGeoBusy(true);
     const loc = await resolvePlace(s);
     setGeoBusy(false);
