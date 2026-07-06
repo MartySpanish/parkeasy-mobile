@@ -147,7 +147,7 @@ const SPOTS = [
   { id:51, name:'Park & Ride — Dundonald',             near:'East Belfast',      tags:['park and ride','dundonald','east belfast','park & ride'],                           badge:'official',   dist:0.00, walk:'Bus to city',    restriction:'Mon–Sat 7am–7pm',              notes:'Official Translink Park & Ride — 517 spaces, 8 accessible bays. Regular Metro bus to the city centre. Free parking with bus ticket — great for East Belfast commuters.', lat:54.5812, lng:-5.8390, by:'Translink', votes:0, photo:null, price:null, spaces:517, available:310, total:517, ev:{available:true,ports:2,speed:'7kW'} },
   { id:52, name:'Titanic Quarter multi-storey',        near:'Titanic Quarter',   tags:['titanic quarter','titanic belfast','multi-storey','titanic'],                       badge:'official',   dist:0.10, walk:'3 min',          restriction:'Open 7am–10pm',                notes:'Official underground car park for Titanic Belfast — 520 secure spaces. Close to Titanic Belfast, SS Nomadic and W5. Pre-booking recommended on busy days.', lat:54.6070, lng:-5.9125, by:'Titanic Belfast', votes:12, photo:null, price:'£3.00/hr', spaces:520, available:312, total:520, ev:{available:true,ports:8,speed:'22kW'} },
   { id:53, name:'Castle Court multi-storey',           near:'Castle Court',      tags:['castle court','multi-storey','city centre','royal avenue'],                         badge:'official',   dist:0.00, walk:'Right there',    restriction:'Open 7am–10pm Mon–Sat',        notes:'Multi-storey inside Castle Court shopping centre — 1,550 spaces with EV charging on level 5. Validated parking available with purchase in many stores.', lat:54.5992, lng:-5.9352, by:'CastleCourt', votes:8, photo:null, price:'£2.50/hr', spaces:1550, available:930, total:1550, ev:{available:true,ports:4,speed:'7kW'} },
-  { id:54, name:'Lagan Towpath riverside (free)',      near:'Lagan Towpath',     tags:['lagan towpath','riverside','lagan','south belfast','free parking'],                 badge:'hidden_gem', dist:0.00, walk:'Riverside start', restriction:'Free all day',                notes:'Completely free parking along the Lagan towpath riverside roads. Walk or cycle along the Lagan from here. Popular with locals but rarely on parking apps.', lat:54.5810, lng:-5.9155, by:'LaganLocal', votes:58, photo:null, price:null, spaces:null, premium:true },
+  { id:54, name:'Lagan Towpath riverside (free)',      near:'Lagan Towpath',     tags:['lagan towpath','riverside','lagan','south belfast','free parking'],                 badge:'hidden_gem', dist:0.00, walk:'Riverside start', restriction:'Free all day',                notes:'Completely free parking along the Lagan towpath riverside roads. Walk or cycle along the Lagan from here. Popular with locals but rarely on parking apps.', lat:54.5810, lng:-5.9155, by:'LaganLocal', votes:58, photo:null, price:null, spaces:null, premium:false },
   // ── Parks & walks around Belfast (free car parks) ──
   { id:55, name:'Stormont Estate car park',            near:'Stormont Estate',   tags:['stormont','stormont estate','east belfast','walks','parliament buildings','free parking','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — open dawn to dusk', notes:'Free car park at Parliament Buildings. Walk the 4km Long Woodland Walk (orange arrows), the 2km loop or the 1.6km fitness trail. Tree-lined avenue up to Stormont — great for families and dog walkers.', lat:54.6038, lng:-5.8345, by:'StormontWalker', votes:74, photo:null, price:null, spaces:200 },
   { id:56, name:'Ormeau Park car park',                near:'Ormeau Park',       tags:['ormeau park','south belfast','east belfast','walks','free parking','oldest park','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:"Belfast's oldest park (1871). Free car park by the Recreation Centre — toilets and refreshments on site. Walks through mature woodland, formal gardens and a wildflower meadow overlooking the Lagan.", lat:54.5905, lng:-5.9105, by:'OrmeauParkLocal', votes:61, photo:null, price:null, spaces:120 },
@@ -160,6 +160,7 @@ const SPOTS = [
   { id:63, name:'Victoria Park (East Belfast)',        near:'Victoria Park',     tags:['victoria park','east belfast','walks','free parking','lagan','airport road','dog walk','cycling'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free all day', notes:'Free car park off the Sydenham bypass. Flat lakeside loop popular with runners, cyclists and families — watch the planes land at George Best City Airport. Links to the Comber Greenway.', lat:54.6030, lng:-5.8780, by:'VicParkLocal', votes:39, photo:null, price:null, spaces:60 },
   { id:64, name:'Cave Hill Country Park (Upper Cavehill Rd)', near:'Cave Hill', tags:['cave hill','cavehill','country park','walks','hiking','napoleons nose','free parking','north belfast','dog walk'], badge:'free', dist:0.00, walk:'Trail start', restriction:'Free — dawn to dusk', notes:'Alternative free car park higher up on Upper Cavehill Road — quicker route to the summit and Napoleon\'s Nose than the castle. Stunning views over the city and lough. Less crowded on busy weekends.', lat:54.6420, lng:-5.9560, by:'CaveHillHiker', votes:54, photo:null, price:null, spaces:40 },
   { id:65, name:'Whiterock Leisure Centre car park', near:'Whiterock Road', tags:['whiterock','whiterock leisure centre','west belfast','ev charging','falls','leisure centre','free parking'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Free car park at Whiterock Leisure Centre with 2 EV charging points — one of the few charging spots in West Belfast. Handy for the gym, pool and Falls Park. Community estimate on charger availability.', lat:54.6002, lng:-5.9840, by:'WhiterockLocal', votes:0, photo:null, price:null, spaces:60, ev:{available:true, ports:2, speed:'7kW'}, premium:true },
+  { id:66, name:'LORAG centre / Shaftesbury Rec kerbside', near:'Lower Ormeau / Gasworks', tags:['lorag','shaftesbury','lower ormeau','gasworks','south belfast','free parking','city centre walk'], badge:'hidden_gem', dist:0.30, walk:'8 min', restriction:'Free all day', notes:'Founder pick: free kerbside and community-centre parking around LORAG on the Lower Ormeau, beside the Gasworks. Park up and walk into the city centre in minutes — ideal on match and gig days.', lat:54.5900, lng:-5.9235, by:'ParkEasy', votes:0, photo:null, price:null, spaces:null, premium:true },
 ];
 
 // ── Cities ───────────────────────────────────────────────────────────────────
@@ -215,7 +216,7 @@ const LISBURN_SPOTS = [
   { id:201, name:'Bow Street Mall Car Park',   near:'Bow Street Mall',  tags:['lisburn','bow street','city centre','shopping','bow street mall'], badge:'official', dist:0, walk:'2 min', restriction:'Mall hours', notes:'Multi-storey at Bow Street Mall in the centre of Lisburn — the main shopping car park. Easy access to Bow St and Market Square.', lat:54.5101, lng:-6.0407, by:'Bow Street Mall', votes:0, photo:null, price:null, spaces:null },
   { id:202, name:'Lisburn Square Car Park',     near:'Lisburn Square',   tags:['lisburn','lisburn square','city centre','shopping'],               badge:'official', dist:0, walk:'2 min', restriction:'Mon–Sat 8am–6pm', notes:'Central car park beside Lisburn Square shops and restaurants. Handy for the city centre and Market Square.', lat:54.5108, lng:-6.0388, by:'Official', votes:0, photo:null, price:null, spaces:null },
   { id:203, name:'Smithfield Street Car Park',  near:'Lisburn centre',   tags:['lisburn','smithfield street','city centre'],                       badge:'timed',    dist:0, walk:'3 min', restriction:'Mon–Sat 8am–6pm', notes:'On-street/surface parking on Smithfield St. Free evenings and Sundays — short walk to the centre.', lat:54.5119, lng:-6.0412, by:'NorthAntrimLocal', votes:0, photo:null, price:null, spaces:null },
-  { id:204, name:'Wallace Park',                near:'Wallace Park',     tags:['lisburn','wallace park','walks','free parking','dog walk'],         badge:'hidden_gem', dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Wallace Park — Victorian park with walks, sports pitches and a duck pond. Great for families and dog walkers.', lat:54.5180, lng:-6.0360, by:'LisburnLocal', votes:0, photo:null, price:null, spaces:null, premium:true },
+  { id:204, name:'Wallace Park',                near:'Wallace Park',     tags:['lisburn','wallace park','walks','free parking','dog walk'],         badge:'hidden_gem', dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Wallace Park — Victorian park with walks, sports pitches and a duck pond. Great for families and dog walkers.', lat:54.5180, lng:-6.0360, by:'LisburnLocal', votes:0, photo:null, price:null, spaces:null, premium:false },
 ];
 
 // ── Bangor — starter set of real, well-known car parks (owner to verify) ──────
@@ -229,7 +230,7 @@ const BANGOR_SPOTS = [
 // ── Newtownabbey — starter set of real, well-known car parks (owner to verify) ─
 const NEWTOWNABBEY_SPOTS = [
   { id:401, name:'Abbeycentre Car Park',        near:'Abbeycentre',      tags:['newtownabbey','abbeycentre','shopping','free parking','retail park'], badge:'free',  dist:0, walk:'Right there', restriction:'Free — centre hours', notes:'Large free car park at the Abbeycentre shopping centre — always plenty of space. Use as a base for the area.', lat:54.6855, lng:-5.9160, by:'Abbeycentre', votes:0, photo:null, price:null, spaces:null },
-  { id:402, name:'Valley Leisure Centre',       near:'Valley Park',      tags:['newtownabbey','valley park','valley leisure centre','walks','free parking','dog walk'], badge:'hidden_gem', dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Valley Leisure Centre and the Valley Park — walking trails, playing fields and the leisure centre.', lat:54.6760, lng:-5.9300, by:'NewtownabbeyLocal', votes:0, photo:null, price:null, spaces:null, premium:true },
+  { id:402, name:'Valley Leisure Centre',       near:'Valley Park',      tags:['newtownabbey','valley park','valley leisure centre','walks','free parking','dog walk'], badge:'hidden_gem', dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Valley Leisure Centre and the Valley Park — walking trails, playing fields and the leisure centre.', lat:54.6760, lng:-5.9300, by:'NewtownabbeyLocal', votes:0, photo:null, price:null, spaces:null, premium:false },
 ];
 
 // ── Derry~Londonderry ─────────────────────────────────────────────────────────
@@ -269,7 +270,7 @@ const ANTRIM_SPOTS = [
   { id:565, name:'Church Street On-Street', near:'Antrim Town Centre / Church Street', tags:['antrim','church street','on-street','timed','town centre'], badge:'timed', dist:0, walk:'~2 min', restriction:'1 hr limit Mon-Sat 9am-5pm, no return within 2 hrs', notes:'On-street spaces along Church Street in the heart of Antrim. The 1-hour limit is strictly enforced during the week. Free evenings and Sundays.', lat:54.7195, lng:-6.2090, by:'Antrim Local', votes:0, photo:null, price:null, spaces:15 },
   { id:566, name:'High Street On-Street', near:'Antrim High Street shops', tags:['antrim','high street','on-street','timed','shopping'], badge:'timed', dist:0, walk:'~2 min', restriction:'1 hr limit Mon-Sat 9am-5pm', notes:'Limited on-street parking on High Street giving direct access to independent shops and cafes. Free outside restricted hours.', lat:54.7202, lng:-6.2083, by:'Antrim Local', votes:0, photo:null, price:null, spaces:10 },
   { id:567, name:'Steeple Road On-Street', near:'Antrim Round Tower', tags:['antrim','steeple road','round tower','free','hidden gem'], badge:'hidden_gem', dist:0, walk:'~2 min', restriction:'Free all day', notes:'Quiet residential on-street parking along Steeple Road, short walk from the famous Antrim Round Tower. Virtually unknown to visitors. Completely free with no restrictions.', lat:54.7258, lng:-6.2082, by:'Antrim Local', votes:0, photo:null, price:null, spaces:20, premium:true },
-  { id:568, name:'Tesco Extra Car Park, Castle Way', near:'Tesco Extra / Castle Mall', tags:['antrim','tesco','castle way','supermarket','free','hidden gem'], badge:'hidden_gem', dist:0, walk:'~4 min', restriction:'Free, customers only', notes:'The large Tesco Extra car park on Castle Way has overflow capacity locals use for a quick town centre visit. Far less busy than the Central Car Park on weekends.', lat:54.7205, lng:-6.2115, by:'Antrim Local', votes:0, photo:null, price:null, spaces:300, premium:true },
+  { id:568, name:'Tesco Extra Car Park, Castle Way', near:'Tesco Extra / Castle Mall', tags:['antrim','tesco','castle way','supermarket','free','hidden gem'], badge:'hidden_gem', dist:0, walk:'~4 min', restriction:'Free, customers only', notes:'The large Tesco Extra car park on Castle Way has overflow capacity locals use for a quick town centre visit. Far less busy than the Central Car Park on weekends.', lat:54.7205, lng:-6.2115, by:'Antrim Local', votes:0, photo:null, price:null, spaces:300, premium:false },
   { id:569, name:'Fountain Street On-Street', near:'Antrim Town Centre', tags:['antrim','fountain street','on-street','free','town centre'], badge:'free', dist:0, walk:'~3 min', restriction:'Free where not restricted', notes:'A handful of unrestricted on-street spaces at the southern end of Fountain Street. Often overlooked as most people head for the central car parks.', lat:54.7188, lng:-6.2075, by:'Antrim Local', votes:0, photo:null, price:null, spaces:8 },
   { id:570, name:'Greystone Road On-Street', near:'Antrim Leisure Centre / Town Centre', tags:['antrim','greystone road','on-street','free','leisure centre'], badge:'free', dist:0, walk:'~6 min', restriction:'Free all day', notes:'Unrestricted on-street parking along Greystone Road on the western edge of town. Useful when central car parks are full on market days.', lat:54.7215, lng:-6.2205, by:'Antrim Local', votes:0, photo:null, price:null, spaces:25 },
 ];
@@ -367,7 +368,7 @@ const OMAGH_SPOTS = [
   { id:786, name:'Asda Omagh (Dromore Road)', near:'Asda Superstore / Dromore Road', tags:['omagh','asda','dromore road','superstore','free','supermarket'], badge:'free', dist:0, walk:'Right there', restriction:'Free for Asda customers', notes:'Free customer car park at Asda Omagh on Dromore Road. Ample spaces, open during store hours. Useful overflow when town centre car parks are full on busy Saturdays.', lat:54.5932, lng:-7.2905, by:'Omagh Local', votes:0, photo:null, price:null, spaces:null },
   { id:787, name:'Castle Street On-Street Parking', near:'Strule Arts Centre / Castle Street', tags:['omagh','castle street','strule arts centre','on-street','timed'], badge:'timed', dist:0, walk:'~2 min', restriction:'Mon-Sat 8am-6pm limited; free evenings & Sundays', notes:'On-street spaces on Castle Street beside the Strule Arts Centre. Perfect for theatre visits in the evenings when parking is free.', lat:54.5960, lng:-7.2968, by:'Omagh Local', votes:0, photo:null, price:null, spaces:null },
   { id:788, name:'Church Street North On-Street', near:'Church Street / Omagh town centre', tags:['omagh','church street','on-street','timed','town centre'], badge:'timed', dist:0, walk:'~3 min', restriction:'Mon-Sat 8am-6pm limited; free evenings & Sundays', notes:'On-street spaces on Church Street North within easy reach of the Market Street shopping area. Free in the evenings — good for a meal out.', lat:54.5970, lng:-7.2960, by:'Omagh Local', votes:0, photo:null, price:null, spaces:null },
-  { id:789, name:'Omagh Riverside Walk Lay-By', near:'River Strule / Omagh Riverside Walk', tags:['omagh','riverside','river strule','hidden gem','free','abbey bridge'], badge:'hidden_gem', dist:0, walk:'Right there', restriction:'Free all day, no restrictions', notes:"Quiet lay-by alongside the River Strule used by locals visiting the Riverside Walk. Virtually unknown to visitors and completely free — walk straight onto the riverside path.", lat:54.5940, lng:-7.2940, by:'Omagh Local', votes:0, photo:null, price:null, spaces:null, premium:true },
+  { id:789, name:'Omagh Riverside Walk Lay-By', near:'River Strule / Omagh Riverside Walk', tags:['omagh','riverside','river strule','hidden gem','free','abbey bridge'], badge:'hidden_gem', dist:0, walk:'Right there', restriction:'Free all day, no restrictions', notes:"Quiet lay-by alongside the River Strule used by locals visiting the Riverside Walk. Virtually unknown to visitors and completely free — walk straight onto the riverside path.", lat:54.5940, lng:-7.2940, by:'Omagh Local', votes:0, photo:null, price:null, spaces:null, premium:false },
   { id:790, name:'Campsie Road Quiet Street Parking', near:'Campsie Road / west Omagh', tags:['omagh','campsie road','free','hidden gem','residential'], badge:'hidden_gem', dist:0, walk:'~8 min', restriction:'Free all day', notes:'Residential street on the western edge of the town centre where locals park for free and walk in. Zero charge, zero hassle, ~8 minutes on foot to the High Street.', lat:54.5985, lng:-7.3055, by:'Omagh Local', votes:0, photo:null, price:null, spaces:null, premium:true },
 ];
 
@@ -409,8 +410,8 @@ const STRABANE_SPOTS = [
   { id:866, name:'ASDA Branch Road Car Park', near:'ASDA Strabane Superstore', tags:['strabane','asda','branch road','superstore','supermarket','free'], badge:'free', dist:0, walk:'~8 min', restriction:'Free up to 3 hrs for customers', notes:'Large well-lit free car park at ASDA Strabane on Branch Road with generous 3-hour limit. Easy to combine a shop with a town centre visit. Rarely full.', lat:54.8308, lng:-7.4711, by:'Strabane Local', votes:0, photo:null, price:null, spaces:250 },
   { id:867, name:'Meetinghouse Street On-Street', near:'Strabane Town Centre / Upper Main Street', tags:['strabane','meetinghouse street','on-street','town centre','timed'], badge:'timed', dist:0, walk:'~2 min', restriction:'Mon-Sat 8am-6pm, 1hr limit; free evenings & Sundays', notes:'On-street parking bays on Meetinghouse Street, quiet side street just off the upper town centre. Free after hours and all day Sunday.', lat:54.8276, lng:-7.4641, by:'Strabane Local', votes:0, photo:null, price:null, spaces:12 },
   { id:868, name:'Castle Street On-Street', near:'Strabane Town Centre / Abercorn Square', tags:['strabane','castle street','abercorn square','on-street','timed'], badge:'timed', dist:0, walk:'~4 min', restriction:'Mon-Sat 8am-6pm, 1hr limit; free evenings & Sundays', notes:'Convenient on-street spaces on Castle Street close to Abercorn Square. Often overlooked in favour of the main car parks — handy option during quieter parts of the day.', lat:54.8265, lng:-7.4644, by:'Strabane Local', votes:0, photo:null, price:null, spaces:10 },
-  { id:869, name:'Dock Street Riverside Layby', near:'Canal Basin / River Mourne Towpath', tags:['strabane','dock street','canal basin','river mourne','towpath','hidden gem','free'], badge:'hidden_gem', dist:0, walk:'~6 min', restriction:'Free all day', notes:'Informal layby on Dock Street alongside the River Mourne towpath — almost entirely unknown to visitors. Perfect for reaching the Canal Basin and riverside walks.', lat:54.8248, lng:-7.4592, by:'Strabane Local', votes:0, photo:null, price:null, spaces:15, premium:true },
-  { id:870, name:'Strabane Retail Park Overflow', near:'Strabane Retail Park / Upper Main Street', tags:['strabane','retail park','overflow','upper main street','hidden gem','free'], badge:'hidden_gem', dist:0, walk:'~5 min', restriction:'Free all day', notes:'Outer overflow section of Strabane Retail Park — largely unmarked and almost always empty. Short walk from the upper town centre. Only locals in the know use this area.', lat:54.8290, lng:-7.4668, by:'Strabane Local', votes:0, photo:null, price:null, spaces:20, premium:true },
+  { id:869, name:'Dock Street Riverside Layby', near:'Canal Basin / River Mourne Towpath', tags:['strabane','dock street','canal basin','river mourne','towpath','hidden gem','free'], badge:'hidden_gem', dist:0, walk:'~6 min', restriction:'Free all day', notes:'Informal layby on Dock Street alongside the River Mourne towpath — almost entirely unknown to visitors. Perfect for reaching the Canal Basin and riverside walks.', lat:54.8248, lng:-7.4592, by:'Strabane Local', votes:0, photo:null, price:null, spaces:15, premium:false },
+  { id:870, name:'Strabane Retail Park Overflow', near:'Strabane Retail Park / Upper Main Street', tags:['strabane','retail park','overflow','upper main street','hidden gem','free'], badge:'hidden_gem', dist:0, walk:'~5 min', restriction:'Free all day', notes:'Outer overflow section of Strabane Retail Park — largely unmarked and almost always empty. Short walk from the upper town centre. Only locals in the know use this area.', lat:54.8290, lng:-7.4668, by:'Strabane Local', votes:0, photo:null, price:null, spaces:20, premium:false },
 ];
 
 // ── Downpatrick ───────────────────────────────────────────────────────────────
@@ -437,7 +438,7 @@ const NEWCASTLE_SPOTS = [
   { id:916, name:'Central Promenade On-Street Bays', near:'Newcastle Centre & Tropicana Pool', tags:['newcastle','central promenade','promenade','seafront','tropicana'], badge:'timed', dist:0, walk:'Right there', restriction:'Mon-Sat daytime limited stay', notes:'On-street parking along Central Promenade facing the beach, near Newcastle Centre and the Tropicana outdoor pool. Very popular in summer — arrive before 9am in July/August.', lat:54.2168, lng:-5.8920, by:'Newcastle Local', votes:0, photo:null, price:null, spaces:null },
   { id:917, name:'Bryansford Road On-Street Parking', near:'Tollymore Forest Park Road & Bryansford Village', tags:['newcastle','bryansford road','bryansford','tollymore','free parking'], badge:'free', dist:0, walk:'~10 min', restriction:'Free, no restrictions', notes:'Unrestricted free on-street parking on Bryansford Road heading toward Tollymore Forest Park. Useful when beach car parks are full.', lat:54.2230, lng:-5.9050, by:'Newcastle Local', votes:0, photo:null, price:null, spaces:null },
   { id:918, name:'Castlebridge Court Car Park', near:'Newcastle Town Centre (behind Main Street)', tags:['newcastle','castlebridge court','hidden gem','free parking','town centre'], badge:'hidden_gem', dist:0, walk:'~4 min', restriction:'Free daytime, no overnight', notes:'Quiet lesser-known free car park tucked in at Castlebridge Court. Locals use it to avoid the busy seafront car parks. No overnight parking.', lat:54.2103, lng:-5.8917, by:'Newcastle Local', votes:0, photo:null, price:null, spaces:30, premium:true },
-  { id:919, name:'Shimna Road Riverside Lay-By', near:'Shimna River Walk & Donard Forest', tags:['newcastle','shimna road','shimna river','donard forest','hidden gem','walkers'], badge:'hidden_gem', dist:0, walk:'~5 min', restriction:'Free, no restrictions', notes:'Free informal lay-by spaces along Shimna Road near the river and forest edge. Popular with walkers heading into Donard Forest who want to avoid the busier car park.', lat:54.2128, lng:-5.8935, by:'Newcastle Local', votes:0, photo:null, price:null, spaces:10, premium:true },
+  { id:919, name:'Shimna Road Riverside Lay-By', near:'Shimna River Walk & Donard Forest', tags:['newcastle','shimna road','shimna river','donard forest','hidden gem','walkers'], badge:'hidden_gem', dist:0, walk:'~5 min', restriction:'Free, no restrictions', notes:'Free informal lay-by spaces along Shimna Road near the river and forest edge. Popular with walkers heading into Donard Forest who want to avoid the busier car park.', lat:54.2128, lng:-5.8935, by:'Newcastle Local', votes:0, photo:null, price:null, spaces:10, premium:false },
 ];
 
 // ── Portadown ─────────────────────────────────────────────────────────────────
@@ -462,7 +463,7 @@ const CRAIGAVON_SPOTS = [
   { id:964, name:'Brownlow Community Hub Car Park', near:'Brownlow Community Hub', tags:['craigavon','brownlow','brownlow road','community hub'], badge:'free', dist:0, walk:'Right there', restriction:'Free all day', notes:'Free car park at the front of Brownlow Community Hub on Brownlow Road. Central to the Craigavon new town area and rarely busy.', lat:54.4642, lng:-6.3378, by:'Craigavon Local', votes:0, photo:null, price:null, spaces:60 },
   { id:965, name:'Lakeview Road On-Street', near:'Craigavon Civic Centre', tags:['craigavon','lakeview road','on-street','civic centre','town centre'], badge:'timed', dist:0, walk:'~3 min', restriction:'Mon-Sat 8am-6pm, 1hr limit; free evenings & Sundays', notes:'On-street spaces along Lakeview Road beside the civic centre. Free on Sundays and after 6pm on weekdays.', lat:54.4622, lng:-6.3505, by:'Craigavon Local', votes:0, photo:null, price:null, spaces:20 },
   { id:966, name:'Brownlow Road On-Street', near:'Brownlow Community Hub', tags:['craigavon','brownlow road','on-street','free parking'], badge:'free', dist:0, walk:'~2 min', restriction:'Free all day, no restrictions', notes:'Unrestricted on-street parking on Brownlow Road in the heart of Craigavon new town. Locals use this as an alternative to the busier civic centre car park.', lat:54.4652, lng:-6.3395, by:'Craigavon Local', votes:0, photo:null, price:null, spaces:15 },
-  { id:967, name:'Craigavon Watersports Centre Overflow Lay-by', near:'Craigavon City Park Lakes', tags:['craigavon','watersports','city park','lake road','hidden gem','lakes'], badge:'hidden_gem', dist:0, walk:'~5 min', restriction:'Free all day', notes:'Unmarked lay-by parking along Lake Road just before the watersports centre entrance. Locals park here for free to access the 3-mile lakes loop when the main car park fills up.', lat:54.4543, lng:-6.3580, by:'Craigavon Local', votes:0, photo:null, price:null, spaces:10, premium:true },
+  { id:967, name:'Craigavon Watersports Centre Overflow Lay-by', near:'Craigavon City Park Lakes', tags:['craigavon','watersports','city park','lake road','hidden gem','lakes'], badge:'hidden_gem', dist:0, walk:'~5 min', restriction:'Free all day', notes:'Unmarked lay-by parking along Lake Road just before the watersports centre entrance. Locals park here for free to access the 3-mile lakes loop when the main car park fills up.', lat:54.4543, lng:-6.3580, by:'Craigavon Local', votes:0, photo:null, price:null, spaces:10, premium:false },
   { id:968, name:'Legaghory Road Residential On-Street', near:'Craigavon New Town Centre', tags:['craigavon','legaghory','legaghory road','hidden gem','residential','free'], badge:'hidden_gem', dist:0, walk:'~6 min', restriction:'Free all day, no restrictions', notes:'Quiet residential side streets off Legaghory Road in the heart of Craigavon new town — completely unrestricted and almost always empty even on busy event days.', lat:54.4660, lng:-6.3430, by:'Craigavon Local', votes:0, photo:null, price:null, spaces:20, premium:true },
   { id:969, name:'Craigavon City Park North Car Park', near:'Craigavon City Park (North Lake)', tags:['craigavon','city park','north lake','lakes','park','walking'], badge:'free', dist:0, walk:'Right there', restriction:'Free all day, dawn to dusk', notes:'Free surface car park at the northern end of Craigavon City Park giving direct access to the north lake walking trail. Less busy than the south lake car park.', lat:54.4675, lng:-6.3500, by:'Craigavon Local', votes:0, photo:null, price:null, spaces:80 },
 ];
@@ -489,7 +490,7 @@ const BANBRIDGE_SPOTS = [
   { id:1015, name:'Downshire Place Car Park', near:'Downshire Place / Banbridge', tags:['banbridge','downshire place','town centre','pay and display','council'], badge:'official', dist:0, walk:'2 min', restriction:'Pay & Display, Mon-Sat during business hours', notes:'Council Pay & Display at Downshire Place, tucked just off the main town centre. Convenient for Church Square and the upper town area. RingGo accepted.', lat:54.3500, lng:-6.2690, by:'Official', votes:0, photo:null, price:'£0.60/hr', spaces:55 },
   { id:1016, name:'Townsend Street On-Street Parking', near:'Townsend Street / Banbridge town centre', tags:['banbridge','townsend street','on-street','timed','town centre'], badge:'timed', dist:0, walk:'3 min', restriction:'Mon-Sat 8am-6pm, 2hr limit; evenings & Sundays free', notes:'On-street timed parking on Townsend Street running parallel to the main town centre. Free after 6pm and all day Sunday.', lat:54.3505, lng:-6.2680, by:'Banbridge Local', votes:0, photo:null, price:null, spaces:20 },
   { id:1017, name:'Church Square On-Street', near:'Church Square / Holy Trinity Church', tags:['banbridge','church square','holy trinity','on-street','timed','town centre'], badge:'timed', dist:0, walk:'2 min', restriction:'Mon-Sat 8am-6pm limited; free evenings & Sundays', notes:'On-street spaces around Church Square near the historic Holy Trinity Church. Central location and free outside daytime hours.', lat:54.3492, lng:-6.2710, by:'Banbridge Local', votes:0, photo:null, price:null, spaces:15 },
-  { id:1018, name:'Tesco Car Park Overflow', near:'Tesco / Castlewellan Road', tags:['banbridge','tesco','castlewellan road','supermarket','free','overflow'], badge:'hidden_gem', dist:0, walk:'~8 min', restriction:'Free, customers only during store hours', notes:'Tesco on Castlewellan Road has a large car park locals use when the town centre is packed on Saturdays. Pop in for milk and use the overflow bays near the trolley bays — rarely full and a flat 8-min walk into town.', lat:54.3487, lng:-6.2638, by:'Banbridge Local', votes:0, photo:null, price:null, spaces:200, premium:true },
+  { id:1018, name:'Tesco Car Park Overflow', near:'Tesco / Castlewellan Road', tags:['banbridge','tesco','castlewellan road','supermarket','free','overflow'], badge:'hidden_gem', dist:0, walk:'~8 min', restriction:'Free, customers only during store hours', notes:'Tesco on Castlewellan Road has a large car park locals use when the town centre is packed on Saturdays. Pop in for milk and use the overflow bays near the trolley bays — rarely full and a flat 8-min walk into town.', lat:54.3487, lng:-6.2638, by:'Banbridge Local', votes:0, photo:null, price:null, spaces:200, premium:false },
   { id:1019, name:'Rathfriland Street Layby', near:'Rathfriland Street / Banbridge south', tags:['banbridge','rathfriland street','layby','free','hidden gem','on-street'], badge:'hidden_gem', dist:0, walk:'~6 min', restriction:'Free all day, no restrictions', notes:'Largely unmarked layby stretch on the south side of Rathfriland Street that most visitors drive straight past. No time limit, free at all hours, short flat walk to the Bridge Street shops.', lat:54.3459, lng:-6.2725, by:'Banbridge Local', votes:0, photo:null, price:null, spaces:18, premium:true },
   { id:1020, name:'Dromore Street On-Street', near:'Dromore Street / north Banbridge', tags:['banbridge','dromore street','on-street','free','north banbridge'], badge:'free', dist:0, walk:'~5 min', restriction:'Free all day', notes:'Free unrestricted on-street parking along Dromore Street on the northern approach to town. Quiet residential road — great fallback when central car parks are busy.', lat:54.3515, lng:-6.2698, by:'Banbridge Local', votes:0, photo:null, price:null, spaces:25 },
 ];
@@ -938,14 +939,14 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
             <Star size={28} fill="currentColor" className="text-[#FFD27A]"/>
           </div>
           <h2 className="text-white font-extrabold text-xl">ParkEasy Premium</h2>
-          <p className="text-[#5BE7DA] text-sm mt-1">Support Belfast's community parking finder</p>
+          <p className="text-[#5BE7DA] text-sm mt-1">Unlock the spots only locals know — hand-picked free hidden gems + EV chargers across NI</p>
         </div>
         <div className="p-6 space-y-4">
           <div className="space-y-2">
             {[
-              ['🔍','See all spots — free users see top 10 only'],
+              ['✨','Hidden gems — founder-curated free spots in ideal locations'],
+              ['⚡','Premium EV charger spots + charging filter'],
               ['📍','Sort by distance — nearest spots first'],
-              ['⚡','EV charging filter — find charge points'],
               ['🗺️','Offline maps — works without signal'],
               ['🔔','Notifications when spots free up'],
               ['💎','Premium badge on your profile'],
@@ -1089,12 +1090,12 @@ const amenitiesOf = (spot) => {
 
 // ── Compact spot card (tap to open detail) ────────────────────────────────────
 const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
-  if (spot.premium && !isPremium) {
+  if (!isPremium && isGated(spot)) {
     return (
       <button onClick={onUpgrade} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
-        <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">&#x1F48E;</div>
-        <div className="flex-1"><p className="font-bold text-[#EAF1F8] text-sm">Premium spot</p><p className="text-xs text-[rgba(234,241,248,0.5)]">Tap to unlock this hidden gem</p></div>
-        <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal">Unlock &#9733;</span>
+        <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
+        <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p></div>
+        <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal flex-shrink-0">Unlock &#9733;</span>
       </button>
     );
   }
@@ -1400,8 +1401,9 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
         </div>
         <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2.5">Good walk-in spots (outside the zone)</h3>
         <div className="space-y-3">
+          {/* Event parking is a safety feature — never locked, even for free users */}
           {walkIns.map(s=>(
-            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
+            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={true} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
           ))}
         </div>
         <a href="https://fleadhcheoil.ie/travel" target="_blank" rel="noreferrer"
@@ -1436,14 +1438,37 @@ const pricePin = (spot, selected) => {
   });
 };
 
-const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat }) => (
+// Teaser pin for gated spots (free users): a soft dashed marker at an
+// APPROXIMATE position — shows the area a gem is in, never the exact kerb.
+const gemPin = (spot) => L.divIcon({
+  className: 'pe-gem-pin',
+  html: `<div style="width:34px;height:34px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(46,211,198,0.18);border:2px dashed rgba(46,211,198,0.7);box-shadow:0 0 0 8px rgba(46,211,198,0.08)">${spot.ev?.available ? '⚡' : '✨'}</div>`,
+  iconSize: [34, 34], iconAnchor: [17, 17],
+});
+
+// isPremium defaults to true so existing call sites keep exact pins; screens
+// that can show gated spots pass the real flag + an upgrade handler.
+const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPremium=true, onUpgrade }) => (
   <div style={{height}} className={flat ? 'overflow-hidden border-y border-white/10' : 'rounded-2xl overflow-hidden border border-white/10 shadow-sm'}>
     <MapContainer center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'/>
       {center && <RecenterMap center={center} zoom={zoom}/>}
-      {spots.map(s=>(
+      {spots.map(s => (!isPremium && isGated(s)) ? (
+        <Marker key={s.id} position={[approxCoord(s.lat), approxCoord(s.lng)]} icon={gemPin(s)}>
+          <Popup>
+            <div style={{minWidth:160}}>
+              <p className="font-bold text-sm mb-1">{gatedLabel(s)}</p>
+              <p className="text-xs text-[#8da2bd] leading-relaxed">Around {s.near}. Approximate area — the exact free spot is revealed with Premium.</p>
+              <button onClick={onUpgrade}
+                className="mt-2 block w-full text-center text-xs bg-[#5BE7DA] text-[#06231f] px-3 py-1.5 rounded-lg font-semibold">
+                Unlock Premium ★
+              </button>
+            </div>
+          </Popup>
+        </Marker>
+      ) : (
         <Marker key={s.id} position={[s.lat,s.lng]} icon={pricePin(s, s.id===selectedId)}>
           <Popup>
             <div style={{minWidth:160}}>
@@ -1509,8 +1534,6 @@ const SORT_OPTIONS_PREMIUM = [
   { id:'alpha',    label:'A–Z' },
 ];
 
-const FREE_RESULTS_LIMIT = 10;
-
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 
 // Returns a street-level image URL for a parking spot.
@@ -1534,20 +1557,32 @@ const walkFromMiles = (mi) => {
   return mins >= 60 ? `${mi.toFixed(1)} mi away` : `~${mins} min walk`;
 };
 
-// Which spots are gated behind Premium for non-subscribers: all explicit
-// premium spots, plus ~75% of the free/hidden-gem spots (deterministic by id).
-// Free users see these only as an aggregate "N more with Premium" teaser —
-// never their name or location.
-const isGated = (spot) =>
-  spot.premium === true ||
-  (['free','hidden_gem'].includes(spot.badge) && (spot.id % 4 !== 0));
+// Which spots are gated behind Premium for non-subscribers. ONLY founder-curated
+// picks lock: ✨ hidden gems (ideal-location, free-to-park kerb/side-road spots
+// near high-demand destinations) and ⚡ selected free EV charger spots.
+// Never locked, regardless of any flag: community-submitted spots, anything the
+// driver already pays to park at, and all council/commercial/timed/on-street
+// parking including Park & Ride. Free users still see gated spots as area-only
+// teasers — approximate pin + area name, never the exact location or notes.
+const isGated = (spot) => {
+  if (spot.mine) return false;                                         // community submissions
+  if (spot.price) return false;                                        // paid to park → free to view
+  if (['official','timed','paid'].includes(spot.badge)) return false;  // car parks, P&R, on-street
+  return spot.premium === true;                                        // founder-curated only
+};
+
+// Locked-card labelling for a gated spot: what it is + roughly where, nothing more.
+const gatedLabel = (spot) => spot.ev?.available ? '⚡ EV charger · Premium' : '✨ Hidden gem · Premium';
+// Approximate coordinate for teaser map pins (~±250 m) so free users see the
+// area a gem is in without getting its kerb-accurate position.
+const approxCoord = (v) => Math.round(v * 200) / 200;
 
 // ── Sheet row (map screen): price chip | name + caption | availability dot ──
 const RowItem = ({ spot, isPremium, onUpgrade, onOpen }) => {
-  if (spot.premium && !isPremium) return (
+  if (!isPremium && isGated(spot)) return (
     <button onClick={onUpgrade} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
-      <div className="min-w-[56px] h-[46px] rounded-[13px] flex items-center justify-center bg-[#2ED3C6]/12 border border-[#2ED3C6]/25 text-lg">💎</div>
-      <div className="flex-1 min-w-0"><p className="text-[14.5px] font-bold text-[#EAF1F8]">Premium spot</p><p className="text-xs text-[rgba(234,241,248,0.5)]">Tap to unlock this hidden gem</p></div>
+      <div className="min-w-[56px] h-[46px] rounded-[13px] flex items-center justify-center bg-[#2ED3C6]/12 border border-[#2ED3C6]/25 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
+      <div className="flex-1 min-w-0"><p className="text-[14.5px] font-bold text-[#EAF1F8]">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — unlock the exact spot</p></div>
       <span className="text-[#5BE7DA] text-xs font-bold flex-shrink-0">Unlock ★</span>
     </button>
   );
@@ -1569,11 +1604,11 @@ const RowItem = ({ spot, isPremium, onUpgrade, onOpen }) => {
 
 // ── List card (search screen): name/price top row, badges, availability bar ──
 const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
-  if (spot.premium && !isPremium) return (
+  if (!isPremium && isGated(spot)) return (
     <button onClick={onUpgrade} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
-      <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">💎</div>
-      <div className="flex-1"><p className="font-bold text-[#EAF1F8] text-sm">Premium spot</p><p className="text-xs text-[rgba(234,241,248,0.5)]">Tap to unlock this hidden gem</p></div>
-      <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal">Unlock ★</span>
+      <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
+      <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p></div>
+      <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal flex-shrink-0">Unlock ★</span>
     </button>
   );
   const occ = occupancyOf(spot); const pr = priceParts(spot); const free = isSpotFree(spot);
@@ -1714,11 +1749,13 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     });
   }, [geo, citySpots, query, badgeFilter, sortBy, evOnly, userLoc]);
 
-  // Free users: hide gated spots entirely (no name/location), then cap the rest.
-  // The gated ones surface only as an aggregate "N more with Premium" teaser.
-  const ungated      = isPremium ? filtered : filtered.filter(s => !isGated(s));
-  const visibleSpots = isPremium ? filtered : ungated.slice(0, FREE_RESULTS_LIMIT);
-  const hiddenCount  = isPremium ? 0 : (filtered.length - visibleSpots.length);
+  // Everyone sees every spot — no caps. Gated ones (founder-curated gems + EV
+  // picks) render as area-only teaser cards / approximate pins for free users.
+  const visibleSpots = filtered;
+  const gatedSpots   = isPremium ? [] : filtered.filter(isGated);
+  const gatedGems    = gatedSpots.filter(s => !s.ev?.available).length;
+  const gatedEv      = gatedSpots.filter(s => s.ev?.available).length;
+  const hiddenCount  = gatedSpots.length;
 
   const isSearching = !!geo || query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
   const mapCenter = geo ? [geo.lat, geo.lng]
@@ -1856,11 +1893,16 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     </div>
   );
 
+  // Counts only what is actually locked: curated hidden gems + premium EV picks.
+  const gatedSummary = [
+    gatedGems > 0 && `${gatedGems} hidden gem${gatedGems !== 1 ? 's' : ''}`,
+    gatedEv   > 0 && `${gatedEv} EV charger spot${gatedEv !== 1 ? 's' : ''}`,
+  ].filter(Boolean).join(' & ');
   const premiumTeaser = hiddenCount > 0 && (
     <div onClick={onUpgrade} className="rounded-[22px] border-2 border-dashed border-[#2ED3C6]/40 bg-[#2ED3C6]/8 p-5 text-center cursor-pointer hover:bg-[#2ED3C6]/12 transition-colors">
-      <p className="text-2xl mb-1">💎</p>
-      <p className="font-bold text-[#EAF1F8] text-sm">{hiddenCount} more spot{hiddenCount!==1?'s':''} available with Premium</p>
-      <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">They&rsquo;re around here too — unlock Premium to reveal their exact locations</p>
+      <p className="text-2xl mb-1">✨</p>
+      <p className="font-bold text-[#EAF1F8] text-sm">{gatedSummary} here — hand-picked by locals</p>
+      <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">Free to park, ideally placed. Their area shows on the map — Premium reveals the exact spots &amp; directions.</p>
       <span className="inline-block text-[#06231f] text-xs font-bold px-4 py-2 rounded-full btn-teal">★ Unlock Premium</span>
     </div>
   );
@@ -1876,10 +1918,10 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         </div>
         {searchBlock}
         <div className="px-4 pt-3">
-          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id}/>
+          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade}/>
         </div>
         <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
-          <p className="text-[12.5px] text-[rgba(234,241,248,0.5)] font-semibold"><strong className="text-[#EAF1F8]">{filtered.length}</strong> spot{filtered.length!==1?'s':''}{geo?` near ${geo.label.split(',')[0]}`:''}</p>
+          <p className="text-[12.5px] text-[rgba(234,241,248,0.5)] font-semibold"><strong className="text-[#EAF1F8]">{filtered.length}</strong> spot{filtered.length!==1?'s':''}{geo?` near ${geo.label.split(',')[0]}`:''}{hiddenCount>0?` · ${hiddenCount} ✨ Premium`:''}</p>
           <div className="relative">
             <button onClick={()=>setShowSort(v=>!v)} className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-full border border-white/12 bg-white/[0.05] text-[#cdd9e8] font-semibold hover:border-white/25 transition">
               <Filter size={12}/>{sortLabel}
@@ -1918,7 +1960,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     <div className="pt-2">
       {searchBlock}
       <div ref={mapRef} className="relative mt-2.5">
-        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={380} selectedId={focusSpot?.id} flat/>
+        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={380} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} flat/>
         <button onClick={locateMe} aria-label="Find parking near me"
           className="absolute right-4 bottom-10 z-[5] w-12 h-12 rounded-full flex items-center justify-center text-[#5BE7DA] shadow-lg active:scale-95 transition"
           style={{background:'var(--float)',border:'1px solid var(--hairline)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}}>
@@ -1929,7 +1971,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
         <div className="flex items-baseline justify-between mb-2 px-1">
           <h2 className="font-display font-bold text-[17px] text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label}` : 'Nearby parking'}</h2>
-          <span className="text-[12.5px] font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0 pl-2">{filtered.length} spot{filtered.length!==1?'s':''}</span>
+          <span className="text-[12.5px] font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0 pl-2">{filtered.length} spot{filtered.length!==1?'s':''}{hiddenCount>0?` · ${hiddenCount} ✨`:''}</span>
         </div>
         {filtered.length === 0 ? emptyState : (
           <>
@@ -2039,10 +2081,10 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, cityName, on
         </div>
       )}
       <div ref={mapRef}>
-        <ParkingMap spots={isPremium ? nearby : nearby.filter(s=>!isGated(s))} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240} selectedId={focusSpot?.id}/>
+        <ParkingMap spots={nearby} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : loc} zoom={focusSpot ? 16 : 13} height={240} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade}/>
       </div>
       <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-[#EAF1F8]">{nearby.length ? `${(isPremium?nearby:nearby.filter(s=>!isGated(s))).length} spots near you` : `No spots near you yet`}</p>
+        <p className="text-sm font-bold text-[#EAF1F8]">{nearby.length ? `${nearby.length} spots near you` : `No spots near you yet`}</p>
         <button onClick={()=>{setLoc(null);setNearby([]);setErr('');setFocusSpot(null);setFallback(null);}} className="text-xs text-[#5BE7DA] font-semibold">Refresh</button>
       </div>
       {nearby.length === 0 && (
@@ -2051,15 +2093,15 @@ const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, cityName, on
         </div>
       )}
       <div className="space-y-4">
-        {(isPremium ? nearby : nearby.filter(s=>!isGated(s))).map(s=>(
+        {nearby.map(s=>(
           <SpotCard key={s.id} spot={{...s, dist:Math.round(s.realDist*10)/10}}
             saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
         ))}
-        {!isPremium && nearby.filter(isGated).length > 0 && (
+        {!isPremium && nearby.some(isGated) && (
           <div onClick={onUpgrade} className="rounded-2xl border-2 border-dashed border-[#2ED3C6]/40 bg-[#2ED3C6]/8 p-5 text-center cursor-pointer hover:bg-[#2ED3C6]/12 transition-colors">
-            <p className="text-2xl mb-1">💎</p>
-            <p className="font-bold text-[#EAF1F8] text-sm">{nearby.filter(isGated).length} more spot{nearby.filter(isGated).length!==1?'s':''} available with Premium</p>
-            <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">They're nearby too — unlock to reveal their exact locations</p>
+            <p className="text-2xl mb-1">✨</p>
+            <p className="font-bold text-[#EAF1F8] text-sm">{nearby.filter(isGated).length} hand-picked hidden gem{nearby.filter(isGated).length!==1?'s':''} near you</p>
+            <p className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5 mb-3">Free to park, ideally placed — Premium reveals the exact spots &amp; directions.</p>
             <span className="inline-block text-[#06231f] text-xs font-bold px-4 py-2 rounded-full btn-teal">★ Unlock Premium</span>
           </div>
         )}
@@ -2231,7 +2273,7 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, allSpots = SP
       </div>
       {(spots.length > 1 || focusSpot) && (
         <div ref={mapRef}>
-          <ParkingMap spots={spots} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : [spots[0].lat, spots[0].lng]} zoom={focusSpot ? 16 : 12} height={200} selectedId={focusSpot?.id}/>
+          <ParkingMap spots={spots} center={focusSpot ? [focusSpot.lat,focusSpot.lng] : [spots[0].lat, spots[0].lng]} zoom={focusSpot ? 16 : 12} height={200} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade}/>
         </div>
       )}
       <div className="space-y-4">
@@ -3466,9 +3508,17 @@ export default function App() {
   const [detailSpot,    setDetailSpot]    = useState(null);
 
   // Deep links: #s=<id> opens that spot; the hash tracks the open detail sheet.
+  // Gated spots can't be opened via a shared link on the free tier — show the
+  // pricing sheet instead so exact locations never leak.
   useEffect(() => {
     const m = location.hash.match(/#s=(\d+)/);
-    if (m) { const sp = ALL_SPOTS.find(x => x.id === +m[1]); if (sp) setDetailSpot(sp); }
+    if (m) {
+      const sp = ALL_SPOTS.find(x => x.id === +m[1]);
+      if (sp) {
+        if (!isPremium && isGated(sp)) setShowPricing(true);
+        else setDetailSpot(sp);
+      }
+    }
   }, []);
   useEffect(() => {
     try {
