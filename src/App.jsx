@@ -973,6 +973,17 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
               <span className="block w-full bg-[#0e1a2c] text-white py-2 rounded-xl text-xs font-bold">Subscribe</span>
             </a>
           </div>
+          {/* Wallets come from Stripe's hosted checkout: Apple Pay appears
+              automatically on Apple devices, Google Pay on Android/Chrome.
+              ApplePaySession only exists where Apple Pay can actually run. */}
+          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+            {['Apple Pay','Google Pay','Card'].map(w=>(
+              <span key={w} className="text-[10px] font-bold px-2.5 py-1 rounded-full border border-white/12 bg-white/5 text-[#aebfd4]">{w}</span>
+            ))}
+          </div>
+          {typeof window !== 'undefined' && window.ApplePaySession && (
+            <p className="text-center text-[11px] text-[#6BEFB9] font-semibold">✓ Apple Pay is ready on this device</p>
+          )}
           <p className="text-center text-xs text-[#6b7d96]">Secure payment via Stripe · Cancel any time</p>
 
           {!showCodeBox ? (
