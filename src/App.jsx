@@ -1175,7 +1175,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   const confirmCount=(spot.votes||0)+(voted?1:0);
   const confirmedAgo=confirmedAt?timeAgo(confirmedAt):null;
   const confirmStillHere=()=>{ onVote?.(spot.id); const m=ls.get('pe_confirmed_at',{}); m[spot.id]=Date.now(); ls.set('pe_confirmed_at',m); setConfirmedAt(m[spot.id]); };
-  const reportHref=`mailto:hello@parkeasy.uk?subject=${encodeURIComponent('Report wrong/gone: '+spot.name)}&body=${encodeURIComponent('This spot may be inaccurate or gone:\n\n'+spot.name+' — '+spot.near+'\nhttps://parkeasy.uk/\n\nWhat is wrong: ')}`;
+  const reportHref=`mailto:parkeasyuk@gmail.com?subject=${encodeURIComponent('Report wrong/gone: '+spot.name)}&body=${encodeURIComponent('This spot may be inaccurate or gone:\n\n'+spot.name+' — '+spot.near+'\nhttps://parkeasy.uk/\n\nWhat is wrong: ')}`;
   const occ = occupancyOf(spot); const pr = priceParts(spot);
   const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
   const ring = spot.available!=null && spot.total ? spot.available/spot.total : occ.pct;
@@ -3562,7 +3562,7 @@ const INFO_PAGES = {
         <p><strong className="text-[#EAF1F8]">Location:</strong> we only request your location when you tap &ldquo;near me&rdquo;, and we use it solely to show nearby parking. We don&apos;t track or store your movements.</p>
         <p><strong className="text-[#EAF1F8]">Analytics &amp; cookies:</strong> optional, and only with your consent via the cookie banner. Reject all and the app still works fully.</p>
         <p><strong className="text-[#EAF1F8]">Payments:</strong> Premium subscriptions are handled by Stripe; we never see your card details.</p>
-        <p><strong className="text-[#EAF1F8]">Your rights:</strong> email <a className="text-[#5BE7DA] underline" href="mailto:hello@parkeasy.uk">hello@parkeasy.uk</a> any time to access or delete your data.</p>
+        <p><strong className="text-[#EAF1F8]">Your rights:</strong> email <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a> any time to access or delete your data.</p>
       </>
     ),
   },
@@ -3578,7 +3578,7 @@ const INFO_PAGES = {
           <li>A spot on the Local businesses tab</li>
         </ul>
         <p><strong className="text-[#EAF1F8]">Founding-sponsor pricing:</strong> £25–40/month, and your first month is free. Limited slots per area so it stays useful, not cluttered.</p>
-        <p>Interested? Email <a className="text-[#5BE7DA] underline" href="mailto:hello@parkeasy.uk?subject=Advertising%20with%20ParkEasy">hello@parkeasy.uk</a> and we&apos;ll set you up.</p>
+        <p>Interested? Email <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com?subject=Advertising%20with%20ParkEasy">parkeasyuk@gmail.com</a> and we&apos;ll set you up.</p>
       </>
     ),
   },
