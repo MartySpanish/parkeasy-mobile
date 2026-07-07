@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
+import { EV_SPOTS } from './evSpots';
 import { suggestPlaces, resolvePlace, geocodeText } from './geo';
 import { notify, apiFetch } from './notify';
 
@@ -231,7 +232,7 @@ const BANGOR_SPOTS = [
 // ── Newtownabbey — starter set of real, well-known car parks (owner to verify) ─
 const NEWTOWNABBEY_SPOTS = [
   { id:401, name:'Abbeycentre Car Park',        near:'Abbeycentre',      tags:['newtownabbey','abbeycentre','shopping','free parking','retail park'], badge:'free',  dist:0, walk:'Right there', restriction:'Free — centre hours', notes:'Large free car park at the Abbeycentre shopping centre — always plenty of space. Use as a base for the area.', lat:54.6855, lng:-5.9160, by:'Abbeycentre', votes:0, photo:null, price:null, spaces:null },
-  { id:402, name:'Valley Leisure Centre',       near:'Valley Park',      tags:['newtownabbey','valley park','valley leisure centre','walks','free parking','dog walk'], badge:'hidden_gem', dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Valley Leisure Centre and the Valley Park — walking trails, playing fields and the leisure centre.', lat:54.6760, lng:-5.9300, by:'NewtownabbeyLocal', votes:0, photo:null, price:null, spaces:null, premium:false },
+  { id:402, name:'Valley Leisure Centre',       near:'Valley Park',      tags:['newtownabbey','valley park','valley leisure centre','walks','free parking','dog walk'], badge:'hidden_gem', dist:0, walk:'Trail start', restriction:'Free — park hours', notes:'Free parking at Valley Leisure Centre and the Valley Park — walking trails, playing fields and the leisure centre. ESB rapid + AC EV chargers on site (community estimate).', lat:54.6760, lng:-5.9300, by:'NewtownabbeyLocal', votes:0, photo:null, price:null, spaces:null, premium:false, ev:{available:true, ports:2, speed:'50kW DC'} },
 ];
 
 // ── Derry~Londonderry ─────────────────────────────────────────────────────────
@@ -539,7 +540,7 @@ const CITY_SPOTS = {
   magherafelt:   MAGHERAFELT_SPOTS,
 };
 
-const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []) ];
+const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []), ...(EV_SPOTS[cityId] || []) ];
 
 // Welcome-screen stats — derived from every town's spots so they never go stale.
 const ALL_SPOTS_STATS = CITIES.flatMap(c => getCitySpots(c.id));
