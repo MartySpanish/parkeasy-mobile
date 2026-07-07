@@ -13,7 +13,7 @@ import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
 import { EV_SPOTS } from './evSpots';
 import { suggestPlaces, resolvePlace, geocodeText } from './geo';
-import { notify, apiFetch } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus } from './notify';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -694,6 +694,7 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
   const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [promo, setPromo]   = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState('');
   const [notice, setNotice] = useState('');
@@ -731,9 +732,14 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
         });
         if (error) throw error;
         await notifyAdmin(name.trim(), email.trim());
+        // Stash any promo code — the app redeems it as soon as there's a
+        // session (immediately if confirmation is off, or on first login).
+        if (promo.trim()) ls.set('pe_pending_promo', promo.trim());
         if (!data.session) {
           // Email confirmation is required (default in Supabase).
-          setNotice('Almost there! Check your email for a confirmation link, then log in.');
+          setNotice(promo.trim()
+            ? 'Almost there! Check your email for a confirmation link, then log in — your promo activates automatically.'
+            : 'Almost there! Check your email for a confirmation link, then log in.');
           setMode('login');
           setPassword('');
           setLoading(false);
@@ -823,6 +829,13 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
                 placeholder={isSignup ? 'Create a password (min 6 characters)' : 'Password'}
                 autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={6}
                 className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"
+              />
+            )}
+            {isSupabaseEnabled && isSignup && (
+              <input
+                value={promo} onChange={e=>setPromo(e.target.value)}
+                placeholder="Promo code (optional)" autoCapitalize="characters"
+                className="w-full px-4 py-3 border border-white/12 rounded-xl text-sm uppercase placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#5BE7DA] bg-white/5"
               />
             )}
 
@@ -3393,6 +3406,29 @@ const AdminOverlay = ({ onClose }) => {
                   <Tile label="Active · 7d" value={d.users.activeLast7}/>
                 </div>
               </div>
+              {d.promos && (
+                <div>
+                  <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Promo redemptions</h3>
+                  <div className="glass rounded-2xl p-4">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-display font-extrabold text-3xl text-[#5BE7DA] leading-none">{d.promos.total}</span>
+                      <span className="text-[12px] text-[rgba(234,241,248,0.55)]">total code{d.promos.total!==1?'s':''} redeemed</span>
+                    </div>
+                    {d.promos.latest?.length > 0 && (
+                      <div className="mt-3 divide-y divide-white/5">
+                        {d.promos.latest.map((p,i)=>(
+                          <div key={i} className="flex items-center justify-between gap-2 py-1.5 text-[12px]">
+                            <span className="font-semibold text-[#EAF1F8] truncate">{p.user_email || 'user'}</span>
+                            <span className="flex-shrink-0 text-[rgba(234,241,248,0.5)]">
+                              <span className="font-bold text-[#5BE7DA]">{p.code}</span> · {new Date(p.redeemed_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {(d.pending?.length > 0) && (
                 <div>
                   <h3 className="font-display font-bold text-[13px] text-[#FFD27A] uppercase tracking-widest mb-2.5">⏳ Organization listings awaiting approval ({d.pending.length})</h3>
@@ -3676,6 +3712,7 @@ export default function App() {
   const [theme,          setTheme]          = useState(()=>ls.get('pe_theme', 'dark'));
   const [showEvent,      setShowEvent]      = useState(false);
   const [showAdmin,      setShowAdmin]      = useState(false);
+  const [promoToast,     setPromoToast]     = useState(null);   // { ok, msg }
 
   // Apply the theme to the document root and keep the browser chrome colour
   // in sync so the status bar matches in both modes.
@@ -3711,14 +3748,42 @@ export default function App() {
         const prev = ls.get('pe_user', null);
         const u = { ...sessionToUser(session), spotsAdded: prev?.spotsAdded || 0 };
         setUser(u); ls.set('pe_user', u); setShowWelcome(false);
+        syncPromo(session.access_token);
       } else {
         setUser(null); ls.set('pe_user', null);
+      }
+    };
+    // Redeem any pending promo code (entered at signup), then sync the user's
+    // active promo entitlement from the server so Premium follows them anywhere.
+    const syncPromo = async (token) => {
+      if (!token) return;
+      const pending = ls.get('pe_pending_promo', null);
+      if (pending) {
+        ls.set('pe_pending_promo', null);
+        const r = await redeemPromo(pending, token);
+        if (r.ok && r.premiumUntil) {
+          setPromoToast({ ok: true, msg: `🎉 Promo applied — ${r.days || 7} days of Premium unlocked!` });
+        } else if (r.error) {
+          setPromoToast({ ok: false, msg: `Promo code: ${r.error}` });
+        }
+      }
+      const status = await fetchPromoStatus(token);
+      if (status?.premiumUntil && status.premiumUntil > Date.now()) {
+        ls.set('pe_premium_until', status.premiumUntil);
+        setIsPremium(true);
       }
     };
     supabase.auth.getSession().then(({ data }) => applySession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => applySession(session));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Auto-dismiss the promo toast after a few seconds.
+  useEffect(() => {
+    if (!promoToast) return;
+    const t = setTimeout(() => setPromoToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [promoToast]);
 
   // Deep link: parkeasy.uk/#admin opens the dashboard straight away for the
   // master account (bookmarkable). Re-checks whenever the account loads or the
@@ -3879,6 +3944,13 @@ export default function App() {
     <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'var(--app-grad)'}}>
       {/* ── Modals ── */}
       {showAdmin && <AdminOverlay onClose={()=>{ setShowAdmin(false); if (location.hash === '#admin') history.replaceState(null, '', location.pathname + location.search); }}/>}
+      {promoToast && (
+        <div className="fixed inset-x-0 top-4 z-[220] flex justify-center px-4 pointer-events-none">
+          <div onClick={()=>setPromoToast(null)} className={`pointer-events-auto max-w-sm w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-2xl cursor-pointer ${promoToast.ok ? 'bg-[#0e1a2c] border border-[#34E0A0]/40 text-[#6BEFB9]' : 'bg-[#0e1a2c] border border-red-400/40 text-red-200'}`}>
+            {promoToast.msg}
+          </div>
+        </div>
+      )}
       {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={setDetailSpot}/>}
       {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
