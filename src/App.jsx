@@ -7,6 +7,7 @@ import {
   Bookmark, Camera, Check, X, ChevronRight, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon,
+  BarChart3,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -3328,6 +3329,13 @@ const AdminOverlay = ({ onClose }) => {
           </div>
         </div>
         <div className="px-4 py-5 pb-16 space-y-5">
+          {/* Client-side check — shows even if the server endpoint can't load,
+              which is exactly the case when Supabase isn't configured. */}
+          {!isSupabaseEnabled && (
+            <div className="text-sm bg-red-500/12 border border-red-400/35 text-red-200 rounded-2xl px-4 py-3.5 leading-relaxed">
+              <strong className="text-red-100">⚠️ Accounts are OFF in this build.</strong> The signup form is only asking for a name and email (no password), and <strong>new signups are not being saved to your database</strong> — they stay on each visitor&rsquo;s own device. Set <strong>VITE_SUPABASE_URL</strong> and <strong>VITE_SUPABASE_ANON_KEY</strong> in the Vercel project (both scoped to Production) and redeploy. That switches on password accounts and starts recording every signup.
+            </div>
+          )}
           {state.loading && <p className="text-sm text-[#8da2bd] py-10 text-center">Loading analytics…</p>}
           {state.error && (
             <div className="text-sm text-[#FFD27A] bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-2xl px-4 py-3.5 leading-relaxed">{state.error}</div>
@@ -3348,6 +3356,8 @@ const AdminOverlay = ({ onClose }) => {
               <div className="glass rounded-2xl p-4">
                 <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-1.5">Notifications &amp; config</h3>
                 <div className="divide-y divide-white/5">
+                  <Row ok={isSupabaseEnabled} label="Real accounts (VITE_SUPABASE_URL + ANON_KEY)"
+                    hint="DISABLED in this build — the signup form only asks name + email, no password, and new signups are NOT saved to your database (they stay on the visitor's device only). Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to Vercel and redeploy to switch on password accounts and start recording users." />
                   <Row ok={e.resendKey} label="RESEND_API_KEY" hint="Not set in Vercel — no email can be sent. Add your Resend API key." />
                   <Row ok={e.contactEmail} label={`CONTACT_EMAIL${e.contactEmailMasked?` · ${e.contactEmailMasked}`:''}`} hint="Not set — the app has nowhere to deliver signup/listing alerts." />
                   <Row ok={e.emailFromCustom} label={`EMAIL_FROM · ${e.emailFrom}`} hint="Using Resend's shared test sender — it ONLY delivers to your own Resend account email. Verify parkeasy.uk in Resend and set EMAIL_FROM to noreply@parkeasy.uk to reach everyone." />
@@ -3710,6 +3720,18 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Deep link: parkeasy.uk/#admin opens the dashboard straight away for the
+  // master account (bookmarkable). Re-checks whenever the account loads or the
+  // hash changes, so it works even before the async session restore finishes.
+  useEffect(() => {
+    const openIfAdmin = () => {
+      if (location.hash === '#admin' && isAdminUser(user)) setShowAdmin(true);
+    };
+    openIfAdmin();
+    window.addEventListener('hashchange', openIfAdmin);
+    return () => window.removeEventListener('hashchange', openIfAdmin);
+  }, [user]);
+
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('premium') === 'success') {
@@ -3856,7 +3878,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'var(--app-grad)'}}>
       {/* ── Modals ── */}
-      {showAdmin && <AdminOverlay onClose={()=>setShowAdmin(false)}/>}
+      {showAdmin && <AdminOverlay onClose={()=>{ setShowAdmin(false); if (location.hash === '#admin') history.replaceState(null, '', location.pathname + location.search); }}/>}
       {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={setDetailSpot}/>}
       {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
@@ -3926,6 +3948,12 @@ export default function App() {
               <button onClick={()=>setShowPricing(true)}
                 className="text-[11px] text-[#06231f] px-2 py-1.5 rounded-full font-bold active:scale-95 transition-all btn-teal whitespace-nowrap">
                 ★ Premium
+              </button>
+            )}
+            {isAdminUser(user) && (
+              <button onClick={()=>setShowAdmin(true)} aria-label="Admin analytics"
+                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 whitespace-nowrap flex items-center gap-1">
+                <BarChart3 size={12}/> Analytics
               </button>
             )}
             {user ? (
