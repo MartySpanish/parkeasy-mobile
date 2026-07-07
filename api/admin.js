@@ -180,10 +180,24 @@ export default async function handler(req, res) {
       if (pr.ok) pending = await pr.json();
     } catch { /* ignore */ }
 
+    // Promo-code redemptions (e.g. PARKEZ) — total count + most recent.
+    let promos = { total: 0, latest: [] };
+    try {
+      const rr = await fetch(`${URL_}/rest/v1/promo_redemptions?select=user_email,code,redeemed_at,expires_at&order=redeemed_at.desc&limit=50`,
+        { headers: { ...svc, Prefer: 'count=exact' } });
+      if (rr.ok) {
+        const rows = await rr.json();
+        const range = rr.headers.get('content-range');
+        promos.total = range?.includes('/') ? parseInt(range.split('/')[1]) || rows.length : rows.length;
+        promos.latest = rows.slice(0, 8);
+      }
+    } catch { /* table may not exist yet */ }
+
     return res.status(200).json({
       ok: true, configured: true,
       env,
       pending,
+      promos,
       users: {
         total: users.length,
         last7: users.filter(u => within(u, 7)).length,
