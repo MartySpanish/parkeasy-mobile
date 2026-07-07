@@ -3280,6 +3280,20 @@ const AdminOverlay = ({ onClose }) => {
     } catch (e) { alert(e.message || 'Action failed'); }
     setActing(null);
   };
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const sendTestEmail = async () => {
+    setTesting(true); setTestResult(null);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess?.session?.access_token;
+      const r = await apiFetch('/api/admin', { method:'POST',
+        headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+        body: JSON.stringify({ action:'test-email' }) });
+      setTestResult(await r.json().catch(()=>({ ok:false, error:'No response' })));
+    } catch (e) { setTestResult({ ok:false, error: e.message || 'Request failed' }); }
+    setTesting(false);
+  };
   useEffect(() => {
     (async () => {
       try {
@@ -3318,9 +3332,44 @@ const AdminOverlay = ({ onClose }) => {
           {state.error && (
             <div className="text-sm text-[#FFD27A] bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-2xl px-4 py-3.5 leading-relaxed">{state.error}</div>
           )}
+          {/* ── Config / notifications health ── */}
+          {d?.env && (() => {
+            const e = d.env;
+            const Row = ({ ok, label, hint }) => (
+              <div className="flex items-start gap-2.5 py-2">
+                <span className={`mt-0.5 w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${ok?'bg-[#34E0A0]/20 text-[#6BEFB9]':'bg-red-500/20 text-red-300'}`}>{ok?'✓':'✕'}</span>
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-semibold text-[#EAF1F8]">{label}</span>
+                  {!ok && hint && <span className="block text-[11.5px] text-[rgba(234,241,248,0.55)] leading-snug">{hint}</span>}
+                </span>
+              </div>
+            );
+            return (
+              <div className="glass rounded-2xl p-4">
+                <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-1.5">Notifications &amp; config</h3>
+                <div className="divide-y divide-white/5">
+                  <Row ok={e.resendKey} label="RESEND_API_KEY" hint="Not set in Vercel — no email can be sent. Add your Resend API key." />
+                  <Row ok={e.contactEmail} label={`CONTACT_EMAIL${e.contactEmailMasked?` · ${e.contactEmailMasked}`:''}`} hint="Not set — the app has nowhere to deliver signup/listing alerts." />
+                  <Row ok={e.emailFromCustom} label={`EMAIL_FROM · ${e.emailFrom}`} hint="Using Resend's shared test sender — it ONLY delivers to your own Resend account email. Verify parkeasy.uk in Resend and set EMAIL_FROM to noreply@parkeasy.uk to reach everyone." />
+                  <Row ok={e.serviceKey} label="SUPABASE_SERVICE_ROLE_KEY" hint="Not set — user counts & the signups list below stay empty. Supabase → Settings → API → service_role." />
+                </div>
+                <button onClick={sendTestEmail} disabled={testing}
+                  className="mt-3 w-full py-2.5 rounded-xl font-bold text-xs text-[#06231f] btn-teal disabled:opacity-50">
+                  {testing ? 'Sending…' : '✉️ Send test email now'}
+                </button>
+                {testResult && (
+                  <div className={`mt-2.5 text-[12px] leading-relaxed rounded-xl px-3.5 py-3 ${testResult.ok?'bg-[#34E0A0]/10 border border-[#34E0A0]/25 text-[#6BEFB9]':'bg-red-500/10 border border-red-400/30 text-red-200'}`}>
+                    {testResult.ok
+                      ? <>✅ Sent to <strong>{testResult.to}</strong> from <code>{testResult.from}</code>. Check that inbox (and spam). If it never arrives, your Resend sender/domain isn&rsquo;t verified.</>
+                      : <>❌ {testResult.stage==='resend'?`Resend rejected it (HTTP ${testResult.httpStatus}): `:''}{typeof testResult.error==='string'?testResult.error:JSON.stringify(testResult.error)}</>}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {d && !d.configured && (
             <div className="text-sm text-[#FFD27A] bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-2xl px-4 py-3.5 leading-relaxed">
-              Almost there — add <strong className="text-[#EAF1F8]">SUPABASE_SERVICE_ROLE_KEY</strong> to the Vercel project env (Supabase → Settings → API → service_role) to unlock user analytics.
+              Add <strong className="text-[#EAF1F8]">SUPABASE_SERVICE_ROLE_KEY</strong> to the Vercel project env (Supabase → Settings → API → service_role) to unlock user analytics below.
             </div>
           )}
           {d?.configured && (

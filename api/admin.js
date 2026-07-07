@@ -51,8 +51,52 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Not an admin account' });
   }
 
+  // Config health (booleans / masked values only — never leak secrets). Lets the
+  // dashboard show exactly which env vars are missing and why email/analytics
+  // aren't working.
+  const env = {
+    contactEmail: !!process.env.CONTACT_EMAIL,
+    contactEmailMasked: process.env.CONTACT_EMAIL
+      ? process.env.CONTACT_EMAIL.replace(/^(.).*(@.*)$/, '$1•••$2') : null,
+    resendKey: !!process.env.RESEND_API_KEY,
+    emailFrom: process.env.EMAIL_FROM || 'onboarding@resend.dev (Resend test sender)',
+    emailFromCustom: !!process.env.EMAIL_FROM,
+    serviceKey: !!SERVICE,
+  };
+
+  // ── Live test email: sends to CONTACT_EMAIL and returns the REAL Resend
+  // result, so the admin sees the actual delivery error (test-mode restriction,
+  // unverified domain, bad key, …) instead of the app's silent failure. ──
+  if (req.method === 'POST') {
+    let peek = req.body;
+    if (typeof peek === 'string') { try { peek = JSON.parse(peek); } catch { peek = {}; } }
+    if (peek?.action === 'test-email') {
+      const TO = process.env.CONTACT_EMAIL;
+      const KEY = process.env.RESEND_API_KEY;
+      const FROM = process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>';
+      if (!TO) return res.status(200).json({ ok: false, stage: 'config', error: 'CONTACT_EMAIL is not set in Vercel — the app has nowhere to send notifications.' });
+      if (!KEY) return res.status(200).json({ ok: false, stage: 'config', error: 'RESEND_API_KEY is not set in Vercel — the app cannot send any email.' });
+      try {
+        const r = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: FROM, to: [TO],
+            subject: '✅ ParkEasy test email — notifications are working',
+            html: `<p>This diagnostic email was sent from your ParkEasy admin dashboard.</p><p>If you can read this, signup and listing notifications will arrive at <strong>${TO}</strong>.</p>`,
+          }),
+        });
+        const detail = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, stage: 'resend', httpStatus: r.status, error: detail || 'Resend rejected the request.', to: env.contactEmailMasked, from: FROM });
+        return res.status(200).json({ ok: true, to: env.contactEmailMasked, from: FROM });
+      } catch (e) {
+        return res.status(200).json({ ok: false, stage: 'network', error: e.message || 'send failed' });
+      }
+    }
+  }
+
   if (!SERVICE) {
-    return res.status(200).json({ ok: true, configured: false,
+    return res.status(200).json({ ok: true, configured: false, env,
       hint: 'Add SUPABASE_SERVICE_ROLE_KEY to Vercel env to unlock user analytics.' });
   }
 
@@ -138,6 +182,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true, configured: true,
+      env,
       pending,
       users: {
         total: users.length,
