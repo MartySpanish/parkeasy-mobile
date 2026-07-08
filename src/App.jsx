@@ -1481,15 +1481,32 @@ const gemPin = (spot) => L.divIcon({
   iconSize: [34, 34], iconAnchor: [17, 17],
 });
 
+// Pulsing marker for the address the user searched — so they can SEE the map
+// is centred on the right place, with parking pins around it.
+const searchPin = (label) => L.divIcon({
+  className: 'pe-search-pin',
+  html: `<div style="position:relative;width:22px;height:22px">
+    <div style="position:absolute;inset:0;border-radius:999px;background:rgba(91,231,218,0.25);animation:pePulse 1.8s ease-out infinite"></div>
+    <div style="position:absolute;left:5px;top:5px;width:12px;height:12px;border-radius:999px;background:#5BE7DA;border:2px solid #06231f;box-shadow:0 0 0 2px rgba(91,231,218,0.6)"></div>
+  </div><style>@keyframes pePulse{0%{transform:scale(0.6);opacity:0.9}100%{transform:scale(2.4);opacity:0}}</style>`,
+  iconSize: [22, 22], iconAnchor: [11, 11],
+});
+
 // isPremium defaults to true so existing call sites keep exact pins; screens
 // that can show gated spots pass the real flag + an upgrade handler.
-const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPremium=true, onUpgrade }) => (
+// `pin` (optional) marks a searched address location.
+const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPremium=true, onUpgrade, pin }) => (
   <div style={{height}} className={flat ? 'overflow-hidden border-y border-white/10' : 'rounded-2xl overflow-hidden border border-white/10 shadow-sm'}>
     <MapContainer center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'/>
       {center && <RecenterMap center={center} zoom={zoom}/>}
+      {pin && (
+        <Marker position={[pin.lat, pin.lng]} icon={searchPin(pin.label)} zIndexOffset={1000}>
+          <Popup><div style={{minWidth:120}}><p className="font-bold text-sm">📍 {pin.label}</p><p className="text-xs text-[#8da2bd] mt-1">Your searched location — nearest parking shown around it.</p></div></Popup>
+        </Marker>
+      )}
       {spots.map(s => (!isPremium && isGated(s)) ? (
         <Marker key={s.id} position={[approxCoord(s.lat), approxCoord(s.lng)]} icon={gemPin(s)}>
           <Popup>
@@ -1866,19 +1883,24 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     else { setGeo(null); setGeoMiss(true); }
   };
 
-  // Typing updates the live address/place suggestions (debounced) and clears
-  // any active location search so the text filter takes over.
+  // Typing updates the live suggestions AND auto-previews nearest parking:
+  // once the user pauses, we centre on the best coordinate-bearing match so
+  // the nearest spots appear without pressing Enter. No extra API calls —
+  // local landmarks and Nominatim predictions already carry coordinates
+  // (Google predictions, which only have a placeId, are resolved on tap).
   const onQueryChange = (v) => {
     setQuery(v);
-    if (geo) setGeo(null);
     if (geoMiss) setGeoMiss(false);
     clearTimeout(sugTimer.current);
-    if (v.trim().length < 3) { setSugs([]); return; }
+    if (v.trim().length < 3) { setSugs([]); setGeo(null); return; }
     sugTimer.current = setTimeout(async () => {
       const local = localSuggestions(v, isPremium);
-      const list = await suggestPlaces(v);
-      setSugs([...local, ...list].slice(0, 6));
-    }, 300);
+      const remote = await suggestPlaces(v);
+      const list = [...local, ...remote].slice(0, 6);
+      setSugs(list);
+      const best = list.find(s => s.lat != null && s.lng != null);
+      if (best) { setGeo({ lat: best.lat, lng: best.lng, label: best.label }); setFocusSpot(null); }
+    }, 350);
   };
 
   // Choose an address/place suggestion → resolve to coordinates, then show the
@@ -2007,7 +2029,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         </div>
         {searchBlock}
         <div className="px-4 pt-3">
-          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade}/>
+          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo}/>
         </div>
         <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
           <p className="text-[12.5px] text-[rgba(234,241,248,0.5)] font-semibold"><strong className="text-[#EAF1F8]">{filtered.length}</strong> spot{filtered.length!==1?'s':''}{geo?` near ${geo.label.split(',')[0]}`:''}{hiddenCount>0?` · ${hiddenCount} ✨ Premium`:''}</p>
@@ -2049,7 +2071,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     <div className="pt-2">
       {searchBlock}
       <div ref={mapRef} className="relative mt-2.5">
-        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={380} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} flat/>
+        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={380} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo} flat/>
         <button onClick={locateMe} aria-label="Find parking near me"
           className="absolute right-4 bottom-10 z-[5] w-12 h-12 rounded-full flex items-center justify-center text-[#5BE7DA] shadow-lg active:scale-95 transition"
           style={{background:'var(--float)',border:'1px solid var(--hairline)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}}>
