@@ -1898,8 +1898,22 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       const remote = await suggestPlaces(v);
       const list = [...local, ...remote].slice(0, 6);
       setSugs(list);
+      // Prefer a suggestion that already carries coordinates (local landmarks +
+      // Nominatim) — instant, no extra call. Otherwise (e.g. Google address
+      // predictions, which only carry a placeId) geocode the typed text so ANY
+      // street address / postcode still auto-loads nearest parking.
       const best = list.find(s => s.lat != null && s.lng != null);
-      if (best) { setGeo({ lat: best.lat, lng: best.lng, label: best.label }); setFocusSpot(null); }
+      if (best) {
+        setGeo({ lat: best.lat, lng: best.lng, label: best.label }); setFocusSpot(null);
+      } else if (v.trim().length >= 4) {
+        setGeoBusy(true);
+        const loc = await geocodeText(normalizePlace(v));
+        setGeoBusy(false);
+        // Ignore a slow result if the user has since typed something else.
+        if (loc && inputRef.current && inputRef.current.value.trim() === v.trim()) {
+          setGeo(loc); setFocusSpot(null);
+        }
+      }
     }, 350);
   };
 
