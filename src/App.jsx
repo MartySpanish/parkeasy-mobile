@@ -3637,14 +3637,64 @@ const INFO_PAGES = {
     title: 'Privacy policy', Icon: Shield,
     body: (
       <>
-        <p className="text-[rgba(234,241,248,0.5)] text-xs">Last updated: June 2026</p>
-        <p>ParkEasy is built to need as little of your data as possible.</p>
-        <p><strong className="text-[#EAF1F8]">What we store on your device:</strong> your saved spots, ratings and preferences are kept in your browser&apos;s local storage. They never leave your device unless you create an account.</p>
-        <p><strong className="text-[#EAF1F8]">Accounts:</strong> if you sign up, your email and the spots you add are stored securely with our backend provider (Supabase) so you can access them across devices.</p>
-        <p><strong className="text-[#EAF1F8]">Location:</strong> we only request your location when you tap &ldquo;near me&rdquo;, and we use it solely to show nearby parking. We don&apos;t track or store your movements.</p>
-        <p><strong className="text-[#EAF1F8]">Analytics &amp; cookies:</strong> optional, and only with your consent via the cookie banner. Reject all and the app still works fully.</p>
-        <p><strong className="text-[#EAF1F8]">Payments:</strong> Premium subscriptions are handled by Stripe; we never see your card details.</p>
-        <p><strong className="text-[#EAF1F8]">Your rights:</strong> email <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a> any time to access or delete your data.</p>
+        <p><strong className="text-[#EAF1F8]">[ParkEasy Ltd — confirm exact registered name]</strong> (&ldquo;ParkEasy&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) is the <strong className="text-[#EAF1F8]">data controller</strong> for personal data processed through parkeasy.uk and any associated app. We are registered with the Information Commissioner&apos;s Office (ICO), registration number <strong className="text-[#EAF1F8]">[insert ICO registration number]</strong>.</p>
+        <p className="text-[rgba(234,241,248,0.5)] text-xs">Last updated: 8 July 2026 · Version 1.0</p>
+        <p>This policy explains what personal data we collect, why, and your rights under the UK GDPR and the Data Protection Act 2018.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">1 · Who we are and how to contact us</h3>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li><strong className="text-[#EAF1F8]">Controller:</strong> [ParkEasy Ltd], [registered office address]</li>
+          <li><strong className="text-[#EAF1F8]">Contact:</strong> <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a></li>
+        </ul>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">2 · The data we collect</h3>
+        <p><strong className="text-[#EAF1F8]">From Hosts:</strong> name, contact details, address, the address/details of the parking Space, payout/bank details (collected and held by Stripe), earnings and transaction history, and — where required for tax reporting — date of birth and National Insurance number.</p>
+        <p><strong className="text-[#EAF1F8]">From Drivers:</strong> name and contact details (if provided), <strong className="text-[#EAF1F8]">vehicle registration number</strong>, booking history, and payment card details (collected and held by Stripe). A vehicle registration is personal data because it can identify an individual.</p>
+        <p><strong className="text-[#EAF1F8]">From all users:</strong> device and usage information, and — where you allow it — approximate or precise <strong className="text-[#EAF1F8]">location</strong> to show nearby spaces on the map.</p>
+        <p>We do not intentionally collect special-category data.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">3 · Why we use your data, and our lawful bases</h3>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li><strong className="text-[#EAF1F8]">To provide the service</strong> (create listings, take bookings, connect Hosts and Drivers, process payments) — <em>performance of a contract</em>.</li>
+          <li><strong className="text-[#EAF1F8]">To comply with legal obligations</strong>, including reporting Host (seller) information to HMRC under the UK&apos;s digital platform reporting rules, and keeping tax and accounting records — <em>legal obligation</em>.</li>
+          <li><strong className="text-[#EAF1F8]">To prevent fraud, ensure safety, resolve disputes and improve the Platform</strong> — <em>legitimate interests</em>.</li>
+          <li><strong className="text-[#EAF1F8]">To send marketing</strong> (only where you have opted in) — <em>consent</em>, which you may withdraw at any time.</li>
+        </ul>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">4 · HMRC platform reporting</h3>
+        <p>Where required by law, we collect, verify and report information about Hosts and their earnings to HM Revenue &amp; Customs, and provide a copy of the reported information to the Host. This is a legal obligation on digital platforms that facilitate the rental of property (which includes parking spaces). We keep the associated records for the period required by those rules.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">5 · Payments</h3>
+        <p>Payments and payouts are handled by <strong className="text-[#EAF1F8]">Stripe</strong>, which acts as an independent controller of your payment data. We do not store full card or bank details on our systems. See Stripe&apos;s privacy policy for how it processes that data.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">6 · Hosting and processors</h3>
+        <p>Our Platform is hosted using <strong className="text-[#EAF1F8]">Vercel</strong> and our database is provided by <strong className="text-[#EAF1F8]">Supabase</strong>, which act as our processors under written terms. Some processors may store or process data outside the UK; where they do, we rely on appropriate safeguards (such as the UK International Data Transfer Agreement or Addendum, or an adequacy decision).</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">7 · Who we share data with</h3>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li><strong className="text-[#EAF1F8]">Hosts and Drivers</strong> — the minimum information needed to complete a Booking (e.g. a Driver&apos;s vehicle registration and booking time to the relevant Host).</li>
+          <li><strong className="text-[#EAF1F8]">Stripe</strong> — to process payments and payouts.</li>
+          <li><strong className="text-[#EAF1F8]">HMRC</strong> — as described in section 4.</li>
+          <li><strong className="text-[#EAF1F8]">Service providers</strong> — hosting, analytics, communications and fraud-prevention providers acting on our instructions.</li>
+          <li><strong className="text-[#EAF1F8]">Authorities or advisers</strong> — where required by law or to establish or defend legal claims.</li>
+        </ul>
+        <p>We do not sell your personal data.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">8 · How long we keep it</h3>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>Booking, payment and accounting records: <strong className="text-[#EAF1F8]">6 years</strong> (tax and accounting requirements).</li>
+          <li>Platform-reporting due-diligence records: <strong className="text-[#EAF1F8]">5 years</strong> from the end of the relevant reporting period.</li>
+          <li>Account data: for as long as your account is active, then deleted or anonymised, subject to the retention periods above.</li>
+        </ul>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">9 · Your rights</h3>
+        <p>You have the right to access, correct, erase, restrict or object to the processing of your data, to data portability, and to withdraw consent. To exercise any right, contact us at <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a>. You also have the right to complain to the <strong className="text-[#EAF1F8]">ICO</strong> (<a className="text-[#5BE7DA] underline" href="https://ico.org.uk" target="_blank" rel="noreferrer">ico.org.uk</a>), though we&apos;d welcome the chance to resolve any concern first.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">10 · Cookies</h3>
+        <p>We use cookies necessary for the Platform to function and, with your consent, for analytics. You can change your choice any time via the cookie banner.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">11 · Changes</h3>
+        <p>We may update this policy and will post the current version here with a revised date.</p>
       </>
     ),
   },
@@ -3661,6 +3711,82 @@ const INFO_PAGES = {
         </ul>
         <p><strong className="text-[#EAF1F8]">Founding-sponsor pricing:</strong> £25–40/month, and your first month is free. Limited slots per area so it stays useful, not cluttered.</p>
         <p>Interested? Email <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com?subject=Advertising%20with%20ParkEasy">parkeasyuk@gmail.com</a> and we&apos;ll set you up.</p>
+      </>
+    ),
+  },
+  terms: {
+    title: 'Terms of Service', Icon: FileText,
+    body: (
+      <>
+        <p>Operated by <strong className="text-[#EAF1F8]">[ParkEasy Ltd — confirm exact registered name]</strong>, a company registered in Northern Ireland (company number <strong className="text-[#EAF1F8]">[insert]</strong>), registered office <strong className="text-[#EAF1F8]">[insert registered office address]</strong> (&ldquo;ParkEasy&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;).</p>
+        <p className="text-[rgba(234,241,248,0.5)] text-xs">Last updated: 8 July 2026 · Version 1.0</p>
+        <p>These Terms govern use of the ParkEasy platform at parkeasy.uk and any associated app (the &ldquo;Platform&rdquo;). By creating a listing, making a booking, or otherwise using the Platform, you agree to these Terms. Please read them carefully. Nothing in these Terms affects your non-excludable statutory rights as a consumer.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">1 · What ParkEasy is (and is not)</h3>
+        <p>1.1 ParkEasy is an online marketplace that introduces <strong className="text-[#EAF1F8]">Hosts</strong> (people offering a private parking space) to <strong className="text-[#EAF1F8]">Drivers</strong> (people wishing to park).</p>
+        <p>1.2 The contract for the parking itself is formed <strong className="text-[#EAF1F8]">directly between the Host and the Driver</strong>. ParkEasy is not a party to that contract, does not own, control, manage or offer any parking space, and does not provide parking services. We provide the technology, booking and payment-facilitation layer only.</p>
+        <p>1.3 We do not guarantee the condition, availability, safety, legality or suitability of any space, nor the conduct of any Host or Driver.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">2 · Definitions</h3>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li><strong className="text-[#EAF1F8]">Booking</strong> — a confirmed reservation of a Space for a stated period.</li>
+          <li><strong className="text-[#EAF1F8]">Space</strong> — a private driveway, parking bay or other off-street parking area listed by a Host.</li>
+          <li><strong className="text-[#EAF1F8]">Host Commission</strong> — the commission we deduct from a Host&apos;s earnings.</li>
+          <li><strong className="text-[#EAF1F8]">Driver Service Fee</strong> — the fee we charge a Driver per Booking (which may be higher on event dates).</li>
+          <li><strong className="text-[#EAF1F8]">Event Date</strong> — a date we designate as high-demand (e.g. a festival or major event).</li>
+        </ul>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">3 · Accounts and eligibility</h3>
+        <p>3.1 Hosts must register an account. Drivers may book as a guest without an account.</p>
+        <p>3.2 You must be at least 18 and provide accurate information. You are responsible for activity under your account and for keeping login details secure.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">4 · Fees, pricing and payment</h3>
+        <p>4.1 <strong className="text-[#EAF1F8]">Hosts</strong> pay a Host Commission of <strong className="text-[#EAF1F8]">15%</strong> of the booking price, deducted from payouts.</p>
+        <p>4.2 <strong className="text-[#EAF1F8]">Drivers</strong> pay the Host&apos;s listed price plus a <strong className="text-[#EAF1F8]">Driver Service Fee</strong> of <strong className="text-[#EAF1F8]">£[standard fee]</strong> per Booking, or <strong className="text-[#EAF1F8]">£[event fee]</strong> per Booking on an Event Date.</p>
+        <p>4.3 <strong className="text-[#EAF1F8]">All fees, including any elevated Event Date fee, are displayed in full before you confirm and pay for a Booking.</strong> No charge is applied that has not been shown to you first.</p>
+        <p>4.4 Payments are processed by <strong className="text-[#EAF1F8]">Stripe</strong>. By transacting you also agree to Stripe&apos;s terms. Host payouts are made via Stripe to the Host&apos;s connected account after deduction of the Host Commission.</p>
+        <p>4.5 Prices include VAT where applicable. [Confirm VAT position once registered / if applicable.]</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">5 · Cancellations, refunds and no-shows</h3>
+        <p>5.1 <strong className="text-[#EAF1F8]">Driver cancellations:</strong> a Driver who cancels <strong className="text-[#EAF1F8]">[e.g. 24] hours or more</strong> before the Booking start receives a full refund of the booking price; the Driver Service Fee <strong className="text-[#EAF1F8]">[is / is not] refundable</strong>. Later cancellations are refunded at <strong className="text-[#EAF1F8]">[insert %/rule]</strong>.</p>
+        <p>5.2 <strong className="text-[#EAF1F8]">Host cancellations:</strong> if a Host cancels a confirmed Booking, the Driver receives a full refund and we may apply consequences to the Host&apos;s account.</p>
+        <p>5.3 <strong className="text-[#EAF1F8]">No-show:</strong> if a Driver does not use a booked Space, no refund is due unless required by law.</p>
+        <p>5.4 <strong className="text-[#EAF1F8]">Consumer cancellation rights:</strong> where the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013 apply, you may have a 14-day right to cancel. Because a Booking is a service for a specific date/period, by making a time-specific Booking you request that the service begin during the cancellation period and acknowledge this may affect that right. This does not remove your statutory rights.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">6 · Host obligations and warranties</h3>
+        <p>By listing a Space, the Host confirms and agrees that they:</p>
+        <p>6.1 have the <strong className="text-[#EAF1F8]">legal right</strong> to offer the Space for paid parking, including any necessary consent from a landlord, mortgage lender, freeholder, management company or under any lease or title covenant;</p>
+        <p>6.2 are responsible for determining whether their use of the Space for paid parking requires <strong className="text-[#EAF1F8]">planning permission or constitutes a material change of use</strong>, and for obtaining any such permission. Regular commercial letting of a driveway can, in some cases, require planning consent, and this responsibility rests solely with the Host;</p>
+        <p>6.3 are responsible for their <strong className="text-[#EAF1F8]">own tax affairs</strong> on income earned, and for holding <strong className="text-[#EAF1F8]">appropriate insurance</strong> (a Host&apos;s domestic home or motor insurance may not cover commercial use of a driveway — Hosts should check with their insurer);</p>
+        <p>6.4 will keep the Space available, accessible and safe for the booked period, and will not discriminate unlawfully against Drivers;</p>
+        <p>6.5 <strong className="text-[#EAF1F8]">consent to ParkEasy collecting and reporting their information to HM Revenue &amp; Customs</strong> where required under the UK&apos;s digital platform reporting rules (see the Privacy Policy).</p>
+        <p>6.6 The Host <strong className="text-[#EAF1F8]">indemnifies</strong> ParkEasy against claims, losses and costs arising from the Host&apos;s breach of these Terms, the condition of the Space, or the Host&apos;s provision of parking.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">7 · Driver obligations</h3>
+        <p>7.1 A Booking grants a licence to park the identified vehicle in the Space for the booked period only, subject to any reasonable rules the Host has stated.</p>
+        <p>7.2 The Driver must provide an <strong className="text-[#EAF1F8]">accurate vehicle registration</strong>, park only the vehicle booked, vacate on time, and leave the Space as found.</p>
+        <p>7.3 The Driver is responsible for their vehicle and its contents and is liable for any damage they cause to the Space or surrounding property.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">8 · Liability</h3>
+        <p>8.1 The parking arrangement is between Host and Driver. <strong className="text-[#EAF1F8]">ParkEasy is not liable for loss, theft of or damage to any vehicle or its contents, for personal injury on a Host&apos;s premises, or for any dispute between a Host and a Driver</strong>, save to the extent caused by our own negligence.</p>
+        <p>8.2 We do not exclude or limit liability for death or personal injury caused by our negligence, for fraud, or for any other liability that cannot be excluded under the law of Northern Ireland.</p>
+        <p>8.3 Subject to 8.2, our total liability to you arising out of or in connection with the Platform is limited to <strong className="text-[#EAF1F8]">the total fees paid by or to you through the Platform in the 12 months before the claim</strong>.</p>
+        <p>8.4 We are not liable for business losses, and we provide the Platform on an &ldquo;as available&rdquo; basis without guaranteeing uninterrupted access.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">9 · Prohibited use</h3>
+        <p>You must not use the Platform for on-street or public parking, for any unlawful purpose, to circumvent our fees, to post false listings, or in any way that harms the Platform or other users.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">10 · Suspension and termination</h3>
+        <p>We may suspend or close an account for breach of these Terms, suspected fraud, or to comply with law.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">11 · Changes to these Terms</h3>
+        <p>We may update these Terms. Material changes will be notified via the Platform or by email. Continued use after changes take effect constitutes acceptance.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">12 · Complaints and contact</h3>
+        <p>Questions or complaints: <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a>.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">13 · Governing law</h3>
+        <p>These Terms are governed by the <strong className="text-[#EAF1F8]">law of Northern Ireland</strong>, and the courts of Northern Ireland have jurisdiction, without affecting any mandatory consumer protections available to you.</p>
       </>
     ),
   },
@@ -3690,7 +3816,7 @@ const InfoOverlay = ({ page, onClose }) => {
 const Footer = ({ onOpen }) => (
   <footer className="px-4 pt-2 pb-6 text-center">
     <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-[rgba(234,241,248,0.5)]">
-      {[['about','About'],['privacy','Privacy'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
+      {[['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
         <button key={id} onClick={()=>onOpen(id)} className="hover:text-[#5BE7DA] transition font-medium">{label}</button>
       ))}
     </div>
