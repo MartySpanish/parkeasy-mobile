@@ -49,6 +49,11 @@ const loadBootstrap = () => {
 const placesLib = async () => { await loadBootstrap(); return window.google.maps.importLibrary('places'); };
 const geocodingLib = async () => { await loadBootstrap(); return window.google.maps.importLibrary('geocoding'); };
 
+// Diagnostic: the last Google failure reason, surfaced in the UI via ?debug=1
+// so we can see exactly why Google fell back (billing, API not enabled, etc.).
+const setDiag = (m) => { try { if (typeof window !== 'undefined') window.__peGeoError = m; } catch { /* ignore */ } };
+export const lastGeoError = () => (typeof window !== 'undefined' ? window.__peGeoError : '') || '';
+
 // ── Nominatim helpers (fallback) ──────────────────────────────────────────────
 const nominatimSuggest = async (term) => {
   try {
@@ -102,9 +107,9 @@ export const suggestPlaces = async (q) => {
             placeId: p.placeId,
           };
         }).filter(x => x && x.label);
-        if (out.length) return out;
-      }
-    } catch { /* fall back to Nominatim */ }
+        if (out.length) { setDiag(''); return out; }
+      } else { setDiag('new Places API not on SDK'); }
+    } catch (e) { setDiag('places: ' + (e?.message || e)); }
   }
   return nominatimSuggest(term);
 };
@@ -141,11 +146,12 @@ export const geocodeText = async (q) => {
         const geocoder = new Geocoder();
         const { results } = await geocoder.geocode({ address: term, componentRestrictions: { country: 'GB' } });
         if (results && results[0]) {
+          setDiag('');
           const l = results[0].geometry.location;
           return { lat: l.lat(), lng: l.lng(), label: (results[0].formatted_address || term).split(',').slice(0, 2).join(', ') };
         }
       }
-    } catch { /* fall back to Nominatim */ }
+    } catch (e) { setDiag('geocode: ' + (e?.message || e)); }
   }
   return nominatimGeocode(term);
 };

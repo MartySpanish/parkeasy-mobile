@@ -12,7 +12,7 @@ import {
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
 import { EV_SPOTS } from './evSpots';
-import { suggestPlaces, resolvePlace, geocodeText } from './geo';
+import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus } from './notify';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
@@ -2020,6 +2020,12 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         <div className="flex items-start gap-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 text-[#FFD27A] text-xs px-3.5 py-3 rounded-2xl">
           <Info size={14} className="mt-0.5 flex-shrink-0"/>
           <span>Couldn&rsquo;t find &ldquo;{query.trim()}&rdquo;. Showing keyword matches — try a fuller address.</span>
+        </div>
+      )}
+      {/* Diagnostic: visit parkeasy.uk/?debug=1 to see why Google fell back. */}
+      {typeof location !== 'undefined' && new URLSearchParams(location.search).get('debug') === '1' && query.trim().length >= 3 && (
+        <div className="text-[11px] px-3.5 py-2 rounded-xl bg-white/5 border border-white/12 text-[rgba(234,241,248,0.7)] font-mono break-all">
+          google: {lastGeoError() || 'OK / using Google'}
         </div>
       )}
     </div>
