@@ -3737,7 +3737,7 @@ const INFO_PAGES = {
           <li>Your pin highlighted on the map with your offer</li>
           <li>A spot on the Local businesses tab</li>
         </ul>
-        <p><strong className="text-[#EAF1F8]">Founding-sponsor pricing:</strong> £25–40/month, and your first month is free. Limited slots per area so it stays useful, not cluttered.</p>
+        <p><strong className="text-[#EAF1F8]">Founding-sponsor pricing:</strong> £25–40/month. Limited slots per area so it stays useful, not cluttered.</p>
         <p>Interested? Email <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com?subject=Advertising%20with%20ParkEasy">parkeasyuk@gmail.com</a> and we&apos;ll set you up.</p>
       </>
     ),
