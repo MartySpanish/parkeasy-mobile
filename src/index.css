@@ -101,7 +101,8 @@ h1, h2, h3 { letter-spacing: -0.02em; }
   z-index: 0;
   background: #0a111e !important;
 }
-.leaflet-tile { filter: brightness(0.78) saturate(0.85) hue-rotate(170deg) invert(0.92); }
+/* CARTO tiles are already styled per theme (dark_all / voyager) — no filter. */
+.leaflet-tile { filter: none; }
 .leaflet-control-attribution {
   background: rgba(10, 17, 30, 0.7) !important;
   color: rgba(234, 241, 248, 0.5) !important;
