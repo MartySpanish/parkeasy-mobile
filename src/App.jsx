@@ -1201,7 +1201,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
       <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] overflow-hidden animate-fade-in-up" style={{maxWidth:680,width:'100%',margin:'0 auto',maxHeight:'92vh',background:'var(--sheet)',borderTop:'1px solid var(--hairline)',boxShadow:'var(--sheet-shadow)'}}>
         <div className="relative h-44">
           <MapContainer key={spot.id} center={[spot.lat,spot.lng]} zoom={15} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+            <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
             <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
           </MapContainer>
           <button onClick={onClose} aria-label="Back" className="absolute top-3 left-3 z-[600] w-10 h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white backdrop-blur"><X size={17}/></button>
@@ -1494,13 +1494,19 @@ const searchPin = (label) => L.divIcon({
 
 // isPremium defaults to true so existing call sites keep exact pins; screens
 // that can show gated spots pass the real flag + an upgrade handler.
+// Map base tiles — CARTO's free, polished styles that match the app theme
+// (dark map for dark mode, light "Voyager" for light mode). No per-view cost.
+const CARTO_DARK  = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png';
+const CARTO_LIGHT = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+const TILE_ATTR = '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const tileUrl = () => (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light') ? CARTO_LIGHT : CARTO_DARK;
+
 // `pin` (optional) marks a searched address location.
 const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPremium=true, onUpgrade, pin }) => (
   <div style={{height}} className={flat ? 'overflow-hidden border-y border-white/10' : 'rounded-2xl overflow-hidden border border-white/10 shadow-sm'}>
     <MapContainer center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
-      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'/>
+      <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
       {center && <RecenterMap center={center} zoom={zoom}/>}
       {pin && (
         <Marker position={[pin.lat, pin.lng]} icon={searchPin(pin.label)} zIndexOffset={1000}>
