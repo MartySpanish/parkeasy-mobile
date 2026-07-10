@@ -38,15 +38,20 @@ const nominatimSuggest = async (term) => {
 };
 
 const nominatimGeocode = async (term) => {
-  const lookup = async (extra) => {
+  const lookup = async (q, extra) => {
     try {
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=gb&q=${encodeURIComponent(term)}${extra}`, { headers: { Accept: 'application/json' } });
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=gb&q=${encodeURIComponent(q)}${extra}`, { headers: { Accept: 'application/json' } });
       const d = await r.json();
       if (d && d[0]) return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon), label: (d[0].display_name || term).split(',').slice(0, 2).join(', ') };
     } catch { /* ignore */ }
     return null;
   };
-  return (await lookup(`&viewbox=${NI_VIEWBOX}&bounded=1`)) || (await lookup(''));
+  // Try the term as typed (NI-bounded), then with an explicit region hint to
+  // improve the hit rate for street addresses, then a UK-wide fallback.
+  return (await lookup(term, `&viewbox=${NI_VIEWBOX}&bounded=1`))
+      || (await lookup(`${term}, Northern Ireland`, `&viewbox=${NI_VIEWBOX}&bounded=1`))
+      || (await lookup(`${term}, Northern Ireland`, ''))
+      || (await lookup(term, ''));
 };
 
 // ── Public API ────────────────────────────────────────────────────────────────

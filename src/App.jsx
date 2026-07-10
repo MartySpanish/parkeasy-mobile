@@ -1611,6 +1611,22 @@ const normalizePlace = (s) => String(s || '').toLowerCase()
   .replace(/\s+/g, ' ')
   .trim();
 
+// If a query mentions an NI town/city by name (e.g. "…Belfast", "Derry"),
+// return that town's centre. A reliable fallback for when the free geocoder
+// can't resolve a full street address — better than a dead "no spots" screen.
+const cityFromText = (q) => {
+  const t = normalizePlace(q);
+  if (!t) return null;
+  let hit = null;
+  for (const c of CITIES) {
+    // "Derry~Londonderry" → match "derry" or "londonderry"
+    for (const name of c.name.toLowerCase().split(/[~/]/).map(n => normalizePlace(n))) {
+      if (name.length >= 4 && new RegExp(`\\b${name}\\b`).test(t)) hit = c;
+    }
+  }
+  return hit ? { lat: hit.center[0], lng: hit.center[1], label: hit.name } : null;
+};
+
 // Gated spots (hidden gems / premium EV picks) still work as landmarks for
 // free users — their tags/areas are public place names ("kennedy centre") —
 // but only via area+tags, with APPROXIMATE coordinates and the area as the
@@ -1877,7 +1893,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     const local = localLandmark(term, isPremium);
     if (local) { setGeo(local); setFocusSpot(null); return; }
     setGeoBusy(true); setGeoMiss(false);
-    const loc = await geocodeText(normalizePlace(term));
+    const loc = await geocodeText(normalizePlace(term)) || cityFromText(term);
     setGeoBusy(false);
     if (loc) { setGeo(loc); setFocusSpot(null); }
     else { setGeo(null); setGeoMiss(true); }
@@ -1907,7 +1923,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         setGeo({ lat: best.lat, lng: best.lng, label: best.label }); setFocusSpot(null);
       } else if (v.trim().length >= 4) {
         setGeoBusy(true);
-        const loc = await geocodeText(normalizePlace(v));
+        const loc = await geocodeText(normalizePlace(v)) || cityFromText(v);
         setGeoBusy(false);
         // Ignore a slow result if the user has since typed something else.
         if (loc && inputRef.current && inputRef.current.value.trim() === v.trim()) {
