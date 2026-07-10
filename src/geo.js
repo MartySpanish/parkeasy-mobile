@@ -9,8 +9,9 @@ export const hasGoogle = !!GOOGLE_MAPS_KEY;
 
 // Northern Ireland bias box (lng/lat extents) for Nominatim.
 const NI_VIEWBOX = '-8.3,55.45,-5.3,54.0';
-// NI-centred circle to bias Google predictions toward local results.
-const NI_BIAS = { center: { lat: 54.62, lng: -6.6 }, radius: 140000 };
+// Bias Google predictions toward Northern Ireland. A bounds box (not a circle)
+// avoids Google's 50 km circle-radius cap and covers the whole region.
+const NI_BIAS = { north: 55.35, south: 53.95, east: -5.35, west: -8.2 };
 
 // ── Google Maps JS loader (async bootstrap + importLibrary) ───────────────────
 // The modern loader exposes google.maps.importLibrary; classes come from
