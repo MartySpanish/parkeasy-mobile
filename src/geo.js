@@ -1,41 +1,53 @@
 // Geocoding + address autocomplete.
-// Prefers Google (Places Autocomplete + Geocoder via the JS SDK, which is
-// CORS-safe in the browser — unlike Google's REST geocoder) when a Maps key is
-// configured. Falls back to free OpenStreetMap Nominatim otherwise.
+// Prefers Google when a Maps key is configured, using the NEW Places API
+// (AutocompleteSuggestion + Place) — the legacy AutocompleteService is not
+// available to Google projects created after March 2025. Falls back to free
+// OpenStreetMap Nominatim on any failure, so search always works.
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 export const hasGoogle = !!GOOGLE_MAPS_KEY;
 
-// Northern Ireland bias box (lng/lat extents).
+// Northern Ireland bias box (lng/lat extents) for Nominatim.
 const NI_VIEWBOX = '-8.3,55.45,-5.3,54.0';
+// NI-centred circle to bias Google predictions toward local results.
+const NI_BIAS = { center: { lat: 54.62, lng: -6.6 }, radius: 140000 };
 
-let googlePromise = null;
-const loadGoogle = () => {
+// ── Google Maps JS loader (async bootstrap + importLibrary) ───────────────────
+// The modern loader exposes google.maps.importLibrary; classes come from
+// importLibrary('places') / importLibrary('geocoding'). A gm_authFailure means
+// the key/API/billing isn't right — we record it and fall back to Nominatim.
+let bootstrapPromise = null;
+const loadBootstrap = () => {
   if (!GOOGLE_MAPS_KEY) return Promise.reject(new Error('no key'));
-  if (window.google?.maps?.places) return Promise.resolve(window.google);
-  if (googlePromise) return googlePromise;
-  googlePromise = new Promise((resolve, reject) => {
+  if (window.google?.maps?.importLibrary) return Promise.resolve();
+  if (bootstrapPromise) return bootstrapPromise;
+  bootstrapPromise = new Promise((resolve, reject) => {
     let settled = false;
     const finish = (ok) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer); clearInterval(poll);
-      ok ? resolve(window.google) : reject(new Error('google maps unavailable'));
+      ok ? resolve() : reject(new Error('google maps unavailable'));
+    };
+    // Auth failures (bad key restriction, API not enabled, billing off) trigger
+    // this global. Surface it for diagnostics, then fall back to Nominatim.
+    window.gm_authFailure = () => {
+      try { localStorage.setItem('pe_gmap_error', 'auth-failed'); } catch { /* ignore */ }
+      finish(false);
     };
     const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&v=weekly&libraries=places,geocoding&loading=async`;
     s.async = true;
     s.onerror = () => finish(false);
-    // onload can fire before the Places library is ready, and a CSP/network
-    // block may never fire onerror — so poll for readiness and hard-timeout.
-    // On any failure we fall back to Nominatim instead of hanging.
-    const poll = setInterval(() => { if (window.google?.maps?.places) finish(true); }, 100);
-    const timer = setTimeout(() => finish(false), 6000);
+    const poll = setInterval(() => { if (window.google?.maps?.importLibrary) finish(true); }, 100);
+    const timer = setTimeout(() => finish(false), 8000);
     document.head.appendChild(s);
   });
-  googlePromise.catch(() => { googlePromise = null; });  // allow a later retry
-  return googlePromise;
+  bootstrapPromise.catch(() => { bootstrapPromise = null; }); // allow retry
+  return bootstrapPromise;
 };
+const placesLib = async () => { await loadBootstrap(); return window.google.maps.importLibrary('places'); };
+const geocodingLib = async () => { await loadBootstrap(); return window.google.maps.importLibrary('geocoding'); };
 
 // ── Nominatim helpers (fallback) ──────────────────────────────────────────────
 const nominatimSuggest = async (term) => {
@@ -58,8 +70,6 @@ const nominatimGeocode = async (term) => {
     } catch { /* ignore */ }
     return null;
   };
-  // Try the term as typed (NI-bounded), then with an explicit region hint to
-  // improve the hit rate for street addresses, then a UK-wide fallback.
   return (await lookup(term, `&viewbox=${NI_VIEWBOX}&bounded=1`))
       || (await lookup(`${term}, Northern Ireland`, `&viewbox=${NI_VIEWBOX}&bounded=1`))
       || (await lookup(`${term}, Northern Ireland`, ''))
@@ -68,59 +78,73 @@ const nominatimGeocode = async (term) => {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-// Autocomplete predictions for streets / postcodes / venues.
+// Autocomplete predictions for streets / postcodes / venues (new Places API).
 export const suggestPlaces = async (q) => {
   const term = (q || '').trim();
   if (term.length < 3) return [];
   if (GOOGLE_MAPS_KEY) {
     try {
-      const g = await loadGoogle();
-      const svc = new g.maps.places.AutocompleteService();
-      const bounds = new g.maps.LatLngBounds(new g.maps.LatLng(54.0, -8.3), new g.maps.LatLng(55.45, -5.3));
-      const preds = await new Promise((resolve) => {
-        svc.getPlacePredictions(
-          { input: term, componentRestrictions: { country: 'gb' }, locationBias: bounds },
-          (res) => resolve(res || [])
-        );
-      });
-      if (preds.length) {
-        return preds.map(p => ({
-          label: p.structured_formatting?.main_text || p.description,
-          sub: p.structured_formatting?.secondary_text || '',
-          placeId: p.place_id,
-        }));
+      const { AutocompleteSuggestion, AutocompleteSessionToken } = await placesLib();
+      if (AutocompleteSuggestion?.fetchAutocompleteSuggestions) {
+        const sessionToken = new AutocompleteSessionToken();
+        const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input: term,
+          includedRegionCodes: ['gb'],
+          locationBias: NI_BIAS,
+          sessionToken,
+        });
+        const out = (suggestions || []).map(s => {
+          const p = s.placePrediction;
+          if (!p) return null;
+          return {
+            label: p.mainText?.text || p.text?.text || '',
+            sub: p.secondaryText?.text || '',
+            placeId: p.placeId,
+          };
+        }).filter(x => x && x.label);
+        if (out.length) return out;
       }
     } catch { /* fall back to Nominatim */ }
   }
   return nominatimSuggest(term);
 };
 
-// Resolve a chosen suggestion (Nominatim items carry lat/lng; Google items
-// carry a placeId that we geocode to coordinates).
+// Resolve a chosen suggestion to coordinates. Nominatim items already carry
+// lat/lng; Google items carry a placeId → fetch its location via the new Place.
 export const resolvePlace = async (item) => {
   if (item == null) return null;
   if (item.lat != null && item.lng != null) return { lat: item.lat, lng: item.lng, label: item.label };
   if (item.placeId && GOOGLE_MAPS_KEY) {
     try {
-      const g = await loadGoogle();
-      const geocoder = new g.maps.Geocoder();
-      const r = await new Promise((resolve) => geocoder.geocode({ placeId: item.placeId }, (res, status) => resolve(status === 'OK' ? res : [])));
-      if (r[0]) { const l = r[0].geometry.location; return { lat: l.lat(), lng: l.lng(), label: item.label }; }
+      const { Place } = await placesLib();
+      if (Place) {
+        const place = new Place({ id: item.placeId });
+        await place.fetchFields({ fields: ['location', 'formattedAddress'] });
+        const loc = place.location;
+        if (loc) return { lat: loc.lat(), lng: loc.lng(), label: item.label };
+      }
     } catch { /* ignore */ }
   }
   return null;
 };
 
-// Free-text geocode (used when the user presses Enter without picking).
+// Free-text geocode (used when the user presses Enter without picking, and for
+// the debounced auto-preview). The classic Geocoder is still available to new
+// customers, so this keeps working where autocomplete needs the new API.
 export const geocodeText = async (q) => {
   const term = (q || '').trim();
   if (!term) return null;
   if (GOOGLE_MAPS_KEY) {
     try {
-      const g = await loadGoogle();
-      const geocoder = new g.maps.Geocoder();
-      const r = await new Promise((resolve) => geocoder.geocode({ address: term, componentRestrictions: { country: 'GB' } }, (res, status) => resolve(status === 'OK' ? res : [])));
-      if (r[0]) { const l = r[0].geometry.location; return { lat: l.lat(), lng: l.lng(), label: (r[0].formatted_address || term).split(',').slice(0, 2).join(', ') }; }
+      const { Geocoder } = await geocodingLib();
+      if (Geocoder) {
+        const geocoder = new Geocoder();
+        const { results } = await geocoder.geocode({ address: term, componentRestrictions: { country: 'GB' } });
+        if (results && results[0]) {
+          const l = results[0].geometry.location;
+          return { lat: l.lat(), lng: l.lng(), label: (results[0].formatted_address || term).split(',').slice(0, 2).join(', ') };
+        }
+      }
     } catch { /* fall back to Nominatim */ }
   }
   return nominatimGeocode(term);
