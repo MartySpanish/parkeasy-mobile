@@ -3653,13 +3653,13 @@ const INFO_PAGES = {
     title: 'Privacy policy', Icon: Shield,
     body: (
       <>
-        <p><strong className="text-[#EAF1F8]">[ParkEasy Ltd — confirm exact registered name]</strong> (&ldquo;ParkEasy&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) is the <strong className="text-[#EAF1F8]">data controller</strong> for personal data processed through parkeasy.uk and any associated app. We are registered with the Information Commissioner&apos;s Office (ICO), registration number <strong className="text-[#EAF1F8]">[insert ICO registration number]</strong>.</p>
+        <p><strong className="text-[#EAF1F8]">Parkeasy Apps Ltd</strong> (&ldquo;ParkEasy&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) is the <strong className="text-[#EAF1F8]">data controller</strong> for personal data processed through parkeasy.uk and any associated app. We are registered with the Information Commissioner&apos;s Office (ICO), registration number <strong className="text-[#EAF1F8]">ZC192696</strong>.</p>
         <p className="text-[rgba(234,241,248,0.5)] text-xs">Last updated: 8 July 2026 · Version 1.0</p>
         <p>This policy explains what personal data we collect, why, and your rights under the UK GDPR and the Data Protection Act 2018.</p>
 
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">1 · Who we are and how to contact us</h3>
         <ul className="list-disc pl-5 space-y-1.5">
-          <li><strong className="text-[#EAF1F8]">Controller:</strong> [ParkEasy Ltd], [registered office address]</li>
+          <li><strong className="text-[#EAF1F8]">Controller:</strong> Parkeasy Apps Ltd, 17 Gransha Park, Belfast, BT11 8AT</li>
           <li><strong className="text-[#EAF1F8]">Contact:</strong> <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a></li>
         </ul>
 
@@ -3734,7 +3734,7 @@ const INFO_PAGES = {
     title: 'Terms of Service', Icon: FileText,
     body: (
       <>
-        <p>Operated by <strong className="text-[#EAF1F8]">[ParkEasy Ltd — confirm exact registered name]</strong>, a company registered in Northern Ireland (company number <strong className="text-[#EAF1F8]">[insert]</strong>), registered office <strong className="text-[#EAF1F8]">[insert registered office address]</strong> (&ldquo;ParkEasy&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;).</p>
+        <p>Operated by <strong className="text-[#EAF1F8]">Parkeasy Apps Ltd</strong>, a company registered in Northern Ireland (company number <strong className="text-[#EAF1F8]">NI742027</strong>), registered office <strong className="text-[#EAF1F8]">17 Gransha Park, Belfast, BT11 8AT</strong> (&ldquo;ParkEasy&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;).</p>
         <p className="text-[rgba(234,241,248,0.5)] text-xs">Last updated: 8 July 2026 · Version 1.0</p>
         <p>These Terms govern use of the ParkEasy platform at parkeasy.uk and any associated app (the &ldquo;Platform&rdquo;). By creating a listing, making a booking, or otherwise using the Platform, you agree to these Terms. Please read them carefully. Nothing in these Terms affects your non-excludable statutory rights as a consumer.</p>
 
