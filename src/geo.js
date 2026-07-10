@@ -15,13 +15,25 @@ const loadGoogle = () => {
   if (window.google?.maps?.places) return Promise.resolve(window.google);
   if (googlePromise) return googlePromise;
   googlePromise = new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer); clearInterval(poll);
+      ok ? resolve(window.google) : reject(new Error('google maps unavailable'));
+    };
     const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places&loading=async`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places`;
     s.async = true;
-    s.onload = () => resolve(window.google);
-    s.onerror = () => reject(new Error('google maps failed to load'));
+    s.onerror = () => finish(false);
+    // onload can fire before the Places library is ready, and a CSP/network
+    // block may never fire onerror — so poll for readiness and hard-timeout.
+    // On any failure we fall back to Nominatim instead of hanging.
+    const poll = setInterval(() => { if (window.google?.maps?.places) finish(true); }, 100);
+    const timer = setTimeout(() => finish(false), 6000);
     document.head.appendChild(s);
   });
+  googlePromise.catch(() => { googlePromise = null; });  // allow a later retry
   return googlePromise;
 };
 
