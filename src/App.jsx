@@ -1399,12 +1399,12 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
     <div className="fixed inset-0 z-[65] flex flex-col overflow-auto" style={{background:'var(--bg-solid)'}}>
       <div className="relative h-56 flex-shrink-0">
         <MapContainer center={[54.606,-5.928]} zoom={12} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} dragging={false} attributionControl={false}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+          <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
           <Polygon positions={FLEADH.zone} pathOptions={{color:'#FF7A7A',weight:2,dashArray:'6 6',fillColor:'#FF5C5C',fillOpacity:0.16}}/>
           {FLEADH.pr.slice(1).map((p,i)=>(<Marker key={i} position={[p.lat,p.lng]} icon={prPin()}/>))}
           {FLEADH.camps.map((c,i)=>(<Marker key={'c'+i} position={[c.lat,c.lng]} icon={campPin(c.name)}/>))}
         </MapContainer>
-        <button onClick={onClose} aria-label="Back" className="absolute top-3 left-3 z-[600] w-10 h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white backdrop-blur"><X size={18}/></button>
+        <button onClick={onClose} aria-label="Close" style={{top:'calc(env(safe-area-inset-top) + 10px)'}} className="fixed left-3 z-[600] w-11 h-11 rounded-full bg-black/60 border border-white/25 flex items-center justify-center text-white backdrop-blur active:scale-90 transition"><X size={20}/></button>
       </div>
       <div className="relative -mt-6 rounded-t-[28px] px-5 pt-3 pb-10 flex-1" style={{background:'var(--sheet)', border:'1px solid var(--hairline)', borderBottom:'none', maxWidth:680, width:'100%', margin:'-24px auto 0'}}>
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
@@ -1445,6 +1445,10 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
           className="mt-5 w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[15px] text-[#06231f] btn-teal active:scale-95 transition">
           <Navigation size={17}/>Official travel info
         </a>
+        <button onClick={onClose}
+          className="mt-3 w-full py-3.5 rounded-2xl font-display font-bold text-[15px] text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+          Close
+        </button>
       </div>
     </div>
   );
