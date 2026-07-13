@@ -1204,8 +1204,8 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
             <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
             <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
           </MapContainer>
-          <button onClick={onClose} aria-label="Back" className="absolute top-3 left-3 z-[600] w-10 h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white backdrop-blur"><X size={17}/></button>
-          <button onClick={()=>onSave(spot.id)} aria-label={saved?'Remove from saved':'Save spot'} className={`absolute top-3 right-3 z-[600] w-10 h-10 rounded-full flex items-center justify-center ${saved?'bg-white text-[#06231f]':'bg-black/50 border border-white/20 text-white backdrop-blur'}`}><Bookmark size={16} fill={saved?'#06231f':'none'}/></button>
+          <button onClick={onClose} aria-label="Close" style={{top:'calc(env(safe-area-inset-top) + 10px)'}} className="absolute left-3 z-[600] w-11 h-11 rounded-full bg-black/60 border border-white/25 flex items-center justify-center text-white backdrop-blur active:scale-90 transition"><X size={19}/></button>
+          <button onClick={()=>onSave(spot.id)} aria-label={saved?'Remove from saved':'Save spot'} style={{top:'calc(env(safe-area-inset-top) + 10px)'}} className={`absolute right-3 z-[600] w-11 h-11 rounded-full flex items-center justify-center active:scale-90 transition ${saved?'bg-white text-[#06231f]':'bg-black/60 border border-white/25 text-white backdrop-blur'}`}><Bookmark size={16} fill={saved?'#06231f':'none'}/></button>
         </div>
         <div className="overflow-auto p-5" style={{maxHeight:'calc(92vh - 112px)'}}>
           <h2 className="font-display font-bold text-2xl text-[#EAF1F8] leading-tight">{spot.name}</h2>
