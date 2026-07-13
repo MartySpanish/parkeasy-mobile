@@ -2532,7 +2532,7 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
       <div>
         <h3 className="text-xl font-bold text-[#EAF1F8]">Join to Add a Spot</h3>
         <p className="text-sm text-[#8da2bd] mt-1 max-w-xs leading-relaxed">
-          Sign up free to contribute spots. Earn 1 month of Premium for every verified spot you add.
+          Sign up free to contribute spots. Earn 1 week of Premium for every verified spot you add.
         </p>
       </div>
       <button onClick={onJoinPrompt}
@@ -2556,8 +2556,8 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
         </p>
       </div>
       <div className="w-full bg-gradient-to-r from-[#0e1a2c] to-[#16243a] text-white px-6 py-4 rounded-2xl text-center space-y-1">
-        <p className="font-bold text-base">🏆 1 month Premium on the way!</p>
-        <p className="text-[#5BE7DA] text-xs leading-relaxed">We'll review your spot within 24 hours. Once approved we'll email you a link to activate your free Premium month.</p>
+        <p className="font-bold text-base">🏆 1 week of Premium on the way!</p>
+        <p className="text-[#5BE7DA] text-xs leading-relaxed">We'll review your spot within 24 hours. Once approved we'll email you a link to activate your free Premium week.</p>
       </div>
       <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);setCoords(null);setLocErr('');}}
         className="text-[#5BE7DA] text-sm font-bold underline">Submit another spot</button>
@@ -2572,7 +2572,7 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
             <Star size={20} fill="currentColor" className="text-[#FFD27A]"/>
           </div>
           <div>
-            <p className="font-extrabold text-base leading-tight">Add a spot → get 1 month Premium FREE</p>
+            <p className="font-extrabold text-base leading-tight">Add a spot → get 1 week Premium FREE</p>
             <p className="text-[#5BE7DA] text-xs mt-0.5">Activated after we review your spot (within 24hrs)</p>
           </div>
         </div>
@@ -2606,7 +2606,7 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
               };
               img.src=URL.createObjectURL(f);
             }}/>
-          <p className="text-[11px] text-[#6b7d96] mt-1.5">📸 Add a photo of the space — verified hidden gems with a photo earn a <strong className="text-[#5BE7DA]">free month of Premium</strong>.</p>
+          <p className="text-[11px] text-[#6b7d96] mt-1.5">📸 Add a photo of the space — verified hidden gems with a photo earn a <strong className="text-[#5BE7DA]">free week of Premium</strong>.</p>
         </div>
 
         <div>
@@ -3999,11 +3999,11 @@ export default function App() {
       window.history.replaceState({}, '', window.location.pathname);
     }
     // Hidden-gem reward: when a community spot is approved, the founder emails
-    // the submitter this link — it activates 1 month of Premium. A second
-    // approval extends from whatever is left, so months stack.
-    if (p.get('reward') === 'gem30') {
+    // the submitter this link — it activates 1 week of Premium. A second
+    // approval extends from whatever is left, so the free time stacks.
+    if (p.get('reward') === 'gem7') {
       const base = Math.max(ls.get('pe_premium_until', 0), Date.now());
-      const until = base + 30 * 86400000;
+      const until = base + 7 * 86400000;
       ls.set('pe_premium_until', until);
       setIsPremium(true);
       setRewardUntil(until);
@@ -4121,7 +4121,7 @@ export default function App() {
     }
     // If the user pinned a location, show their spot on the map straight away
     // and persist it between sessions. It's still emailed for the official
-    // community review (which is what unlocks their free Premium month).
+    // community review (which is what unlocks their free Premium week).
     if (newSpot) {
       const next = [newSpot, ...userSpots];
       setUserSpots(next);
@@ -4157,7 +4157,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[210] flex items-center justify-center p-4" onClick={()=>setRewardUntil(null)}>
           <div onClick={e=>e.stopPropagation()} className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
             <p className="text-4xl">🏆</p>
-            <h3 className="text-xl font-bold text-[#EAF1F8]">Spot approved — 1 month Premium unlocked!</h3>
+            <h3 className="text-xl font-bold text-[#EAF1F8]">Spot approved — 1 week of Premium unlocked!</h3>
             <p className="text-sm text-[#8da2bd] leading-relaxed">
               Thanks for sharing a hidden gem with the community. Every ✨ gem and ⚡ EV charger spot across NI
               is yours until <strong className="text-[#5BE7DA]">{new Date(rewardUntil).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}</strong>.
