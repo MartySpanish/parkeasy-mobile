@@ -3474,6 +3474,18 @@ const AdminOverlay = ({ onClose }) => {
                   <Tile label="Active · 7d" value={d.users.activeLast7}/>
                 </div>
               </div>
+              {d.premium && (
+                <div>
+                  <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Premium members</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Tile label="Active" value={d.premium.active} accent="#FFD27A"/>
+                    <Tile label="Expiring · 7d" value={d.premium.expiring7}/>
+                  </div>
+                  <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] leading-relaxed mt-2">
+                    Counts promo &amp; hidden-gem reward Premium that's still active (tracked server-side). Stripe subscribers aren't included yet — those live per-device until account-linked billing is added.
+                  </p>
+                </div>
+              )}
               {d.promos && (
                 <div>
                   <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Promo redemptions</h3>
