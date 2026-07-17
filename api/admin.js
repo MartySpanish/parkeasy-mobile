@@ -183,7 +183,7 @@ export default async function handler(req, res) {
     // Promo-code redemptions (e.g. PARKEZ) — total count + most recent.
     let promos = { total: 0, latest: [] };
     try {
-      const rr = await fetch(`${URL_}/rest/v1/promo_redemptions?select=user_email,code,redeemed_at,expires_at&order=redeemed_at.desc&limit=50`,
+      const rr = await fetch(`${URL_}/rest/v1/promo_redemptions?select=user_id,user_email,code,redeemed_at,expires_at&order=redeemed_at.desc&limit=200`,
         { headers: { ...svc, Prefer: 'count=exact' } });
       if (rr.ok) {
         const rows = await rr.json();
@@ -193,11 +193,36 @@ export default async function handler(req, res) {
       }
     } catch { /* table may not exist yet */ }
 
+    // Premium members we can verify server-side: promo/reward Premium that is
+    // still within its expiry window (distinct accounts). Stripe purchases are
+    // NOT counted — they live in per-device localStorage and aren't yet linked
+    // to accounts (needs a Stripe webhook). VIP emails are also always Premium.
+    let premium = { active: 0, expiring7: 0, source: 'promo_redemptions' };
+    try {
+      const nowISO = new Date(now).toISOString();
+      const soonISO = new Date(now + 7 * DAY).toISOString();
+      const pr2 = await fetch(`${URL_}/rest/v1/promo_redemptions?expires_at=gt.${nowISO}&select=user_id,expires_at`,
+        { headers: svc });
+      if (pr2.ok) {
+        const rows = await pr2.json();
+        const active = new Set(), expiring = new Set();
+        for (const r of rows) {
+          const id = r.user_id || r.user_email;
+          if (!id) continue;
+          active.add(id);
+          if (r.expires_at && r.expires_at < soonISO) expiring.add(id);
+        }
+        premium.active = active.size;
+        premium.expiring7 = expiring.size;
+      }
+    } catch { /* table may not exist yet */ }
+
     return res.status(200).json({
       ok: true, configured: true,
       env,
       pending,
       promos,
+      premium,
       users: {
         total: users.length,
         last7: users.filter(u => within(u, 7)).length,
