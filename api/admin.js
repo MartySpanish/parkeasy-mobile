@@ -193,6 +193,19 @@ export default async function handler(req, res) {
       }
     } catch { /* table may not exist yet */ }
 
+    // Community spot submissions (from the "Add a Spot" tab) — total + recent.
+    let spots = { total: 0, latest: [] };
+    try {
+      const sr = await fetch(`${URL_}/rest/v1/spot_submissions?select=near,street,type,restriction,notes,submitter_name,submitter_email,has_photo,lat,lng,status,created_at&order=created_at.desc&limit=30`,
+        { headers: { ...svc, Prefer: 'count=exact' } });
+      if (sr.ok) {
+        const rows = await sr.json();
+        const range = sr.headers.get('content-range');
+        spots.total = range?.includes('/') ? parseInt(range.split('/')[1]) || rows.length : rows.length;
+        spots.latest = rows.slice(0, 12);
+      }
+    } catch { /* table may not exist yet */ }
+
     // Premium members we can verify server-side: promo/reward Premium that is
     // still within its expiry window (distinct accounts). Stripe purchases are
     // NOT counted — they live in per-device localStorage and aren't yet linked
@@ -222,6 +235,7 @@ export default async function handler(req, res) {
       env,
       pending,
       promos,
+      spots,
       premium,
       users: {
         total: users.length,
