@@ -2520,6 +2520,20 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
       message: `Submitted by: ${user.name}\nType: ${form.type}\nRestrictions: ${form.restriction}\nNotes: ${form.notes || 'None'}\nCoordinates: ${coords ? `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}` : 'Not captured'}\nPhoto attached: ${preview ? 'yes' : 'no'}`,
       photoData: preview || undefined,
     });
+    // Persist so the submission is visible in the admin dashboard and survives
+    // across devices — best-effort; the email above is still the primary alert.
+    if (isSupabaseEnabled && user?.id) {
+      try {
+        await supabase.from('spot_submissions').insert({
+          user_id: user.id, submitter_name: user.name, submitter_email: user.email,
+          near: form.near.trim() || null, street: form.street.trim() || null,
+          type: form.type || null, restriction: form.restriction || null,
+          notes: form.notes.trim() || null,
+          lat: coords ? coords[0] : null, lng: coords ? coords[1] : null,
+          has_photo: !!preview,
+        });
+      } catch { /* non-blocking */ }
+    }
     setDone(true);
     onSpotAdded(newSpot);
   };
@@ -2806,6 +2820,9 @@ const ListingCard = ({ listing }) => {
           className="block w-full bg-[#5BE7DA] text-[#06231f] text-xs font-bold py-2.5 rounded-xl text-center hover:bg-[#34E0A0] transition">
           Contact Owner
         </a>
+        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">
+          Arranged directly with the owner — you park at your own risk. See our Terms.
+        </p>
       </div>
     </div>
   );
@@ -2900,6 +2917,7 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   const [draftId, setDraftId] = useState(null);
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState('');
+  const [agreed, setAgreed]   = useState(false);       // Host Terms acknowledgement
   const sugTimer = useRef(null);
   const set = (k,v) => setF(p=>({...p,[k]:v}));
 
@@ -2979,6 +2997,7 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
 
   const publish = async () => {
     if (!canPublish || busy) return;
+    if (!agreed) { setErr('Please confirm you agree to the Host Terms before publishing.'); return; }
     setBusy(true); setErr('');
     const id = await saveDraft(false);
     if (!id) { setBusy(false); return; }
@@ -3166,6 +3185,15 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
           : <ul className="space-y-1">{missing.map((m,i)=>(<li key={i} className="text-[12.5px] text-[#FFD27A]">✗ {m}</li>))}</ul>}
       </div>
 
+      {/* Host Terms acknowledgement — protects both ParkEasy and the Host */}
+      <label className="flex items-start gap-2.5 mt-4 cursor-pointer select-none">
+        <input type="checkbox" checked={agreed} onChange={e=>{setAgreed(e.target.checked); if (e.target.checked) setErr('');}}
+          className="mt-0.5 w-4 h-4 flex-shrink-0 accent-[#2ED3C6]"/>
+        <span className="text-[12px] text-[#aebfd4] leading-relaxed">
+          I confirm I have the right to let this space, and I agree to the <strong className="text-[#EAF1F8]">Host Terms</strong>: drivers park at their own risk and I am not responsible for loss, theft or damage to a driver&apos;s vehicle except where caused by my own negligence. *
+        </span>
+      </label>
+
       {err && <p className="text-red-300 text-xs mt-3 bg-red-500/12 border border-red-400/40 rounded-xl px-3 py-2.5">{err}</p>}
 
       <div className="flex gap-2.5 mt-4">
@@ -3173,8 +3201,8 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
           className="flex-1 py-3 rounded-2xl font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] disabled:opacity-50">
           Save draft
         </button>
-        <button type="button" onClick={publish} disabled={!canPublish||busy}
-          title={canPublish?'':'Missing: '+missing.join(', ')}
+        <button type="button" onClick={publish} disabled={!canPublish||!agreed||busy}
+          title={!canPublish?'Missing: '+missing.join(', '):(!agreed?'Please agree to the Host Terms':'')}
           className="flex-[2] py-3 rounded-2xl font-display font-bold text-sm text-[#06231f] btn-teal disabled:opacity-40 disabled:cursor-not-allowed">
           {busy ? 'Publishing…' : hostType==='organization' ? 'Submit for review' : 'Publish listing'}
         </button>
@@ -3509,6 +3537,42 @@ const AdminOverlay = ({ onClose }) => {
                   </div>
                 </div>
               )}
+              {d.spots && (
+                <div>
+                  <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Submitted spots</h3>
+                  <div className="glass rounded-2xl p-4">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-display font-extrabold text-3xl text-[#5BE7DA] leading-none">{d.spots.total}</span>
+                      <span className="text-[12px] text-[rgba(234,241,248,0.55)]">spot{d.spots.total!==1?'s':''} submitted by drivers</span>
+                    </div>
+                    {d.spots.latest?.length > 0 ? (
+                      <div className="mt-3 divide-y divide-white/5">
+                        {d.spots.latest.map((s,i)=>(
+                          <div key={i} className="py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-[13px] text-[#EAF1F8] truncate">{s.near || s.street || 'Spot'}</span>
+                              <span className="flex-shrink-0 text-[11px] text-[rgba(234,241,248,0.5)]">{new Date(s.created_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-[rgba(234,241,248,0.55)] mt-0.5">
+                              {s.street && <span>{s.street}</span>}
+                              {s.type && <span className="text-[#5BE7DA]">{s.type}</span>}
+                              {s.restriction && <span>· {s.restriction}</span>}
+                              {s.has_photo && <span>· 📷 photo (see email)</span>}
+                              {(s.lat!=null && s.lng!=null)
+                                ? <a className="text-[#5BE7DA] underline" target="_blank" rel="noreferrer" href={`https://www.google.com/maps?q=${s.lat},${s.lng}`}>map</a>
+                                : <span>· no GPS</span>}
+                            </div>
+                            {s.notes && <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] mt-0.5">{s.notes}</p>}
+                            <p className="text-[11px] text-[rgba(234,241,248,0.4)] mt-0.5">by {s.submitter_name || s.submitter_email || 'someone'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[12px] text-[rgba(234,241,248,0.5)] mt-2">No submissions yet. New ones will appear here (and you'll still get the email with any photo).</p>
+                    )}
+                  </div>
+                </div>
+              )}
               {(d.pending?.length > 0) && (
                 <div>
                   <h3 className="font-display font-bold text-[13px] text-[#FFD27A] uppercase tracking-widest mb-2.5">⏳ Organization listings awaiting approval ({d.pending.length})</h3>
@@ -3816,6 +3880,7 @@ const INFO_PAGES = {
         <p>8.2 We do not exclude or limit liability for death or personal injury caused by our negligence, for fraud, or for any other liability that cannot be excluded under the law of Northern Ireland.</p>
         <p>8.3 Subject to 8.2, our total liability to you arising out of or in connection with the Platform is limited to <strong className="text-[#EAF1F8]">the total fees paid by or to you through the Platform in the 12 months before the claim</strong>.</p>
         <p>8.4 We are not liable for business losses, and we provide the Platform on an &ldquo;as available&rdquo; basis without guaranteeing uninterrupted access.</p>
+        <p>8.5 <strong className="text-[#EAF1F8]">Drivers park entirely at their own risk.</strong> The Host is not responsible for loss, theft of, or damage to a Driver&apos;s vehicle or its contents while parked, except to the extent caused by the Host&apos;s own negligence or deliberate act. Nothing in this clause limits liability for death or personal injury caused by negligence, or any other liability that cannot be excluded under the law of Northern Ireland. Drivers should ensure their own motor insurance covers them while using a Space.</p>
 
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">9 · Prohibited use</h3>
         <p>You must not use the Platform for on-street or public parking, for any unlawful purpose, to circumvent our fees, to post false listings, or in any way that harms the Platform or other users.</p>
