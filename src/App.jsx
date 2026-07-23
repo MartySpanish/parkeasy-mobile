@@ -12,6 +12,7 @@ import {
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
 import { EV_SPOTS } from './evSpots';
+import { PILOT_SPOTS } from './pilotSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus } from './notify';
 
@@ -195,6 +196,12 @@ const CITIES = [
   { id:'ballycastle',   name:'Ballycastle',       center:[55.2034,-6.2453],   region:'Northern Ireland' },
   { id:'banbridge',     name:'Banbridge',         center:[54.3484,-6.2705],   region:'Northern Ireland' },
   { id:'magherafelt',   name:'Magherafelt',       center:[54.7558,-6.6070],   region:'Northern Ireland' },
+  { id:'dublin',        name:'Dublin',            center:[53.3498,-6.2603],   region:'Republic of Ireland' },
+  { id:'cork',          name:'Cork',              center:[51.8985,-8.4756],   region:'Republic of Ireland' },
+  { id:'galway',        name:'Galway',            center:[53.2707,-9.0568],   region:'Republic of Ireland' },
+  { id:'manchester',    name:'Manchester',        center:[53.4808,-2.2426],   region:'England' },
+  { id:'glasgow',       name:'Glasgow',           center:[55.8642,-4.2518],   region:'Scotland' },
+  { id:'edinburgh',     name:'Edinburgh',         center:[55.9533,-3.1883],   region:'Scotland' },
   { id:'perth',         name:'Perth',             center:[-31.9523,115.8613], region:'Australia' },
 ];
 
@@ -541,7 +548,7 @@ const CITY_SPOTS = {
   magherafelt:   MAGHERAFELT_SPOTS,
 };
 
-const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []), ...(EV_SPOTS[cityId] || []) ];
+const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []), ...(EV_SPOTS[cityId] || []), ...(PILOT_SPOTS[cityId] || []) ];
 
 // Welcome-screen stats — derived from every town's spots so they never go stale.
 const ALL_SPOTS_STATS = CITIES.flatMap(c => getCitySpots(c.id));
@@ -1109,7 +1116,9 @@ const occupancyOf = (spot) => {
 };
 
 const priceParts = (spot) => {
-  if (!spot.price) return { big:'Free', small:'' };
+  // No captured tariff: only genuinely-free badges read "Free" — a paid/official
+  // car park with an unknown price must not display as free (misleads drivers).
+  if (!spot.price) return { big: ['free','hidden_gem'].includes(spot.badge) ? 'Free' : 'Paid', small:'' };
   const m = String(spot.price).match(/^([^/]+)\/(.+)$/);
   return m ? { big:m[1].trim(), small:'/'+m[2].trim() } : { big:String(spot.price), small:'' };
 };
@@ -1465,7 +1474,7 @@ const RecenterMap = ({ center, zoom }) => {
 const pricePin = (spot, selected) => {
   const light = typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light';
   const free = ['free','hidden_gem'].includes(spot.badge);
-  const label = spot.price ? String(spot.price).split('/')[0].trim() : (free ? 'Free' : '£');
+  const label = spot.price ? String(spot.price).split('/')[0].trim() : (free ? 'Free' : 'P');
   const bg = selected ? 'linear-gradient(135deg,#54E6D8,#2ED3C6)' : light ? 'rgba(255,255,255,0.96)' : 'rgba(16,24,40,0.92)';
   const color = selected ? '#06231f' : light ? '#0B1220' : '#EAF1F8';
   const border = selected ? 'rgba(255,255,255,0.5)' : light ? 'rgba(13,27,54,0.18)' : 'rgba(255,255,255,0.18)';
@@ -2070,7 +2079,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     return (
       <div className="pb-6 pt-2">
         <div className="px-4 pb-3">
-          <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">Northern Ireland</p>
+          <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">{CITIES.find(c=>c.name===cityName)?.region || 'UK & Ireland'}</p>
           <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">Find parking</h1>
         </div>
         {searchBlock}
@@ -4261,7 +4270,7 @@ export default function App() {
           <div className="relative min-w-0 flex-1">
             <h1 className="font-display text-white font-extrabold text-[15px] leading-tight tracking-tight whitespace-nowrap">ParkEasy</h1>
             <p className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium truncate whitespace-nowrap">
-              Northern Ireland · {ALL_SPOTS.length} spots
+              UK &amp; Ireland · {ALL_SPOTS.length} spots
             </p>
           </div>
 
