@@ -8,15 +8,167 @@
   box-sizing: border-box;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ── Theme tokens ─────────────────────────────────────────────────────────────
+   Dark is the default brand theme; [data-theme="light"] flips the surfaces.
+   Components reference these vars (inline styles) or get retargeted by the
+   light-mode override rules further down (Tailwind arbitrary classes). */
+:root {
+  color-scheme: dark;
+  --teal:        #5BE7DA;
+  --teal-deep:   #2ED3C6;
+  --body-bg:     #0a111e;
+  --bg-solid:    #0a111e;
+  --app-grad:    linear-gradient(180deg, #0d1626 0%, #0a111e 60%);
+  --header-grad: linear-gradient(135deg, #0b1422 0%, #0e1a2c 55%, #112338 100%);
+  --sheet:       #0d1626;
+  --surface-solid: #0e1a2c;
+  --float:       rgba(13, 20, 33, 0.85);
+  --hairline:    rgba(255, 255, 255, 0.12);
+  --ink:         #EAF1F8;
+  --glass-bg:     rgba(17, 25, 41, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-shadow: 0 4px 18px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --nav-shadow:   0 -10px 36px rgba(0, 0, 0, 0.45);
+  --sheet-shadow: 0 -12px 44px rgba(0, 0, 0, 0.5);
+  --pop-shadow:   0 12px 40px rgba(0, 0, 0, 0.5);
+  --scroll-thumb: rgba(255, 255, 255, 0.14);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.24);
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+[data-theme="light"] {
+  color-scheme: light;
+  --body-bg:     #f5f7fa;
+  --bg-solid:    #f5f7fa;
+  --app-grad:    linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
+  --header-grad: linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%);
+  --sheet:       #ffffff;
+  --surface-solid: #ffffff;
+  --float:       rgba(255, 255, 255, 0.94);
+  --hairline:    rgba(13, 27, 54, 0.12);
+  --ink:         #0B1220;
+  --glass-bg:     #ffffff;
+  --glass-border: rgba(13, 27, 54, 0.08);
+  --glass-shadow: 0 2px 12px rgba(13, 27, 54, 0.08);
+  --nav-shadow:   0 -6px 24px rgba(13, 27, 54, 0.08);
+  --sheet-shadow: 0 -8px 30px rgba(13, 27, 54, 0.10);
+  --pop-shadow:   0 12px 32px rgba(13, 27, 54, 0.16);
+  --scroll-thumb: rgba(13, 27, 54, 0.18);
+  --scroll-thumb-hover: rgba(13, 27, 54, 0.30);
 }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  color: var(--ink);
+  background: var(--body-bg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Display / heading + price typeface */
+.font-display {
+  font-family: 'Sora', 'Manrope', sans-serif;
+  letter-spacing: -0.02em;
+}
+h1, h2, h3 { letter-spacing: -0.02em; }
+
+/* ── Reusable primitives ─────────────────────────────────────────────────── */
+
+/* Crisp card surface — near-solid in dark, pure white in light */
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Signature teal gradient — buttons & active states (same in both themes) */
+.teal-grad { background: linear-gradient(135deg, #54E6D8, #2ED3C6); }
+.btn-teal {
+  background: linear-gradient(135deg, #54E6D8, #2ED3C6);
+  color: #06231f;
+  box-shadow: 0 10px 28px rgba(46, 211, 198, 0.45);
+}
+.text-teal { color: var(--teal); }
+
+/* ── Leaflet ─────────────────────────────────────────────────────────────── */
+.leaflet-container {
+  isolation: isolate;
+  z-index: 0;
+  background: #0a111e !important;
+}
+/* CARTO tiles are already styled per theme (dark_all / voyager) — no filter. */
+.leaflet-tile { filter: none; }
+.leaflet-control-attribution {
+  background: rgba(10, 17, 30, 0.7) !important;
+  color: rgba(234, 241, 248, 0.5) !important;
+}
+.leaflet-control-attribution a { color: rgba(91, 231, 218, 0.8) !important; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: #0e1a2c !important;
+  color: #EAF1F8 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
+}
+.leaflet-popup-content { color: #EAF1F8 !important; }
+.leaflet-popup-close-button { color: rgba(234, 241, 248, 0.6) !important; }
+
+[data-theme="light"] .leaflet-container { background: #e8ecf2 !important; }
+[data-theme="light"] .leaflet-tile { filter: none; }
+[data-theme="light"] .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.75) !important;
+  color: rgba(11, 18, 32, 0.55) !important;
+}
+[data-theme="light"] .leaflet-control-attribution a { color: #0E9384 !important; }
+[data-theme="light"] .leaflet-popup-content-wrapper, [data-theme="light"] .leaflet-popup-tip {
+  background: #ffffff !important;
+  color: #0B1220 !important;
+  border: 1px solid rgba(13, 27, 54, 0.1);
+  box-shadow: 0 12px 32px rgba(13, 27, 54, 0.18) !important;
+}
+[data-theme="light"] .leaflet-popup-content { color: #0B1220 !important; }
+[data-theme="light"] .leaflet-popup-close-button { color: rgba(11, 18, 32, 0.55) !important; }
+
+/* ── Light-mode retargeting of the dark Tailwind palette ─────────────────────
+   The app's markup uses dark-theme arbitrary classes. These rules retarget
+   them on light without touching the JSX. Order matters: accent colours
+   first, muted text last, so combos like "muted + hover:accent" stay muted. */
+[data-theme="light"] [class*="text-[#5BE7DA]"]  { color: #0E9384 !important; }
+[data-theme="light"] [class*="text-[#6BEFB9]"]  { color: #0B9F66 !important; }
+[data-theme="light"] [class*="text-[#FFD27A]"]  { color: #A16207 !important; }
+[data-theme="light"] [class*="text-[#cdeef0]"]  { color: #155E63 !important; }
+[data-theme="light"] [class*="text-[#EAF1F8]"]  { color: #0B1220 !important; }
+[data-theme="light"] [class*="text-[#dbe4f0]"]  { color: #33415C !important; }
+[data-theme="light"] [class*="text-[#cdd9e8]"]  { color: #33415C !important; }
+[data-theme="light"] [class*="text-[#aebfd4]"]  { color: #47566F !important; }
+[data-theme="light"] [class*="text-[#8da2bd]"]  { color: #5B6B84 !important; }
+[data-theme="light"] [class*="text-[#6b7d96]"]  { color: #64748B !important; }
+[data-theme="light"] [class*="text-[#55657d]"]  { color: #94A3B8 !important; }
+[data-theme="light"] [class*="text-[rgba(234,241,248"] { color: #5B6B84 !important; }
+[data-theme="light"] [class*="bg-white/"]       { background-color: rgba(13, 27, 54, 0.05) !important; }
+[data-theme="light"] [class*="bg-[#0e1a2c]"]    { background-color: #ffffff !important; }
+[data-theme="light"] [class*="border-white/"]   { border-color: rgba(13, 27, 54, 0.12) !important; }
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder      { color: rgba(71, 86, 111, 0.6) !important; }
+[data-theme="light"] header .text-white         { color: #0B1220 !important; }
+/* SVG ring tracks drawn with the dark hairline stroke */
+[data-theme="light"] svg circle[stroke="rgba(255,255,255,0.1)"]  { stroke: rgba(13, 27, 54, 0.12); }
+[data-theme="light"] svg circle[stroke="rgba(255,255,255,0.08)"] { stroke: rgba(13, 27, 54, 0.10); }
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fade-in-up { animation: fadeInUp 0.35s ease both; }
+
+@keyframes pe-pulse { 0% { transform: scale(.7); opacity: .7 } 70% { transform: scale(2.1); opacity: 0 } 100% { opacity: 0 } }
