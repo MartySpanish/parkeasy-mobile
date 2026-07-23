@@ -13,6 +13,7 @@ import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
 import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
+import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus } from './notify';
 
@@ -548,7 +549,7 @@ const CITY_SPOTS = {
   magherafelt:   MAGHERAFELT_SPOTS,
 };
 
-const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []), ...(EV_SPOTS[cityId] || []), ...(PILOT_SPOTS[cityId] || []) ];
+const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []), ...(EV_SPOTS[cityId] || []), ...(PILOT_SPOTS[cityId] || []), ...(APCOA_SPOTS[cityId] || []) ];
 
 // Welcome-screen stats — derived from every town's spots so they never go stale.
 const ALL_SPOTS_STATS = CITIES.flatMap(c => getCitySpots(c.id));
