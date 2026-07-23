@@ -12,6 +12,7 @@ import {
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
 import { EV_SPOTS } from './evSpots';
+import { PILOT_SPOTS } from './pilotSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus } from './notify';
 
@@ -195,6 +196,12 @@ const CITIES = [
   { id:'ballycastle',   name:'Ballycastle',       center:[55.2034,-6.2453],   region:'Northern Ireland' },
   { id:'banbridge',     name:'Banbridge',         center:[54.3484,-6.2705],   region:'Northern Ireland' },
   { id:'magherafelt',   name:'Magherafelt',       center:[54.7558,-6.6070],   region:'Northern Ireland' },
+  { id:'dublin',        name:'Dublin',            center:[53.3498,-6.2603],   region:'Republic of Ireland' },
+  { id:'cork',          name:'Cork',              center:[51.8985,-8.4756],   region:'Republic of Ireland' },
+  { id:'galway',        name:'Galway',            center:[53.2707,-9.0568],   region:'Republic of Ireland' },
+  { id:'manchester',    name:'Manchester',        center:[53.4808,-2.2426],   region:'England' },
+  { id:'glasgow',       name:'Glasgow',           center:[55.8642,-4.2518],   region:'Scotland' },
+  { id:'edinburgh',     name:'Edinburgh',         center:[55.9533,-3.1883],   region:'Scotland' },
   { id:'perth',         name:'Perth',             center:[-31.9523,115.8613], region:'Australia' },
 ];
 
@@ -541,7 +548,7 @@ const CITY_SPOTS = {
   magherafelt:   MAGHERAFELT_SPOTS,
 };
 
-const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []), ...(EV_SPOTS[cityId] || []) ];
+const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOTS[cityId] || []), ...(EV_SPOTS[cityId] || []), ...(PILOT_SPOTS[cityId] || []) ];
 
 // Welcome-screen stats — derived from every town's spots so they never go stale.
 const ALL_SPOTS_STATS = CITIES.flatMap(c => getCitySpots(c.id));
@@ -4261,7 +4268,7 @@ export default function App() {
           <div className="relative min-w-0 flex-1">
             <h1 className="font-display text-white font-extrabold text-[15px] leading-tight tracking-tight whitespace-nowrap">ParkEasy</h1>
             <p className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium truncate whitespace-nowrap">
-              Northern Ireland · {ALL_SPOTS.length} spots
+              UK &amp; Ireland · {ALL_SPOTS.length} spots
             </p>
           </div>
 
