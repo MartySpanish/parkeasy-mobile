@@ -1116,7 +1116,9 @@ const occupancyOf = (spot) => {
 };
 
 const priceParts = (spot) => {
-  if (!spot.price) return { big:'Free', small:'' };
+  // No captured tariff: only genuinely-free badges read "Free" — a paid/official
+  // car park with an unknown price must not display as free (misleads drivers).
+  if (!spot.price) return { big: ['free','hidden_gem'].includes(spot.badge) ? 'Free' : 'Paid', small:'' };
   const m = String(spot.price).match(/^([^/]+)\/(.+)$/);
   return m ? { big:m[1].trim(), small:'/'+m[2].trim() } : { big:String(spot.price), small:'' };
 };
@@ -1472,7 +1474,7 @@ const RecenterMap = ({ center, zoom }) => {
 const pricePin = (spot, selected) => {
   const light = typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light';
   const free = ['free','hidden_gem'].includes(spot.badge);
-  const label = spot.price ? String(spot.price).split('/')[0].trim() : (free ? 'Free' : '£');
+  const label = spot.price ? String(spot.price).split('/')[0].trim() : (free ? 'Free' : 'P');
   const bg = selected ? 'linear-gradient(135deg,#54E6D8,#2ED3C6)' : light ? 'rgba(255,255,255,0.96)' : 'rgba(16,24,40,0.92)';
   const color = selected ? '#06231f' : light ? '#0B1220' : '#EAF1F8';
   const border = selected ? 'rgba(255,255,255,0.5)' : light ? 'rgba(13,27,54,0.18)' : 'rgba(255,255,255,0.18)';
@@ -2077,7 +2079,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     return (
       <div className="pb-6 pt-2">
         <div className="px-4 pb-3">
-          <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">Northern Ireland</p>
+          <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">{CITIES.find(c=>c.name===cityName)?.region || 'UK & Ireland'}</p>
           <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">Find parking</h1>
         </div>
         {searchBlock}
