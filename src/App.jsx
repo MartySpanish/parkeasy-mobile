@@ -2022,7 +2022,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           </button>
         ))}
       </div>
-      {onEvent && <EventBanner onOpen={onEvent}/>}
+      {onEvent && CITIES.find(c=>c.name===cityName)?.region === 'Northern Ireland' && <EventBanner onOpen={onEvent}/>}
       {!geo && !geoBusy && query.trim() && (
         <button onClick={()=>doSearch(query)} className="w-full flex items-center gap-2 text-xs font-semibold text-[#5BE7DA] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 px-3.5 py-2.5 rounded-2xl hover:bg-[#2ED3C6]/15 transition">
           <Navigation size={13}/> Find parking near &ldquo;{query.trim()}&rdquo; — press Enter
