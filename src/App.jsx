@@ -1776,7 +1776,7 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   );
 };
 
-const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onOpenSpot, onCityDetected, onEvent }) => {
+const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onCityDetected, onEvent }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -2082,8 +2082,30 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         <div className="px-4 pb-3">
           <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">{CITIES.find(c=>c.name===cityName)?.region || 'UK & Ireland'}</p>
           <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">Find parking</h1>
+          <div className="flex flex-wrap gap-x-3.5 gap-y-1 mt-2">
+            {[[Check,'Free to use'],[Star,'Community-verified'],[Receipt,'Live prices & rules']].map(([Ic,label],i)=>(
+              <span key={i} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[rgba(234,241,248,0.6)]">
+                <Ic size={12} className="text-[#5BE7DA]"/>{label}
+              </span>
+            ))}
+          </div>
         </div>
         {searchBlock}
+        {onHowItWorks && (
+          <div className="px-4 pt-3">
+            <button onClick={onHowItWorks} className="w-full flex items-center gap-3 text-left rounded-2xl px-3.5 py-3 active:scale-[0.985] transition"
+              style={{background:'linear-gradient(135deg, rgba(91,231,218,0.12), rgba(46,211,198,0.06))', border:'1px solid rgba(91,231,218,0.28)'}}>
+              <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{background:'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
+                <Info size={18} className="text-[#06231f]"/>
+              </div>
+              <span className="flex-1 min-w-0">
+                <span className="block font-display font-bold text-[13.5px] text-[#EAF1F8]">New to ParkEasy?</span>
+                <span className="block text-[11.5px] text-[#cdeef0] mt-0.5">See how it works — finding, saving &amp; renting spaces</span>
+              </span>
+              <ChevronRight size={16} className="text-[#5BE7DA] flex-shrink-0"/>
+            </button>
+          </div>
+        )}
         <div className="px-4 pt-3">
           <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo}/>
         </div>
@@ -3741,6 +3763,46 @@ const INFO_PAGES = {
       </>
     ),
   },
+  howitworks: {
+    title: 'How ParkEasy works', Icon: Info,
+    body: (
+      <>
+        <p>ParkEasy shows you where to <strong className="text-[#EAF1F8]">actually park</strong> — community spots, hidden gems, and official car parks with live prices and rules — across the UK &amp; Ireland. No more circling the block.</p>
+
+        <div className="space-y-3 pt-1">
+          {[
+            { Icon: Search, title: '1 · Search your destination', text: 'Type a place or postcode, or tap the locate button. ParkEasy shows every parking option near where you’re headed.' },
+            { Icon: Map, title: '2 · Compare real spots', text: 'Free street parking, hidden gems locals actually use, and official car parks — each with prices, time limits and restrictions, so there are no nasty surprises.' },
+            { Icon: Car, title: '3 · Park with confidence', text: 'Spots are community-verified and kept up to date. Save your favourites and rate what worked for the next driver.' },
+          ].map((s,i)=>(
+            <div key={i} className="flex items-start gap-3 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
+              <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{background:'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
+                <s.Icon size={18} className="text-[#06231f]"/>
+              </div>
+              <div>
+                <p className="font-display font-bold text-[14px] text-[#EAF1F8] leading-tight">{s.title}</p>
+                <p className="text-[12.5px] text-[rgba(234,241,248,0.6)] leading-relaxed mt-0.5">{s.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">Powered by locals</h3>
+        <p>Every spot comes from people who actually park there. Know a great spot we&apos;re missing? Add it in seconds from the <strong className="text-[#EAF1F8]">Add a Spot</strong> tab — and if it&apos;s a verified hidden gem, you get a <strong className="text-[#EAF1F8]">free week of Premium</strong>.</p>
+
+        <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">Got a driveway or space?</h3>
+        <p>You can rent out a private driveway, parking bay or EV charger to other drivers and earn from it — list it under the <strong className="text-[#EAF1F8]">Spaces</strong> tab. The parking arrangement is directly between you and the driver; drivers park at their own risk (see our Terms).</p>
+
+        <div className="flex flex-wrap gap-2 pt-3">
+          {[[Check,'Free to use'],[Star,'Community-verified'],[Receipt,'Live prices & rules']].map(([Ic,label],i)=>(
+            <span key={i} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#cdeef0] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 rounded-full px-3 py-1.5">
+              <Ic size={13} className="text-[#5BE7DA]"/>{label}
+            </span>
+          ))}
+        </div>
+      </>
+    ),
+  },
   contact: {
     title: 'Contact us', Icon: Mail,
     body: (
@@ -3935,7 +3997,7 @@ const InfoOverlay = ({ page, onClose }) => {
 const Footer = ({ onOpen }) => (
   <footer className="px-4 pt-2 pb-6 text-center">
     <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-[rgba(234,241,248,0.5)]">
-      {[['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
+      {[['howitworks','How it works'],['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
         <button key={id} onClick={()=>onOpen(id)} className="hover:text-[#5BE7DA] transition font-medium">{label}</button>
       ))}
     </div>
@@ -4335,7 +4397,7 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
         {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
