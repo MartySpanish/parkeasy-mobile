@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const stripe = new Stripe(KEY);
+    const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
     const account = await stripe.accounts.retrieve(acct);
     const transfersActive = account.capabilities?.transfers === 'active';
     const status = transfersActive && account.payouts_enabled

@@ -57,7 +57,7 @@ export default async function handler(req, res) {
   const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!KEY || !WEBHOOK_SECRET || !URL_ || !SERVICE) return res.status(500).json({ error: 'Webhook not configured' });
 
-  const stripe = new Stripe(KEY);
+  const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
   const svc = { Authorization: `Bearer ${SERVICE}`, apikey: SERVICE, 'Content-Type': 'application/json' };
 
   let event;

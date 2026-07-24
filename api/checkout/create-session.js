@@ -85,7 +85,7 @@ export default async function handler(req, res) {
 
     const meta = { listing_id: listing.id, host_id: listing.owner_id, duration: String(durationHours) };
 
-    const stripe = new Stripe(KEY);
+    const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
