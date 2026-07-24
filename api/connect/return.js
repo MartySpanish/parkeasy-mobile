@@ -11,7 +11,8 @@ export default async function handler(req, res) {
   const APP_URL = process.env.APP_URL || 'https://parkeasy.uk';
   const acct = String(req.query.acct || '');
 
-  if (!KEY || !KEY.startsWith('sk_test_') || !URL_ || !SERVICE || !acct) {
+  const keyOk = KEY && (KEY.startsWith('sk_test_') || process.env.STRIPE_LIVE_ENABLED === 'true');
+  if (!keyOk || !URL_ || !SERVICE || !acct) {
     return res.redirect(302, `${APP_URL}/?payouts=error`);
   }
 

@@ -41,7 +41,9 @@ export default async function handler(req, res) {
   const SERVICE_FEE_PENCE = parseInt(process.env.DRIVER_SERVICE_FEE_PENCE || '100', 10); // £1.00 default (Terms §4.2)
 
   if (!KEY) return res.status(500).json({ error: 'Stripe not configured (STRIPE_SECRET_KEY)' });
-  if (!KEY.startsWith('sk_test_')) return res.status(403).json({ error: 'Blocked: live Stripe key detected. Test-mode only until insurance is in place.' });
+  if (!KEY.startsWith('sk_test_') && process.env.STRIPE_LIVE_ENABLED !== 'true') {
+    return res.status(403).json({ error: 'Live Stripe key detected but STRIPE_LIVE_ENABLED is not set. Refusing to run.' });
+  }
   if (!URL_ || !SERVICE) return res.status(500).json({ error: 'Supabase not configured' });
 
   let body = req.body;
@@ -79,6 +81,24 @@ export default async function handler(req, res) {
       return res.status(409).json({ error: 'This host hasn’t finished setting up payouts yet, so the space can’t be booked.' });
     }
 
+    // Double-booking prevention. A start time is required so we can check the
+    // requested window against existing bookings for this listing.
+    if (!startsAt) return res.status(400).json({ error: 'Please choose a start date and time' });
+    const startMs = Date.parse(startsAt);
+    if (Number.isNaN(startMs)) return res.status(400).json({ error: 'Invalid start time' });
+    const endsAtISO = new Date(startMs + durationHours * 3600000).toISOString();
+    const spaces = Math.max(1, listing.spaces || 1);
+    // Bookings that overlap [start, end): existing.starts_at < newEnd AND existing.ends_at > newStart.
+    const or = await fetch(`${URL_}/rest/v1/bookings?listing_id=eq.${listing.id}&status=in.(pending,paid)&starts_at=lt.${encodeURIComponent(endsAtISO)}&ends_at=gt.${encodeURIComponent(startsAt)}&select=status,created_at`, { headers: svc });
+    const overlaps = or.ok ? await or.json() : [];
+    // Ignore stale pending checkouts (abandoned) — the Checkout Session expires in 30 min.
+    const PENDING_TTL_MS = 30 * 60000;
+    const now = Date.now();
+    const held = overlaps.filter(b => b.status === 'paid' || (now - Date.parse(b.created_at) < PENDING_TTL_MS)).length;
+    if (held >= spaces) {
+      return res.status(409).json({ error: 'That time is already booked. Try a different time or duration.' });
+    }
+
     const bookingPricePence = Math.round(pricePerHour * durationHours * 100);
     const applicationFeePence = Math.round(bookingPricePence * HOST_COMMISSION) + SERVICE_FEE_PENCE;
     const totalPence = bookingPricePence + SERVICE_FEE_PENCE;
@@ -100,6 +120,7 @@ export default async function handler(req, res) {
         metadata: meta,
       },
       metadata: meta,
+      expires_at: Math.floor(now / 1000) + 30 * 60,   // hold the slot for 30 min max
       success_url: `${APP_URL}/?booking=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/?booking=cancelled`,
     });
