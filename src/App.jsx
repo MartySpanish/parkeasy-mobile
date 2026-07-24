@@ -16,6 +16,7 @@ import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking } from './notify';
+import { findPartnerForListing, trackPartnerEvent } from './partners';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -2876,10 +2877,60 @@ const BookingSheet = ({ listing, onClose }) => {
   );
 };
 
+// Featured Partner card — a local business near this bookable space. Contextual
+// only; appears because the driver is booking nearby. Renders below the booking
+// control. Counts an impression when actually on screen, and a click on the link.
+const PartnerCard = ({ partner, listingId }) => {
+  const ref = useRef(null);
+  const seen = useRef(false);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || seen.current) return;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && !seen.current) {
+          seen.current = true;
+          trackPartnerEvent(partner.id, listingId, 'impression');
+          observer.disconnect();
+        }
+      }
+    }, { threshold: 0.5 });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [partner.id, listingId]);
+
+  return (
+    <aside ref={ref} aria-labelledby={`partner-${partner.slug}-name`}
+      className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0e1a2c] flex">
+      <div aria-hidden className="w-[3px] flex-shrink-0 bg-[#5BE7DA]"/>
+      <div className="min-w-0 flex-1 p-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5BE7DA]">Near this space</p>
+        <h3 id={`partner-${partner.slug}-name`} className="font-display font-extrabold text-xl text-[#EAF1F8] leading-tight mt-1.5">{partner.name}</h3>
+        {partner.name_irish && <p className="text-[11px] font-semibold tracking-[0.12em] text-[#5BE7DA] mt-0.5">{partner.name_irish}</p>}
+        <p className="text-[13px] text-[#cdd9e8] leading-relaxed mt-2">{partner.tagline}</p>
+        {partner.address && <p className="text-[12px] text-[#6b7d96] mt-1.5">{partner.address}</p>}
+        {partner.link_url && (
+          <a href={partner.link_url} target="_blank" rel="noopener noreferrer nofollow"
+            onClick={()=>trackPartnerEvent(partner.id, listingId, 'click')}
+            className="mt-3.5 inline-flex items-center gap-1.5 btn-teal text-[#06231f] font-bold text-[11px] uppercase tracking-[0.1em] px-4 py-2.5 rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5BE7DA]">
+            Visit {partner.name}<span aria-hidden>↗</span>
+          </a>
+        )}
+      </div>
+    </aside>
+  );
+};
+
 const ListingCard = ({ listing }) => {
   const typeInfo = RENTAL_SPACE_TYPES.find(t => t.id === listing.space_type) || { emoji:'🅿️', label:'Space' };
   const [booking, setBooking] = useState(false);
+  const [partner, setPartner] = useState(null);
   const canBook = Number(listing.price_per_hour) > 0;
+  useEffect(() => {
+    let active = true;
+    findPartnerForListing(listing.lat, listing.lng).then(p => { if (active) setPartner(p); });
+    return () => { active = false; };
+  }, [listing.id, listing.lat, listing.lng]);
   return (
     <div className="bg-[#0e1a2c] rounded-2xl shadow-sm border border-white/10 overflow-hidden">
       {listing.photos?.[0] ? (
@@ -2934,6 +2985,7 @@ const ListingCard = ({ listing }) => {
         <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">
           {canBook ? 'You park at your own risk — see our Terms.' : 'Arranged directly with the owner — you park at your own risk. See our Terms.'}
         </p>
+        {partner && <PartnerCard partner={partner} listingId={listing.id}/>}
       </div>
       {booking && <BookingSheet listing={listing} onClose={()=>setBooking(false)}/>}
     </div>
