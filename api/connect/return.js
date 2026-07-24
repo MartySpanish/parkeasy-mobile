@@ -25,11 +25,24 @@ export default async function handler(req, res) {
         ? 'restricted'
         : 'onboarding';
 
+    // Upsert (not just PATCH) keyed on the host_id we stored in the account's
+    // metadata — so the row is created here even if the initial insert in
+    // /connect/onboard didn't land. Self-healing: completing onboarding always
+    // leaves a correct host_accounts row.
+    const hostId = account.metadata?.host_id || null;
     const svc = { Authorization: `Bearer ${SERVICE}`, apikey: SERVICE, 'Content-Type': 'application/json' };
-    await fetch(`${URL_}/rest/v1/host_accounts?stripe_account_id=eq.${acct}`, {
-      method: 'PATCH', headers: svc,
-      body: JSON.stringify({ onboarding_status: status, transfers_active: transfersActive, updated_at: new Date().toISOString() }),
-    });
+    if (hostId) {
+      const r = await fetch(`${URL_}/rest/v1/host_accounts?on_conflict=host_id`, {
+        method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify({ host_id: hostId, stripe_account_id: acct, onboarding_status: status, transfers_active: transfersActive, updated_at: new Date().toISOString() }),
+      });
+      if (!r.ok) console.error('connect/return upsert failed', r.status, await r.text().catch(() => ''));
+    } else {
+      await fetch(`${URL_}/rest/v1/host_accounts?stripe_account_id=eq.${acct}`, {
+        method: 'PATCH', headers: svc,
+        body: JSON.stringify({ onboarding_status: status, transfers_active: transfersActive, updated_at: new Date().toISOString() }),
+      });
+    }
 
     return res.redirect(302, `${APP_URL}/?payouts=${status === 'active' ? 'done' : 'pending'}`);
   } catch (e) {

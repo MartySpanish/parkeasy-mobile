@@ -25,10 +25,19 @@ async function syncHostAccount(stripe, svc, URL_, accountId) {
     : account.requirements?.disabled_reason
       ? 'restricted'
       : 'onboarding';
-  await fetch(`${URL_}/rest/v1/host_accounts?stripe_account_id=eq.${accountId}`, {
-    method: 'PATCH', headers: svc,
-    body: JSON.stringify({ onboarding_status: status, transfers_active: transfersActive, updated_at: new Date().toISOString() }),
-  });
+  // Upsert on host_id (from account metadata) so a missing row self-heals.
+  const hostId = account.metadata?.host_id || null;
+  if (hostId) {
+    await fetch(`${URL_}/rest/v1/host_accounts?on_conflict=host_id`, {
+      method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ host_id: hostId, stripe_account_id: accountId, onboarding_status: status, transfers_active: transfersActive, updated_at: new Date().toISOString() }),
+    });
+  } else {
+    await fetch(`${URL_}/rest/v1/host_accounts?stripe_account_id=eq.${accountId}`, {
+      method: 'PATCH', headers: svc,
+      body: JSON.stringify({ onboarding_status: status, transfers_active: transfersActive, updated_at: new Date().toISOString() }),
+    });
+  }
 }
 
 async function markBooking(svc, URL_, sessionId, patch) {
