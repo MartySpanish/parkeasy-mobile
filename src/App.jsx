@@ -15,7 +15,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession } from './notify';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -2805,8 +2805,81 @@ const RENTAL_AMENITIES = [
   { id:'height_limit',    label:'Height Limit'},
 ];
 
+// Driver booking + payment (Stripe Checkout, test mode). Pick a start and
+// duration, see the price broken down, then pay on Stripe's hosted page — on
+// success the money is split 85% host / 15% + service fee to ParkEasy.
+const SERVICE_FEE_GBP = 1.00;  // mirrors DRIVER_SERVICE_FEE_PENCE default (£1.00)
+const BookingSheet = ({ listing, onClose }) => {
+  const rate = Number(listing.price_per_hour) || 0;
+  const today = new Date().toISOString().split('T')[0];
+  const [date, setDate] = useState(today);
+  const [time, setTime] = useState('09:00');
+  const [hours, setHours] = useState(2);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const bookingCost = rate * hours;
+  const total = bookingCost + SERVICE_FEE_GBP;
+
+  const pay = async () => {
+    setBusy(true); setErr('');
+    try {
+      let token = null;
+      if (isSupabaseEnabled) {
+        const { data } = await supabase.auth.getSession();
+        token = data?.session?.access_token || null;
+      }
+      const startsAt = date && time ? new Date(`${date}T${time}`).toISOString() : null;
+      const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token });
+      window.location.href = url;   // full-page redirect to Stripe Checkout
+    } catch (e) { setErr(e.message || 'Could not start payment'); setBusy(false); }
+  };
+
+  const field = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3.5 py-2.5 text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
+  return (
+    <div className="fixed inset-0 z-[215] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="bg-[#0d1626] rounded-3xl w-full max-w-sm p-5 shadow-2xl border border-white/10 max-h-[92vh] overflow-y-auto">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-display font-bold text-[#EAF1F8] text-lg leading-tight">Reserve &amp; pay</h3>
+            <p className="text-[12px] text-[#8da2bd] mt-0.5 truncate">{listing.title}</p>
+          </div>
+          <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center flex-shrink-0"><X size={15} className="text-[#aebfd4]"/></button>
+        </div>
+
+        <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5">Date</label>
+        <input type="date" min={today} value={date} onChange={e=>setDate(e.target.value)} className={field}/>
+        <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Start time</label>
+        <input type="time" value={time} onChange={e=>setTime(e.target.value)} className={field}/>
+        <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Duration</label>
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={()=>setHours(h=>Math.max(1,h-1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">−</button>
+          <div className="flex-1 text-center"><span className="font-display font-extrabold text-2xl text-[#EAF1F8]">{hours}</span><span className="text-xs text-[#8da2bd]"> hour{hours!==1?'s':''}</span></div>
+          <button type="button" onClick={()=>setHours(h=>Math.min(24,h+1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">+</button>
+        </div>
+
+        <div className="mt-4 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5 space-y-1.5 text-[13px]">
+          <div className="flex justify-between text-[#cdd9e8]"><span>Parking ({hours}h × £{rate.toFixed(2)})</span><span>£{bookingCost.toFixed(2)}</span></div>
+          <div className="flex justify-between text-[#cdd9e8]"><span>ParkEasy service fee</span><span>£{SERVICE_FEE_GBP.toFixed(2)}</span></div>
+          <div className="flex justify-between font-bold text-[#EAF1F8] pt-1.5 border-t border-white/10"><span>Total</span><span className="text-[#6BEFB9]">£{total.toFixed(2)}</span></div>
+        </div>
+
+        {err && <p className="text-red-300 text-xs mt-3 bg-red-500/12 border border-red-400/40 rounded-xl px-3 py-2.5">{err}</p>}
+
+        <button onClick={pay} disabled={busy || rate<=0}
+          className="mt-4 w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50">
+          {busy ? 'Opening secure payment…' : `Pay £${total.toFixed(2)} with card`}
+        </button>
+        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">Secure payment via Stripe. You park at your own risk — see our Terms.</p>
+      </div>
+    </div>
+  );
+};
+
 const ListingCard = ({ listing }) => {
   const typeInfo = RENTAL_SPACE_TYPES.find(t => t.id === listing.space_type) || { emoji:'🅿️', label:'Space' };
+  const [booking, setBooking] = useState(false);
+  const canBook = Number(listing.price_per_hour) > 0;
   return (
     <div className="bg-[#0e1a2c] rounded-2xl shadow-sm border border-white/10 overflow-hidden">
       {listing.photos?.[0] ? (
@@ -2847,15 +2920,22 @@ const ListingCard = ({ listing }) => {
         {listing.description && (
           <p className="text-xs text-[#8da2bd] mb-3 line-clamp-2">{listing.description}</p>
         )}
+        {canBook && (
+          <button onClick={()=>setBooking(true)}
+            className="block w-full btn-teal text-[#06231f] text-xs font-bold py-2.5 rounded-xl text-center mb-2">
+            Reserve &amp; pay · £{Number(listing.price_per_hour).toFixed(2)}/hr
+          </button>
+        )}
         <a href={`mailto:${listing.contact_email}?subject=Parking enquiry: ${encodeURIComponent(listing.title)}`}
           onClick={()=>notify('enquiry', { title: listing.title, address: listing.address, ownerEmail: listing.contact_email })}
-          className="block w-full bg-[#5BE7DA] text-[#06231f] text-xs font-bold py-2.5 rounded-xl text-center hover:bg-[#34E0A0] transition">
+          className={`block w-full text-xs font-bold py-2.5 rounded-xl text-center transition ${canBook ? 'bg-white/8 text-[#cdd9e8] hover:bg-white/12' : 'bg-[#5BE7DA] text-[#06231f] hover:bg-[#34E0A0]'}`}>
           Contact Owner
         </a>
         <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">
-          Arranged directly with the owner — you park at your own risk. See our Terms.
+          {canBook ? 'You park at your own risk — see our Terms.' : 'Arranged directly with the owner — you park at your own risk. See our Terms.'}
         </p>
       </div>
+      {booking && <BookingSheet listing={listing} onClose={()=>setBooking(false)}/>}
     </div>
   );
 };
