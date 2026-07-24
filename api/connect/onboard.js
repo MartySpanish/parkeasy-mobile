@@ -65,12 +65,12 @@ export default async function handler(req, res) {
       });
       accountId = account.id;
 
-      const rowBody = JSON.stringify({ stripe_account_id: accountId, onboarding_status: 'onboarding', updated_at: new Date().toISOString() });
-      if (existing) {
-        await fetch(`${URL_}/rest/v1/host_accounts?host_id=eq.${caller.id}`, { method: 'PATCH', headers: svc, body: rowBody });
-      } else {
-        await fetch(`${URL_}/rest/v1/host_accounts`, { method: 'POST', headers: svc, body: JSON.stringify({ host_id: caller.id, stripe_account_id: accountId, onboarding_status: 'onboarding' }) });
-      }
+      // Upsert on host_id so this is idempotent and never silently no-ops.
+      const w = await fetch(`${URL_}/rest/v1/host_accounts?on_conflict=host_id`, {
+        method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify({ host_id: caller.id, stripe_account_id: accountId, onboarding_status: 'onboarding', updated_at: new Date().toISOString() }),
+      });
+      if (!w.ok) console.error('connect/onboard host_accounts upsert failed', w.status, await w.text().catch(() => ''));
     }
 
     const link = await stripe.accountLinks.create({
