@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     caller = await u.json();
   } catch { return res.status(401).json({ error: 'Auth check failed' }); }
 
-  const stripe = new Stripe(KEY);
+  const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
   const svc = { Authorization: `Bearer ${SERVICE}`, apikey: SERVICE, 'Content-Type': 'application/json' };
 
   try {
