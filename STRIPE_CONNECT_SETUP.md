@@ -52,15 +52,14 @@ Stripe Dashboard (sandbox) → Developers → Webhooks → Add endpoint:
 1. **Host onboarding:** sign in, go to **Spaces → Set up payouts**. You should be redirected to Stripe's hosted onboarding. Use Stripe's test values (test SSN/DOB/address, sort code `10-88-00`, account `00012345`). Finish → you land back with "Payouts are set up".
    - Confirm `host_accounts` for your user shows `transfers_active = true`, `onboarding_status = active`.
 2. **A bookable listing:** create a listing (Spaces → List Your Space) under the **same** host account, publish it so `status='active'`.
-3. **Booking + payment:** trigger `POST /api/checkout/create-session` with `{ listingId, durationHours }` (a "Reserve & pay" button isn't wired into the UI yet — this is the next piece). Pay with test card `4242 4242 4242 4242`, any future expiry/CVC.
+3. **Booking + payment:** open that listing and tap **Reserve & pay** → pick a date/time/duration → **Pay with card**. Use test card `4242 4242 4242 4242`, any future expiry/CVC. (The button appears on any listing with an hourly price; it calls `POST /api/checkout/create-session`.)
    - Confirm: the `bookings` row flips to `status='paid'`; in Stripe → Payments you see the charge, the **application fee**, and the **transfer** to the connected account.
 
 ## Known gaps / next pieces (deliberately not built yet)
 
-1. **No driver-facing "Reserve & pay" button** in the UI — the `create-session` endpoint exists and is correct, but the booking screen (date/time/duration → pay) is the next build. Listings currently still show "Contact Owner".
-2. **Refunds/cancellations** (Terms §5) aren't wired — ParkEasy is merchant of record, so refunds hit the platform balance; build this deliberately before real money.
-3. **Restricted/interrupted onboarding** states show a generic "continue setup" but there's no per-requirement prompting yet.
-4. **Insurance is a hard production blocker** — keep this in test mode until it's sorted.
+1. **Refunds/cancellations** (Terms §5) aren't wired — ParkEasy is merchant of record, so refunds hit the platform balance; build this deliberately before real money.
+2. **Restricted/interrupted onboarding** states show a generic "continue setup" but there's no per-requirement prompting yet.
+3. **Insurance is a hard production blocker** — keep this in test mode until it's sorted.
 
 ## Safety notes
 
