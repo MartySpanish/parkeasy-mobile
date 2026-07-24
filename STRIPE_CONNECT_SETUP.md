@@ -55,11 +55,28 @@ Stripe Dashboard (sandbox) → Developers → Webhooks → Add endpoint:
 3. **Booking + payment:** open that listing and tap **Reserve & pay** → pick a date/time/duration → **Pay with card**. Use test card `4242 4242 4242 4242`, any future expiry/CVC. (The button appears on any listing with an hourly price; it calls `POST /api/checkout/create-session`.)
    - Confirm: the `bookings` row flips to `status='paid'`; in Stripe → Payments you see the charge, the **application fee**, and the **transfer** to the connected account.
 
-## Known gaps / next pieces (deliberately not built yet)
+## Now built (the full functional system)
 
-1. **Refunds/cancellations** (Terms §5) aren't wired — ParkEasy is merchant of record, so refunds hit the platform balance; build this deliberately before real money.
-2. **Restricted/interrupted onboarding** states show a generic "continue setup" but there's no per-requirement prompting yet.
-3. **Insurance is a hard production blocker** — keep this in test mode until it's sorted.
+- **Double-booking prevention** — checkout rejects a slot already held (paid, or a pending checkout < 30 min old) up to the listing's `spaces` capacity; sessions expire in 30 min.
+- **Refunds/cancellations** (`POST /api/bookings/cancel`, Terms §5): host-cancel or driver ≥24h → full refund; driver <24h → 50% of the parking price; after start → none. Uses `reverse_transfer` + `refund_application_fee`.
+- **Confirmation emails** to driver + host + founder on payment (Resend).
+- **"Your bookings"** panel in the Spaces tab (driver + host view, with cancel).
+- **Bookings & payouts** section in the admin dashboard (paid count, gross, our fees, hosts paid-ready).
+
+## Going LIVE (real money) — do this only when insured
+
+The code no longer hard-blocks live keys; instead it refuses a live key **unless `STRIPE_LIVE_ENABLED=true` is set**, so going live is a deliberate switch. To flip it:
+
+1. **Activate your Stripe account for LIVE mode** (business details + bank) and **enable Connect in LIVE mode** — same as you did in test, but on the live side.
+2. **Create a LIVE webhook** at `https://parkeasy-gray.vercel.app/api/webhooks/stripe`, copy its `whsec_…`.
+3. On the Vercel project, set (Production): `STRIPE_SECRET_KEY=sk_live_…`, `STRIPE_WEBHOOK_SECRET=whsec_…` (the live one), and **`STRIPE_LIVE_ENABLED=true`**.
+4. Redeploy.
+
+Until step 3, everything stays exactly as it is (test mode). Setting `STRIPE_LIVE_ENABLED=true` with a live key is the single, intentional go-live action.
+
+## Still to consider
+- **Restricted/interrupted onboarding** shows a generic "continue setup" — no per-requirement prompting yet.
+- Refund fee-retention is generous by design (full refund ≥24h incl. the £1 service fee) — tighten later if you want to keep the fee on driver cancels, once verified in test mode.
 
 ## Safety notes
 

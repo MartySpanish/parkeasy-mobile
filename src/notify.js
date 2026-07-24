@@ -64,6 +64,18 @@ export async function createBookingSession({ listingId, durationHours, startsAt,
   return d.url;
 }
 
+// Cancel a booking (driver or host). Returns { ok, refundPence, refundStatus }.
+export async function cancelBooking(bookingId, token) {
+  const r = await apiFetch('/api/bookings/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ bookingId }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Could not cancel');
+  return d;
+}
+
 // POST a notification to /api/notify, which emails CONTACT_EMAIL via Resend.
 // Fails silently so the app keeps working even if email is down.
 export async function notify(type, data = {}) {

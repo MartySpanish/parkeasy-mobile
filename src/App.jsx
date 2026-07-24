@@ -15,7 +15,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking } from './notify';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -3323,6 +3323,82 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   );
 };
 
+// A user's bookings — both the ones they made (as a driver) and the ones on
+// their own spaces (as a host). RLS lets them read only their own rows.
+const BookingsPanel = ({ user }) => {
+  const [rows, setRows] = useState(undefined);
+  const [titles, setTitles] = useState({});
+  const [busyId, setBusyId] = useState(null);
+  const [msg, setMsg] = useState('');
+
+  const load = async () => {
+    if (!isSupabaseEnabled || !user?.id) { setRows([]); return; }
+    const { data } = await supabase.from('bookings')
+      .select('id,listing_id,host_id,driver_id,starts_at,duration_hours,amount_total_pence,booking_price_pence,application_fee_pence,service_fee_pence,status,refund_pence,refund_status,created_at')
+      .or(`driver_id.eq.${user.id},host_id.eq.${user.id}`)
+      .order('created_at', { ascending: false }).limit(30);
+    const list = data || [];
+    setRows(list);
+    const ids = [...new Set(list.map(b => b.listing_id).filter(Boolean))];
+    if (ids.length) {
+      const { data: ls } = await supabase.from('rental_listings').select('id,title').in('id', ids);
+      setTitles(Object.fromEntries((ls || []).map(l => [l.id, l.title])));
+    }
+  };
+  useEffect(() => { load(); }, [user?.id]);
+
+  if (rows === undefined || !user) return null;
+  if (!rows.length) return null;
+
+  const gbp = (p) => `£${((p || 0) / 100).toFixed(2)}`;
+  const doCancel = async (b) => {
+    if (!window.confirm('Cancel this booking? Refund depends on how close to the start time it is.')) return;
+    setBusyId(b.id); setMsg('');
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const r = await cancelBooking(b.id, sess?.session?.access_token);
+      setMsg(r.refundPence > 0 ? `Cancelled — ${gbp(r.refundPence)} refunded.` : 'Cancelled — no refund was due.');
+      await load();
+    } catch (e) { setMsg(e.message || 'Cancel failed'); }
+    setBusyId(null);
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-5">
+      <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Your bookings</h3>
+      {msg && <p className="text-[12px] text-[#6BEFB9] mb-2">{msg}</p>}
+      <div className="divide-y divide-white/5">
+        {rows.map(b => {
+          const asHost = b.host_id === user.id;
+          const hostEarns = b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence);
+          const when = b.starts_at ? new Date(b.starts_at).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
+          const cancellable = b.status === 'paid' && (!b.starts_at || Date.parse(b.starts_at) > Date.now());
+          const statusColor = b.status==='paid' ? 'text-[#6BEFB9]' : b.status==='cancelled' ? 'text-[#FFD27A]' : b.status==='pending' ? 'text-[#8da2bd]' : 'text-red-300';
+          return (
+            <div key={b.id} className="py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-[13px] text-[#EAF1F8] truncate">{titles[b.listing_id] || 'Space'}</span>
+                <span className={`text-[11px] font-bold uppercase ${statusColor}`}>{b.status}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-[11.5px] text-[rgba(234,241,248,0.55)] mt-0.5">
+                <span>{asHost ? '🅿️ your space' : '🚗 you booked'} · {when} · {b.duration_hours}h</span>
+                <span>{asHost ? `earns ${gbp(hostEarns)}` : gbp(b.amount_total_pence)}</span>
+              </div>
+              {b.status === 'cancelled' && b.refund_pence > 0 && <p className="text-[11px] text-[#FFD27A] mt-0.5">Refunded {gbp(b.refund_pence)}</p>}
+              {cancellable && (
+                <button onClick={()=>doCancel(b)} disabled={busyId===b.id}
+                  className="mt-1.5 text-[11px] font-semibold text-red-300 border border-red-400/40 rounded-lg px-2.5 py-1 disabled:opacity-50">
+                  {busyId===b.id ? 'Cancelling…' : 'Cancel booking'}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Host payout onboarding (Stripe Connect). Lets a host set up where their
 // booking money is paid out. Test-mode only until the payment flow is verified
 // and insurance is in place — so this is intentionally low-key for now.
@@ -3483,6 +3559,7 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
       </div>
 
       <PayoutSetup user={user}/>
+      <BookingsPanel user={user}/>
 
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
         {FILTERS.map(({id, label}) => (
@@ -3690,6 +3767,17 @@ const AdminOverlay = ({ onClose }) => {
                   <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] leading-relaxed mt-2">
                     Counts promo &amp; hidden-gem reward Premium that's still active (tracked server-side). Stripe subscribers aren't included yet — those live per-device until account-linked billing is added.
                   </p>
+                </div>
+              )}
+              {d.bookings && (
+                <div>
+                  <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Bookings &amp; payouts</h3>
+                  <div className="grid grid-cols-4 gap-2">
+                    <Tile label="Paid" value={d.bookings.paid} accent="#6BEFB9"/>
+                    <Tile label="Gross" value={`£${((d.bookings.grossPence||0)/100).toFixed(0)}`}/>
+                    <Tile label="Our fees" value={`£${((d.bookings.feePence||0)/100).toFixed(0)}`} accent="#5BE7DA"/>
+                    <Tile label="Hosts paid-ready" value={d.bookings.hostsOnboarded}/>
+                  </div>
                 </div>
               )}
               {d.promos && (

@@ -230,6 +230,28 @@ export default async function handler(req, res) {
       }
     } catch { /* table may not exist yet */ }
 
+    // Bookings summary (Stripe Checkout marketplace). Gross paid + our fees.
+    let bookings = { total: 0, paid: 0, grossPence: 0, feePence: 0, hostsOnboarded: 0 };
+    try {
+      const brr = await fetch(`${URL_}/rest/v1/bookings?select=status,amount_total_pence,application_fee_pence&order=created_at.desc&limit=1000`, { headers: svc });
+      if (brr.ok) {
+        const rows = await brr.json();
+        bookings.total = rows.length;
+        for (const b of rows) {
+          if (b.status === 'paid') {
+            bookings.paid += 1;
+            bookings.grossPence += b.amount_total_pence || 0;
+            bookings.feePence += b.application_fee_pence || 0;
+          }
+        }
+      }
+      const har = await fetch(`${URL_}/rest/v1/host_accounts?transfers_active=is.true&select=host_id`, { headers: { ...svc, Prefer: 'count=exact' } });
+      if (har.ok) {
+        const range = har.headers.get('content-range');
+        bookings.hostsOnboarded = range?.includes('/') ? parseInt(range.split('/')[1]) || 0 : (await har.json()).length;
+      }
+    } catch { /* tables may not exist yet */ }
+
     return res.status(200).json({
       ok: true, configured: true,
       env,
@@ -237,6 +259,7 @@ export default async function handler(req, res) {
       promos,
       spots,
       premium,
+      bookings,
       users: {
         total: users.length,
         last7: users.filter(u => within(u, 7)).length,

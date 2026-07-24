@@ -34,7 +34,11 @@ export default async function handler(req, res) {
   const API_BASE = process.env.API_BASE || 'https://parkeasy-gray.vercel.app';
 
   if (!KEY) return res.status(500).json({ error: 'Stripe not configured (STRIPE_SECRET_KEY)' });
-  if (!KEY.startsWith('sk_test_')) return res.status(403).json({ error: 'Blocked: live Stripe key detected. This flow is test-mode only until insurance is in place.' });
+  // Live keys are refused unless STRIPE_LIVE_ENABLED=true is explicitly set —
+  // going live is a deliberate switch, never an accident.
+  if (!KEY.startsWith('sk_test_') && process.env.STRIPE_LIVE_ENABLED !== 'true') {
+    return res.status(403).json({ error: 'Live Stripe key detected but STRIPE_LIVE_ENABLED is not set. Refusing to run.' });
+  }
   if (!URL_ || !ANON || !SERVICE) return res.status(500).json({ error: 'Supabase not configured (SUPABASE_SERVICE_ROLE_KEY required)' });
 
   const jwt = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
