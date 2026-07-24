@@ -15,7 +15,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding } from './notify';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -3243,6 +3243,70 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   );
 };
 
+// Host payout onboarding (Stripe Connect). Lets a host set up where their
+// booking money is paid out. Test-mode only until the payment flow is verified
+// and insurance is in place — so this is intentionally low-key for now.
+const PayoutSetup = ({ user }) => {
+  const [acct, setAcct] = useState(undefined);   // undefined = loading, null = none
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState('');
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!isSupabaseEnabled || !user?.id) { setAcct(null); return; }
+      const { data } = await supabase.from('host_accounts').select('onboarding_status,transfers_active').eq('host_id', user.id).maybeSingle();
+      if (active) setAcct(data || null);
+    })();
+    return () => { active = false; };
+  }, [user?.id]);
+
+  if (!user) return null;
+  const active = acct?.transfers_active && acct?.onboarding_status === 'active';
+  const started = acct && !active;
+
+  const go = async () => {
+    setBusy(true); setErr('');
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess?.session?.access_token;
+      if (!token) throw new Error('Please sign in again');
+      const url = await startPayoutOnboarding(token);
+      window.location.href = url;
+    } catch (e) { setErr(e.message || 'Could not start payout setup'); setBusy(false); }
+  };
+
+  if (acct === undefined) return null;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-5">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{background: active ? 'linear-gradient(135deg,#34E0A0,#059669)' : 'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
+          {active ? <Check size={18} className="text-[#06231f]"/> : <Receipt size={18} className="text-[#06231f]"/>}
+        </div>
+        <div className="flex-1 min-w-0">
+          {active ? (
+            <>
+              <p className="font-display font-bold text-[14px] text-[#EAF1F8]">Payouts active</p>
+              <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-0.5">You’re set up to get paid. Bookings pay out weekly to your bank via Stripe.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-display font-bold text-[14px] text-[#EAF1F8]">{started ? 'Finish setting up payouts' : 'Get set up to receive payments'}</p>
+              <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-0.5">Add your details with Stripe so booking money can be paid to you (minus ParkEasy’s 15% fee). Takes a couple of minutes.</p>
+              {err && <p className="text-[12px] text-red-300 mt-1.5">{err}</p>}
+              <button onClick={go} disabled={busy}
+                className="mt-2.5 inline-flex items-center gap-2 btn-teal text-[#06231f] font-bold text-[13px] px-4 py-2 rounded-xl disabled:opacity-50">
+                {busy ? 'Opening Stripe…' : started ? 'Continue setup' : 'Set up payouts'}<ChevronRight size={15}/>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SpacesTab = ({ user, isPremium, onUpgrade }) => {
   const [view,      setView]      = useState('browse');
   const [listings,  setListings]  = useState([]);
@@ -3337,6 +3401,8 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
           </div>
         </div>
       </div>
+
+      <PayoutSetup user={user}/>
 
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
         {FILTERS.map(({id, label}) => (
@@ -4054,6 +4120,7 @@ export default function App() {
   const [nowTs,          setNowTs]          = useState(()=>Date.now());
   const [theme,          setTheme]          = useState(()=>ls.get('pe_theme', 'dark'));
   const [showEvent,      setShowEvent]      = useState(false);
+  const [flash,          setFlash]          = useState(null);   // transient top banner {tone,msg}
   const [showAdmin,      setShowAdmin]      = useState(false);
   const [promoToast,     setPromoToast]     = useState(null);   // { ok, msg }
 
@@ -4156,6 +4223,25 @@ export default function App() {
       ls.set('pe_premium_until', until);
       setIsPremium(true);
       setRewardUntil(until);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // Stripe Connect payout-onboarding return (host set up their payout account).
+    const payouts = p.get('payouts');
+    if (payouts) {
+      setFlash(payouts === 'done'
+        ? { tone: 'ok', msg: '✅ Payouts are set up — you’re ready to get paid.' }
+        : payouts === 'pending'
+          ? { tone: 'warn', msg: 'Almost there — Stripe still needs a few more details before payouts go live.' }
+          : { tone: 'warn', msg: 'Payout setup didn’t complete. You can try again from the Spaces tab.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // Booking checkout return (driver paid, or cancelled). Test mode only.
+    const booking = p.get('booking');
+    if (booking === 'success') {
+      setFlash({ tone: 'ok', msg: '✅ Booking confirmed — your payment went through.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (booking === 'cancelled') {
+      setFlash({ tone: 'warn', msg: 'Booking cancelled — you weren’t charged.' });
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -4298,6 +4384,14 @@ export default function App() {
       {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
+      {flash && (
+        <div className="fixed top-3 inset-x-3 z-[220] flex items-start gap-2.5 rounded-2xl px-4 py-3 shadow-xl"
+          style={{ background: flash.tone==='ok' ? 'rgba(52,224,160,0.14)' : 'rgba(255,194,75,0.14)', border: `1px solid ${flash.tone==='ok' ? 'rgba(52,224,160,0.4)' : 'rgba(255,194,75,0.4)'}`, backdropFilter:'blur(8px)' }}
+          onClick={()=>setFlash(null)}>
+          <span className="flex-1 text-[13px] font-semibold" style={{ color: flash.tone==='ok' ? '#6BEFB9' : '#FFD27A' }}>{flash.msg}</span>
+          <button aria-label="Dismiss" onClick={()=>setFlash(null)} className="flex-shrink-0"><X size={15} className="text-[rgba(234,241,248,0.55)]"/></button>
+        </div>
+      )}
       {!cookieChoice && <CookieBanner onChoice={(c)=>{ setCookieChoice(c); ls.set('pe_cookie', c); }}/>}
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}

@@ -38,6 +38,18 @@ export async function fetchPromoStatus(token) {
   } catch { return null; }
 }
 
+// Start (or resume) Stripe Connect payout onboarding for the signed-in host.
+// Returns a Stripe-hosted Account Link URL to redirect the host to.
+export async function startPayoutOnboarding(token) {
+  const r = await apiFetch('/api/connect/onboard', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || 'Could not start payout setup');
+  return d.url;
+}
+
 // POST a notification to /api/notify, which emails CONTACT_EMAIL via Resend.
 // Fails silently so the app keeps working even if email is down.
 export async function notify(type, data = {}) {
