@@ -2901,10 +2901,17 @@ const PartnerCard = ({ partner, listingId }) => {
 
   return (
     <aside ref={ref} aria-labelledby={`partner-${partner.slug}-name`}
-      className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0e1a2c] flex">
+      className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0e1a2c]">
+      {partner.photo_url && (
+        <img src={partner.photo_url} alt={partner.name} className="w-full h-32 object-cover" loading="lazy"/>
+      )}
+      <div className="flex">
       <div aria-hidden className="w-[3px] flex-shrink-0 bg-[#5BE7DA]"/>
       <div className="min-w-0 flex-1 p-4">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5BE7DA]">Near this space</p>
+        <div className="flex items-center gap-2">
+          {partner.logo_url && <img src={partner.logo_url} alt="" className="w-6 h-6 rounded-md object-cover flex-shrink-0"/>}
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5BE7DA]">Near this space</p>
+        </div>
         <h3 id={`partner-${partner.slug}-name`} className="font-display font-extrabold text-xl text-[#EAF1F8] leading-tight mt-1.5">{partner.name}</h3>
         {partner.name_irish && <p className="text-[11px] font-semibold tracking-[0.12em] text-[#5BE7DA] mt-0.5">{partner.name_irish}</p>}
         <p className="text-[13px] text-[#cdd9e8] leading-relaxed mt-2">{partner.tagline}</p>
@@ -2916,6 +2923,7 @@ const PartnerCard = ({ partner, listingId }) => {
             Visit {partner.name}<span aria-hidden>↗</span>
           </a>
         )}
+      </div>
       </div>
     </aside>
   );
