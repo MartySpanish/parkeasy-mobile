@@ -38,6 +38,32 @@ export async function fetchPromoStatus(token) {
   } catch { return null; }
 }
 
+// Start (or resume) Stripe Connect payout onboarding for the signed-in host.
+// Returns a Stripe-hosted Account Link URL to redirect the host to.
+export async function startPayoutOnboarding(token) {
+  const r = await apiFetch('/api/connect/onboard', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || 'Could not start payout setup');
+  return d.url;
+}
+
+// Create a Stripe Checkout Session for a booking and return the hosted payment
+// URL. Price/fees are computed server-side from the listing — the client only
+// says which listing and for how long. Token is optional (guest checkout ok).
+export async function createBookingSession({ listingId, durationHours, startsAt, token }) {
+  const r = await apiFetch('/api/checkout/create-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ listingId, durationHours, startsAt }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || 'Could not start checkout');
+  return d.url;
+}
+
 // POST a notification to /api/notify, which emails CONTACT_EMAIL via Resend.
 // Fails silently so the app keeps working even if email is down.
 export async function notify(type, data = {}) {
