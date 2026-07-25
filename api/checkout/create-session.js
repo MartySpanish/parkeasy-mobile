@@ -132,6 +132,8 @@ export default async function handler(req, res) {
         listing_id: listing.id, host_id: listing.owner_id,
         driver_id: driver?.id || null, driver_email: driver?.email || null,
         starts_at: startsAt, duration_hours: durationHours, currency: 'gbp',
+        ends_at: endsAtISO,
+        cancellation_deadline: new Date(startMs - (parseInt(process.env.CANCEL_CUTOFF_HOURS || '24', 10)) * 3600000).toISOString(),
         amount_total_pence: totalPence, booking_price_pence: bookingPricePence,
         application_fee_pence: applicationFeePence, service_fee_pence: SERVICE_FEE_PENCE,
         stripe_session_id: session.id, stripe_destination: host.stripe_account_id, status: 'pending',
