@@ -2088,6 +2088,27 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // One-time "meet Premium" promo — dismissible, persists per device.
   const [premiumPromoDismissed, setPremiumPromoDismissed] = useState(() => ls.get('pe_prem_promo_dismissed', false));
 
+  // Featured local partner for the current city (e.g. The Red Devil during the
+  // Fleadh window) — shown as one card inside the main list, not a directory.
+  const [cityPartner, setCityPartner] = useState(null);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!isSupabaseEnabled || !cityCenter) { setCityPartner(null); return; }
+      try {
+        const { data } = await supabase.from('partners')
+          .select('id, slug, name, name_irish, tagline, logo_url, photo_url, photo_urls, link_url, address, lat, lng, radius_m, priority');
+        if (!live || !data?.length) return;
+        const near = data
+          .map(p => ({ ...p, d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000) }))
+          .filter(p => p.d < 8000)
+          .sort((a, b) => b.priority - a.priority || a.d - b.d);
+        setCityPartner(near[0] || null);
+      } catch { /* no partner — nothing to show */ }
+    })();
+    return () => { live = false; };
+  }, [cityCenter?.[0], cityCenter?.[1]]);
+
   // ── LIST mode (Search tab): kicker + heading, count + sort, full-width cards ──
   if (mode === 'list') {
     const sortLabel = SORT_OPTIONS.find(s=>s.id===sortBy)?.label || 'Sort';
@@ -2163,6 +2184,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                 <React.Fragment key={s.id}>
                   <ListCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
                   {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
+                  {i===2 && cityPartner && <PartnerCard partner={cityPartner} listingId={null} eyebrow={`Featured · ${cityName}`}/>}
                 </React.Fragment>
               ))}
               {premiumTeaser}
@@ -2960,7 +2982,7 @@ const BookingSheet = ({ listing, onClose }) => {
 // Featured Partner card — a local business near this bookable space. Contextual
 // only; appears because the driver is booking nearby. Renders below the booking
 // control. Counts an impression when actually on screen, and a click on the link.
-const PartnerCard = ({ partner, listingId }) => {
+const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space' }) => {
   const ref = useRef(null);
   const seen = useRef(false);
   useEffect(() => {
@@ -3001,7 +3023,7 @@ const PartnerCard = ({ partner, listingId }) => {
       <div className="min-w-0 flex-1 p-4">
         <div className="flex items-center gap-2">
           {partner.logo_url && <img src={partner.logo_url} alt="" className="w-6 h-6 rounded-md object-cover flex-shrink-0"/>}
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5BE7DA]">Near this space</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5BE7DA]">{eyebrow}</p>
         </div>
         <h3 id={`partner-${partner.slug}-name`} className="font-display font-extrabold text-xl text-[#EAF1F8] leading-tight mt-1.5">{partner.name}</h3>
         {partner.name_irish && <p className="text-[11px] font-semibold tracking-[0.12em] text-[#5BE7DA] mt-0.5">{partner.name_irish}</p>}
