@@ -71,8 +71,18 @@ export default async function handler(req, res) {
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
     if (listing.status !== 'active') return res.status(400).json({ error: 'This listing is not currently bookable' });
 
-    const pricePerHour = Number(listing.price_per_hour);
+    let pricePerHour = Number(listing.price_per_hour);
     if (!pricePerHour || pricePerHour <= 0) return res.status(400).json({ error: 'This listing has no hourly price set' });
+
+    // Event pricing: a per-date override replaces the base hourly price.
+    if (startsAt) {
+      try {
+        const dateStr = String(startsAt).slice(0, 10);
+        const ovr = await fetch(`${URL_}/rest/v1/listing_price_overrides?listing_id=eq.${listing.id}&override_date=eq.${dateStr}&select=price_pence`, { headers: svc });
+        const o = ovr.ok ? (await ovr.json())?.[0] : null;
+        if (o?.price_pence > 0) pricePerHour = o.price_pence / 100;
+      } catch { /* fall back to base price */ }
+    }
 
     // The host must have completed Connect onboarding (transfers active).
     const hr = await fetch(`${URL_}/rest/v1/host_accounts?host_id=eq.${listing.owner_id}&select=*`, { headers: svc });
