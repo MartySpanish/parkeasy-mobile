@@ -2075,6 +2075,9 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     </div>
   );
 
+  // One-time "meet Premium" promo — dismissible, persists per device.
+  const [premiumPromoDismissed, setPremiumPromoDismissed] = useState(() => ls.get('pe_prem_promo_dismissed', false));
+
   // ── LIST mode (Search tab): kicker + heading, count + sort, full-width cards ──
   if (mode === 'list') {
     const sortLabel = SORT_OPTIONS.find(s=>s.id===sortBy)?.label || 'Sort';
@@ -2105,6 +2108,21 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               </span>
               <ChevronRight size={16} className="text-[#5BE7DA] flex-shrink-0"/>
             </button>
+          </div>
+        )}
+        {!isPremium && !premiumPromoDismissed && (
+          <div className="px-4 pt-3">
+            <div className="relative overflow-hidden rounded-2xl p-4" style={{background:'linear-gradient(135deg, rgba(201,167,255,0.16), rgba(91,231,218,0.10))', border:'1px solid rgba(201,167,255,0.35)'}}>
+              <button aria-label="Dismiss" onClick={()=>{ls.set('pe_prem_promo_dismissed', true); setPremiumPromoDismissed(true);}}
+                className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><X size={12} className="text-[rgba(234,241,248,0.6)]"/></button>
+              <p className="font-display font-extrabold text-[16px] text-[#EAF1F8] leading-tight pr-7">✨ Did you know ParkEasy has Premium?</p>
+              <p className="text-[12.5px] text-[#cdd9e8] leading-relaxed mt-1.5">
+                Unlock <strong className="text-[#C9A7FF]">{hiddenCount > 0 ? `${hiddenCount} hidden gem${hiddenCount!==1?'s':''} in ${cityName}` : 'every hidden gem'}</strong> — the free spots locals keep to themselves — plus every EV charger pick across the map. One parking ticket costs more than a month of Premium.
+              </p>
+              <button onClick={onUpgrade} className="mt-3 inline-flex items-center gap-1.5 font-display font-bold text-[12.5px] text-[#06231f] px-4 py-2.5 rounded-xl" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
+                See what you're missing<ChevronRight size={14}/>
+              </button>
+            </div>
           </div>
         )}
         <div className="px-4 pt-3">
