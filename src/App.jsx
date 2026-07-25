@@ -2902,9 +2902,20 @@ const PartnerCard = ({ partner, listingId }) => {
   return (
     <aside ref={ref} aria-labelledby={`partner-${partner.slug}-name`}
       className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0e1a2c]">
-      {partner.photo_url && (
-        <img src={partner.photo_url} alt={partner.name} className="w-full h-32 object-cover" loading="lazy"/>
-      )}
+      {(() => {
+        // One photo → full-width banner. Several → swipeable strip.
+        const photos = (partner.photo_urls?.length ? partner.photo_urls : (partner.photo_url ? [partner.photo_url] : []));
+        if (!photos.length) return null;
+        if (photos.length === 1) return <img src={photos[0]} alt={partner.name} className="w-full h-32 object-cover" loading="lazy"/>;
+        return (
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar snap-x snap-mandatory">
+            {photos.map((u, i) => (
+              <img key={i} src={u} alt={`${partner.name} photo ${i + 1}`} loading="lazy"
+                className="h-32 w-[85%] flex-shrink-0 object-cover snap-start first:rounded-none"/>
+            ))}
+          </div>
+        );
+      })()}
       <div className="flex">
       <div aria-hidden className="w-[3px] flex-shrink-0 bg-[#5BE7DA]"/>
       <div className="min-w-0 flex-1 p-4">
