@@ -51,6 +51,7 @@ export default async function handler(req, res) {
   const listingId = body?.listingId;
   const durationHours = Math.max(1, Math.min(24, parseInt(body?.durationHours || 1, 10)));
   const startsAt = body?.startsAt || null;
+  const marketingOptIn = body?.marketingOptIn === true;
   if (!listingId) return res.status(400).json({ error: 'Missing listingId' });
 
   // Optional driver identity (guest checkout is allowed per Terms §3.1).
@@ -147,6 +148,7 @@ export default async function handler(req, res) {
         amount_total_pence: totalPence, booking_price_pence: bookingPricePence,
         application_fee_pence: applicationFeePence, service_fee_pence: SERVICE_FEE_PENCE,
         stripe_session_id: session.id, stripe_destination: host.stripe_account_id, status: 'pending',
+        marketing_opt_in: marketingOptIn,
       }),
     });
 

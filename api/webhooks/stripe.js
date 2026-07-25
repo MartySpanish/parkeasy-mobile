@@ -84,8 +84,13 @@ async function sendBookingEmails(svc, URL_, sessionId) {
       body: JSON.stringify({ from: FROM, to: [to], subject, html }),
     }).catch(() => {});
     const jobs = [];
+    // Driver's post-payment anxiety is "will I find the spot" — arrival
+    // instructions go FIRST, receipt second.
+    const findIt = listing?.instructions
+      ? `<div style="font-family:system-ui;margin:10px 0;padding:12px 14px;border-left:4px solid #2ED3C6;background:#f0fdfa;border-radius:8px"><strong>📍 How to find your space</strong><br>${listing.instructions}</div>`
+      : '';
     if (b.driver_email) jobs.push(send(b.driver_email, `✅ Parking booked — ${title}`,
-      `<h2 style="font-family:system-ui">Booking confirmed</h2>${rows(listing?.instructions ? `<tr><td style="padding:4px 10px;color:#64748b">How to find it</td><td style="padding:4px 10px">${listing.instructions}</td></tr>` : '')}${offerHtml}<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (£1 fee non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
+      `<h2 style="font-family:system-ui">Booking confirmed</h2>${findIt}${rows('')}${offerHtml}<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (£1 fee non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
     if (listing?.contact_email) jobs.push(send(listing.contact_email, `🅿️ Your space was booked — ${title}`,
       `<h2 style="font-family:system-ui">You've got a booking</h2>${rows(`<tr><td style="padding:4px 10px;color:#64748b">You receive</td><td style="padding:4px 10px"><strong>${gbp(b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence))}</strong> (after 15% fee), paid out weekly by Stripe.</td></tr>`)}`));
     if (FOUNDER) jobs.push(send(FOUNDER, `💷 New ParkEasy booking — ${title}`, rows()));
