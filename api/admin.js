@@ -102,6 +102,36 @@ export default async function handler(req, res) {
 
   const svcH = { Authorization: `Bearer ${SERVICE}`, apikey: SERVICE, 'Content-Type': 'application/json' };
 
+  // ── Founder action: grant Premium to any account by email (support tool —
+  // e.g. Stripe buyers from before purchases were account-linked). Writes a
+  // promo_redemptions entitlement; the user's next signed-in app open syncs it.
+  if (req.method === 'POST') {
+    let peek2 = req.body;
+    if (typeof peek2 === 'string') { try { peek2 = JSON.parse(peek2); } catch { peek2 = {}; } }
+    if (peek2?.action === 'grant-premium') {
+      const email = String(peek2.email || '').trim().toLowerCase();
+      const days = Math.max(1, Math.min(3660, parseInt(peek2.days || 366, 10)));
+      if (!email) return res.status(400).json({ error: 'Email required' });
+      let userId = null;
+      for (let page = 1; page <= 5 && !userId; page++) {
+        const r = await fetch(`${URL_}/auth/v1/admin/users?page=${page}&per_page=200`, { headers: svcH });
+        if (!r.ok) break;
+        const d = await r.json();
+        const batch = d.users || d || [];
+        userId = batch.find(u => (u.email || '').toLowerCase() === email)?.id || null;
+        if (batch.length < 200) break;
+      }
+      if (!userId) return res.status(404).json({ error: `No account found for ${email}` });
+      const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
+      const w = await fetch(`${URL_}/rest/v1/promo_redemptions?on_conflict=user_id,code`, {
+        method: 'POST', headers: { ...svcH, Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify({ user_id: userId, user_email: email, code: 'STRIPE-SUB', expires_at: expiresAt }),
+      });
+      if (!w.ok) return res.status(502).json({ error: 'Grant failed', detail: await w.text().catch(() => '') });
+      return res.status(200).json({ ok: true, email, days, expiresAt });
+    }
+  }
+
   // ── Founder actions: approve / reject organization listings ──
   if (req.method === 'POST') {
     let body = req.body;

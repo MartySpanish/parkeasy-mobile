@@ -4043,6 +4043,45 @@ const TABS = [
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 // ── Master-account analytics dashboard ───────────────────────────────────────
+// Founder support tool: grant Premium to any account by email (e.g. Stripe
+// buyers from before purchases were account-linked). Two taps, no SQL.
+const GrantPremium = () => {
+  const [email, setEmail] = useState('');
+  const [days, setDays] = useState('366');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const grant = async () => {
+    if (!email.trim()) { setMsg('Enter the user’s email'); return; }
+    setBusy(true); setMsg('');
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const r = await apiFetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess?.session?.access_token}` },
+        body: JSON.stringify({ action: 'grant-premium', email: email.trim(), days: parseInt(days, 10) || 366 }),
+      });
+      const d = await r.json().catch(() => ({}));
+      setMsg(r.ok ? `✅ ${d.email} is Premium until ${new Date(d.expiresAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} — tell them to open the app signed in.` : (d.error || 'Grant failed'));
+      if (r.ok) setEmail('');
+    } catch (e) { setMsg(e.message || 'Grant failed'); }
+    setBusy(false);
+  };
+  return (
+    <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
+      <p className="font-display font-bold text-[12.5px] text-[#EAF1F8] mb-2">Grant Premium to an account</p>
+      <div className="flex gap-2">
+        <input type="email" placeholder="their@email.com" value={email} onChange={e=>setEmail(e.target.value)}
+          className="flex-1 min-w-0 bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2.5 text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60"/>
+        <input type="number" min="1" title="Days" value={days} onChange={e=>setDays(e.target.value)}
+          className="w-20 bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2.5 text-sm text-[#EAF1F8] focus:outline-none"/>
+        <button onClick={grant} disabled={busy}
+          className="btn-teal text-[#06231f] font-bold text-[13px] px-4 rounded-xl disabled:opacity-50">{busy ? '…' : 'Grant'}</button>
+      </div>
+      {msg && <p className="text-[12px] text-[#6BEFB9] mt-2">{msg}</p>}
+    </div>
+  );
+};
+
 const AdminOverlay = ({ onClose }) => {
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
@@ -4185,8 +4224,9 @@ const AdminOverlay = ({ onClose }) => {
                     <Tile label="Expiring · 7d" value={d.premium.expiring7}/>
                   </div>
                   <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] leading-relaxed mt-2">
-                    Counts promo &amp; hidden-gem reward Premium that's still active (tracked server-side). Stripe subscribers aren't included yet — those live per-device until account-linked billing is added.
+                    Counts promo, reward &amp; account-linked Stripe Premium that's still active (tracked server-side).
                   </p>
+                  <GrantPremium/>
                 </div>
               )}
               {d.bookings && (
