@@ -66,33 +66,50 @@ export default async function handler(req, res) {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
   const entered = String(body?.code || '').trim().toUpperCase();   // case-insensitive
   if (!entered) return res.status(400).json({ error: 'Enter a promo code.' });
-  if (entered !== CODE) return res.status(400).json({ error: 'That promo code isn’t valid.' });
 
-  // Window check — configurable, never hardcoded.
-  const start = Date.parse(process.env.PROMO_START || '');
-  const end   = Date.parse(process.env.PROMO_END || '');
-  const now   = Date.now();
-  if (!Number.isFinite(start) || !Number.isFinite(end)) {
-    return res.status(403).json({ error: 'This promo isn’t running right now.' });
+  // Codes are DATA first: look the entered code up in promo_codes (managed in
+  // the Supabase dashboard, no deploy needed). Falls back to the legacy env
+  // config (PROMO_CODE/PROMO_DAYS/PROMO_START/PROMO_END) for PARKEZ.
+  const now = Date.now();
+  let grantDays = null;
+  try {
+    const cr = await fetch(`${URL_}/rest/v1/promo_codes?code=eq.${encodeURIComponent(entered)}&select=*`, { headers: svc });
+    const row = cr.ok ? (await cr.json())?.[0] : null;
+    if (row) {
+      if (!row.active) return res.status(403).json({ error: 'This promo isn’t running right now.' });
+      if (row.starts_at && now < Date.parse(row.starts_at)) return res.status(403).json({ error: 'This promo hasn’t started yet.' });
+      if (row.ends_at && now > Date.parse(row.ends_at)) return res.status(403).json({ error: 'This promo has ended.' });
+      grantDays = row.days;
+    }
+  } catch { /* table may not exist yet — env fallback below */ }
+
+  if (grantDays == null) {
+    if (entered !== CODE) return res.status(400).json({ error: 'That promo code isn’t valid.' });
+    const start = Date.parse(process.env.PROMO_START || '');
+    const end   = Date.parse(process.env.PROMO_END || '');
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+      return res.status(403).json({ error: 'This promo isn’t running right now.' });
+    }
+    if (now < start) return res.status(403).json({ error: 'This promo hasn’t started yet.' });
+    if (now > end)   return res.status(403).json({ error: 'This promo has ended.' });
+    grantDays = DAYS;
   }
-  if (now < start) return res.status(403).json({ error: 'This promo hasn’t started yet.' });
-  if (now > end)   return res.status(403).json({ error: 'This promo has ended.' });
 
   // Already redeemed by this account?
   try {
-    const existing = await fetch(`${URL_}/rest/v1/promo_redemptions?user_id=eq.${caller.id}&code=eq.${encodeURIComponent(CODE)}&select=id`, { headers: svc });
+    const existing = await fetch(`${URL_}/rest/v1/promo_redemptions?user_id=eq.${caller.id}&code=eq.${encodeURIComponent(entered)}&select=id`, { headers: svc });
     if ((await existing.json())?.length) return res.status(409).json({ error: 'You’ve already redeemed this code.' });
   } catch { /* fall through — the UNIQUE constraint is the real guard */ }
 
-  const expiresAtIso = new Date(now + DAYS * 86400000).toISOString();
+  const expiresAtIso = new Date(now + grantDays * 86400000).toISOString();
   const ins = await fetch(`${URL_}/rest/v1/promo_redemptions`, {
     method: 'POST',
     headers: { ...svc, Prefer: 'return=representation' },
-    body: JSON.stringify({ user_id: caller.id, user_email: caller.email, code: CODE, expires_at: expiresAtIso }),
+    body: JSON.stringify({ user_id: caller.id, user_email: caller.email, code: entered, expires_at: expiresAtIso }),
   });
   // 409 = UNIQUE (user_id, code) violation → a concurrent/repeat redemption.
   if (ins.status === 409) return res.status(409).json({ error: 'You’ve already redeemed this code.' });
   if (!ins.ok) return res.status(502).json({ error: 'Could not redeem right now — please try again.', detail: await ins.text().catch(() => '') });
 
-  return res.status(200).json({ ok: true, premiumUntil: Date.parse(expiresAtIso), days: DAYS });
+  return res.status(200).json({ ok: true, premiumUntil: Date.parse(expiresAtIso), days: grantDays });
 }
