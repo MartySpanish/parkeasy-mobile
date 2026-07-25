@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "ParkEasy Belfast — community parking finder for Belfast locals",
+  "description": "ParkEasy Belfast \u2014 community parking finder for Belfast locals",
   "engines": {
     "node": "20.x"
   },
@@ -23,15 +23,15 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-leaflet": "^4.2.1",
-    "stripe": "^16.12.0"
+    "stripe": "^16.12.0",
+    "vite": "^5.0.8",
+    "@vitejs/plugin-react": "^4.2.1",
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.32",
+    "autoprefixer": "^10.4.16"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.0",
-    "vite": "^5.0.8"
+    "@types/react-dom": "^18.2.17"
   }
 }
