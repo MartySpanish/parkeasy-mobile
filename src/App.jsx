@@ -2871,7 +2871,7 @@ const BookingSheet = ({ listing, onClose }) => {
           className="mt-4 w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50">
           {busy ? 'Opening secure payment…' : `Pay £${total.toFixed(2)} with card`}
         </button>
-        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">Secure payment via Stripe. You park at your own risk — see our Terms.</p>
+        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">Secure payment via Stripe. Cancel up to 24h before for a full refund of the parking price (the £1 fee is non-refundable); under 24h, 50%. You park at your own risk — see our Terms.</p>
       </div>
     </div>
   );
@@ -3405,7 +3405,7 @@ const BookingsPanel = ({ user }) => {
   const load = async () => {
     if (!isSupabaseEnabled || !user?.id) { setRows([]); return; }
     const { data } = await supabase.from('bookings')
-      .select('id,listing_id,host_id,driver_id,starts_at,duration_hours,amount_total_pence,booking_price_pence,application_fee_pence,service_fee_pence,status,refund_pence,refund_status,created_at')
+      .select('id,listing_id,host_id,driver_id,starts_at,duration_hours,amount_total_pence,booking_price_pence,application_fee_pence,service_fee_pence,status,refund_pence,refund_status,cancellation_deadline,created_at')
       .or(`driver_id.eq.${user.id},host_id.eq.${user.id}`)
       .order('created_at', { ascending: false }).limit(30);
     const list = data || [];
@@ -3422,8 +3422,23 @@ const BookingsPanel = ({ user }) => {
   if (!rows.length) return null;
 
   const gbp = (p) => `£${((p || 0) / 100).toFixed(2)}`;
+  // Mirror of the server's Terms §5 refund rules, for an honest pre-cancel preview.
+  const previewRefund = (b) => {
+    const asHost = b.host_id === user.id;
+    if (asHost) return b.amount_total_pence;
+    const now = Date.now();
+    const dl = b.cancellation_deadline ? Date.parse(b.cancellation_deadline) : (b.starts_at ? Date.parse(b.starts_at) - 24 * 3600000 : null);
+    const start = b.starts_at ? Date.parse(b.starts_at) : null;
+    if (dl != null && now <= dl) return b.booking_price_pence;
+    if (start != null && now < start) return Math.round(b.booking_price_pence * 0.5);
+    return 0;
+  };
   const doCancel = async (b) => {
-    if (!window.confirm('Cancel this booking? Refund depends on how close to the start time it is.')) return;
+    const exp = previewRefund(b);
+    const line = exp > 0
+      ? `You'd get ${gbp(exp)} back${exp < b.amount_total_pence ? ' (the £1 service fee is non-refundable' + (exp < b.booking_price_pence ? '; under 24h to start = 50% of the parking price' : '') + ')' : ''}.`
+      : 'No refund is due this close to the start time.';
+    if (!window.confirm(`Cancel this booking? ${line}`)) return;
     setBusyId(b.id); setMsg('');
     try {
       const { data: sess } = await supabase.auth.getSession();

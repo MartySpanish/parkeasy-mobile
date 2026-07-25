@@ -61,14 +61,22 @@ export default async function handler(req, res) {
     if (!isDriver && !isHost) return res.status(403).json({ error: 'Not your booking' });
     if (booking.status !== 'paid') return res.status(400).json({ error: `Can't cancel a booking that is ${booking.status}` });
 
-    // Refund policy.
+    // Refund policy (Terms §5): host cancel → full refund incl. service fee.
+    // Driver cancel before the stored cancellation_deadline (default 24h,
+    // CANCEL_CUTOFF_HOURS) → full booking price back, service fee non-refundable.
+    // After the deadline but before the start → 50% of the booking price.
+    // After the start / no-show → nothing.
+    const now = Date.now();
     const startMs = booking.starts_at ? Date.parse(booking.starts_at) : null;
-    const hoursToStart = startMs != null ? (startMs - Date.now()) / 3600000 : 0;
+    const cutoffHours = parseInt(process.env.CANCEL_CUTOFF_HOURS || '24', 10);
+    const deadlineMs = booking.cancellation_deadline
+      ? Date.parse(booking.cancellation_deadline)
+      : (startMs != null ? startMs - cutoffHours * 3600000 : null);
     let refundPence = 0;
-    if (isHost) refundPence = booking.amount_total_pence;               // host cancels → full refund
-    else if (hoursToStart >= 24) refundPence = booking.amount_total_pence; // driver ≥24h → full refund
-    else if (hoursToStart > 0) refundPence = Math.round(booking.booking_price_pence * 0.5); // <24h → 50% of parking
-    else refundPence = 0;                                               // started / no-show → none
+    if (isHost) refundPence = booking.amount_total_pence;
+    else if (deadlineMs != null && now <= deadlineMs) refundPence = booking.booking_price_pence;
+    else if (startMs != null && now < startMs) refundPence = Math.round(booking.booking_price_pence * 0.5);
+    else refundPence = 0;
 
     const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
     if (refundPence > 0 && booking.stripe_payment_intent) {
@@ -80,7 +88,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const refundStatus = refundPence === 0 ? 'none' : refundPence >= booking.amount_total_pence ? 'refunded' : 'partial';
+    const refundStatus = refundPence === 0 ? 'denied_late' : refundPence >= booking.amount_total_pence ? 'refunded' : 'partial';
     await fetch(`${URL_}/rest/v1/bookings?id=eq.${booking.id}`, {
       method: 'PATCH', headers: svc,
       body: JSON.stringify({
