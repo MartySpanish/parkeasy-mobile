@@ -3466,6 +3466,7 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
 const BookingsPanel = ({ user }) => {
   const [rows, setRows] = useState(undefined);
   const [titles, setTitles] = useState({});
+  const [offers, setOffers] = useState({});
   const [busyId, setBusyId] = useState(null);
   const [msg, setMsg] = useState('');
 
@@ -3481,6 +3482,9 @@ const BookingsPanel = ({ user }) => {
     if (ids.length) {
       const { data: ls } = await supabase.from('rental_listings').select('id,title').in('id', ids);
       setTitles(Object.fromEntries((ls || []).map(l => [l.id, l.title])));
+      // Local offers for these listings (RLS already limits to active+in-window).
+      const { data: os } = await supabase.from('local_offers').select('listing_id,business_name,description,offer_code').in('listing_id', ids);
+      if (os) setOffers(Object.fromEntries(os.map(o => [o.listing_id, o])));
     }
   };
   useEffect(() => { load(); }, [user?.id]);
@@ -3537,6 +3541,12 @@ const BookingsPanel = ({ user }) => {
                 <span>{asHost ? `earns ${gbp(hostEarns)}` : gbp(b.amount_total_pence)}</span>
               </div>
               {b.status === 'cancelled' && b.refund_pence > 0 && <p className="text-[11px] text-[#FFD27A] mt-0.5">Refunded {gbp(b.refund_pence)}</p>}
+              {b.status === 'paid' && !asHost && offers[b.listing_id] && (
+                <p className="text-[11.5px] text-[#6BEFB9] mt-1 bg-[#34E0A0]/8 border border-[#34E0A0]/20 rounded-lg px-2.5 py-1.5">
+                  📍 While you're there: {offers[b.listing_id].description} — <strong>{offers[b.listing_id].business_name}</strong>
+                  {offers[b.listing_id].offer_code ? <> · code <strong>{offers[b.listing_id].offer_code}</strong></> : null}
+                </p>
+              )}
               {cancellable && (
                 <button onClick={()=>doCancel(b)} disabled={busyId===b.id}
                   className="mt-1.5 text-[11px] font-semibold text-red-300 border border-red-400/40 rounded-lg px-2.5 py-1 disabled:opacity-50">
