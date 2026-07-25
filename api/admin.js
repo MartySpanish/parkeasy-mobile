@@ -230,6 +230,27 @@ export default async function handler(req, res) {
       }
     } catch { /* table may not exist yet */ }
 
+    // Partner (advertiser) performance: impressions/clicks/CTR per partner —
+    // the numbers Marty quotes back to the business at renewal time.
+    let partners = [];
+    try {
+      const [pr3, ev] = await Promise.all([
+        fetch(`${URL_}/rest/v1/partners?select=id,name,active,ends_at`, { headers: svc }),
+        fetch(`${URL_}/rest/v1/partner_events?select=partner_id,event_type&limit=10000`, { headers: svc }),
+      ]);
+      if (pr3.ok && ev.ok) {
+        const rows = await pr3.json();
+        const events = await ev.json();
+        partners = rows.map(p => {
+          const mine = events.filter(e => e.partner_id === p.id);
+          const impressions = mine.filter(e => e.event_type === 'impression').length;
+          const clicks = mine.filter(e => e.event_type === 'click').length;
+          return { name: p.name, active: p.active, ends_at: p.ends_at, impressions, clicks,
+            ctr: impressions ? Math.round((clicks / impressions) * 1000) / 10 : null };
+        });
+      }
+    } catch { /* tables may not exist yet */ }
+
     // Bookings summary (Stripe Checkout marketplace). Gross paid + our fees.
     let bookings = { total: 0, paid: 0, grossPence: 0, feePence: 0, hostsOnboarded: 0 };
     try {
@@ -260,6 +281,7 @@ export default async function handler(req, res) {
       spots,
       premium,
       bookings,
+      partners,
       users: {
         total: users.length,
         last7: users.filter(u => within(u, 7)).length,
