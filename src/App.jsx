@@ -5091,10 +5091,16 @@ export default function App() {
                 <Download size={11}/><span className="hidden min-[430px]:inline">Install</span>
               </button>
             )}
-            {!isPremium && (
+            {!isPremium ? (
               <button onClick={()=>setShowPricing(true)}
                 className="text-[11px] text-[#06231f] px-2 py-1.5 rounded-full font-bold active:scale-95 transition-all btn-teal whitespace-nowrap">
                 ★ Premium
+              </button>
+            ) : (
+              <button onClick={()=>setShowPricing(true)} aria-label="Your Premium status"
+                className="text-[11px] px-2 py-1.5 rounded-full font-bold active:scale-95 transition-all whitespace-nowrap text-[#06231f]"
+                style={{background:'linear-gradient(135deg,#FFD27A,#eab308)'}}>
+                ★ Premium ✓
               </button>
             )}
             {isAdminUser(user) && (

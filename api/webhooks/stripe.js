@@ -40,6 +40,34 @@ async function syncHostAccount(stripe, svc, URL_, accountId) {
   }
 }
 
+// Premium bought via a Stripe payment link: find the auth user by the buyer's
+// email and record the entitlement in promo_redemptions (code STRIPE-SUB), so
+// the existing login sync surfaces Premium on every device. Duration: monthly
+// price (< £10) → 35 days; anything bigger (annual/lifetime) → 366 days.
+// Known limit: subscription RENEWALS don't re-fire checkout.session.completed,
+// so monthly extensions need invoice events later — flagged in the runbook.
+async function grantPremiumFromPaymentLink(svc, URL_, s) {
+  const email = (s.customer_details?.email || s.customer_email || '').trim().toLowerCase();
+  if (!email || !s.amount_total) return;
+  // Find the auth user with this email (paged; fine at current scale).
+  let userId = null;
+  for (let page = 1; page <= 5 && !userId; page++) {
+    const r = await fetch(`${URL_}/auth/v1/admin/users?page=${page}&per_page=200`, { headers: svc });
+    if (!r.ok) break;
+    const d = await r.json();
+    const batch = d.users || d || [];
+    userId = batch.find(u => (u.email || '').toLowerCase() === email)?.id || null;
+    if (batch.length < 200) break;
+  }
+  if (!userId) { console.error('premium payment-link: no account for', email); return; }
+  const days = s.amount_total < 1000 ? 35 : 366;
+  const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
+  await fetch(`${URL_}/rest/v1/promo_redemptions?on_conflict=user_id,code`, {
+    method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({ user_id: userId, user_email: email, code: 'STRIPE-SUB', expires_at: expiresAt }),
+  });
+}
+
 async function markBooking(svc, URL_, sessionId, patch) {
   if (!sessionId) return;
   await fetch(`${URL_}/rest/v1/bookings?stripe_session_id=eq.${sessionId}`, {
@@ -125,6 +153,13 @@ export default async function handler(req, res) {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded': {
         const s = event.data.object;
+        if (!s.metadata?.pass_id && !s.metadata?.listing_id) {
+          // No booking/pass metadata → a Premium purchase via a Stripe payment
+          // link. Link it to the buyer's ParkEasy account by email so Premium
+          // follows them across devices (synced by fetchPromoStatus on login).
+          await grantPremiumFromPaymentLink(svc, URL_, s).catch(e => console.error('premium link', e));
+          break;
+        }
         if (s.metadata?.pass_id) {
           // Season-pass purchase → credit the pass (idempotent on session id).
           await fetch(`${URL_}/rest/v1/pass_purchases?on_conflict=stripe_session_id`, {
