@@ -46,10 +46,8 @@ async function syncHostAccount(stripe, svc, URL_, accountId) {
 // price (< £10) → 35 days; anything bigger (annual/lifetime) → 366 days.
 // Known limit: subscription RENEWALS don't re-fire checkout.session.completed,
 // so monthly extensions need invoice events later — flagged in the runbook.
-async function grantPremiumFromPaymentLink(svc, URL_, s) {
-  const email = (s.customer_details?.email || s.customer_email || '').trim().toLowerCase();
-  if (!email || !s.amount_total) return;
-  // Find the auth user with this email (paged; fine at current scale).
+async function grantPremiumByEmail(svc, URL_, email, days) {
+  if (!email) return;
   let userId = null;
   for (let page = 1; page <= 5 && !userId; page++) {
     const r = await fetch(`${URL_}/auth/v1/admin/users?page=${page}&per_page=200`, { headers: svc });
@@ -59,13 +57,19 @@ async function grantPremiumFromPaymentLink(svc, URL_, s) {
     userId = batch.find(u => (u.email || '').toLowerCase() === email)?.id || null;
     if (batch.length < 200) break;
   }
-  if (!userId) { console.error('premium payment-link: no account for', email); return; }
-  const days = s.amount_total < 1000 ? 35 : 366;
+  if (!userId) { console.error('premium grant: no account for', email); return; }
   const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
   await fetch(`${URL_}/rest/v1/promo_redemptions?on_conflict=user_id,code`, {
     method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
     body: JSON.stringify({ user_id: userId, user_email: email, code: 'STRIPE-SUB', expires_at: expiresAt }),
   });
+}
+
+async function grantPremiumFromPaymentLink(svc, URL_, s) {
+  const email = (s.customer_details?.email || s.customer_email || '').trim().toLowerCase();
+  if (!email || !s.amount_total) return;
+  const days = s.amount_total < 1000 ? 35 : 366;
+  await grantPremiumByEmail(svc, URL_, email, days);
 }
 
 async function markBooking(svc, URL_, sessionId, patch) {
@@ -189,6 +193,14 @@ export default async function handler(req, res) {
       case 'capability.updated': {
         const accountId = event.data.object.account;
         if (accountId) await syncHostAccount(stripe, svc, URL_, accountId);
+        break;
+      }
+      case 'invoice.paid': {
+        // Subscription renewal → extend account-linked Premium by a month.
+        // (Requires the invoice.paid event ticked on the Stripe webhook.)
+        const inv = event.data.object;
+        const email = (inv.customer_email || '').trim().toLowerCase();
+        if (email) await grantPremiumByEmail(svc, URL_, email, 35).catch(e => console.error('renewal grant', e));
         break;
       }
       case 'payout.paid':
