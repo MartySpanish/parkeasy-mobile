@@ -64,6 +64,30 @@ export async function createBookingSession({ listingId, durationHours, startsAt,
   return d.url;
 }
 
+// Buy a season/bundle pass → returns the Stripe Checkout URL.
+export async function buyPass(passId, token) {
+  const r = await apiFetch('/api/passes/buy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ passId }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || 'Could not start pass purchase');
+  return d.url;
+}
+
+// Redeem one pass credit for a booking (no charge).
+export async function redeemPass({ purchaseId, startsAt, durationHours, token }) {
+  const r = await apiFetch('/api/passes/redeem', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ purchaseId, startsAt, durationHours }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Could not redeem pass credit');
+  return d;
+}
+
 // Cancel a booking (driver or host). Returns { ok, refundPence, refundStatus }.
 export async function cancelBooking(bookingId, token) {
   const r = await apiFetch('/api/bookings/cancel', {
