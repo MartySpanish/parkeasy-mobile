@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/connect/return",
+      "destination": "/api/connect/link?mode=return"
+    },
+    {
+      "source": "/api/connect/refresh",
+      "destination": "/api/connect/link?mode=refresh"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

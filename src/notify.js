@@ -66,10 +66,10 @@ export async function createBookingSession({ listingId, durationHours, startsAt,
 
 // Buy a season/bundle pass → returns the Stripe Checkout URL.
 export async function buyPass(passId, token) {
-  const r = await apiFetch('/api/passes/buy', {
+  const r = await apiFetch('/api/passes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ passId }),
+    body: JSON.stringify({ action: 'buy', passId }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok || !d.url) throw new Error(d.error || 'Could not start pass purchase');
@@ -78,10 +78,10 @@ export async function buyPass(passId, token) {
 
 // Redeem one pass credit for a booking (no charge).
 export async function redeemPass({ purchaseId, startsAt, durationHours, token }) {
-  const r = await apiFetch('/api/passes/redeem', {
+  const r = await apiFetch('/api/passes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ purchaseId, startsAt, durationHours }),
+    body: JSON.stringify({ action: 'redeem', purchaseId, startsAt, durationHours }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || 'Could not redeem pass credit');

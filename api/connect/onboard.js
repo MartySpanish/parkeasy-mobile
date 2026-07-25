@@ -79,8 +79,8 @@ export default async function handler(req, res) {
 
     const link = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${API_BASE}/api/connect/refresh?acct=${accountId}`,
-      return_url: `${API_BASE}/api/connect/return?acct=${accountId}`,
+      refresh_url: `${API_BASE}/api/connect/link?mode=refresh&acct=${accountId}`,
+      return_url: `${API_BASE}/api/connect/link?mode=return&acct=${accountId}`,
       type: 'account_onboarding',
     });
 
