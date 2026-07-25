@@ -4329,7 +4329,7 @@ const SponsorCard = ({ onAdvertise }) => (
           <p className="font-bold text-[#EAF1F8] text-sm">Your business here</p>
           <span className="text-[9px] font-bold uppercase tracking-wide text-[#FFD27A] bg-[#FFC24B]/15 px-1.5 py-0.5 rounded">Sponsored</span>
         </div>
-        <p className="text-xs text-[rgba(234,241,248,0.55)] mt-0.5">Reach drivers searching near you — from £25/mo.</p>
+        <p className="text-xs text-[rgba(234,241,248,0.55)] mt-0.5">Reach drivers searching near you — parkeasyuk@gmail.com</p>
       </div>
       <button onClick={onAdvertise} className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal active:scale-95 transition whitespace-nowrap">Advertise</button>
     </div>
@@ -4529,7 +4529,7 @@ const INFO_PAGES = {
           <li>Your pin highlighted on the map with your offer</li>
           <li>A spot on the Local businesses tab</li>
         </ul>
-        <p><strong className="text-[#EAF1F8]">Founding-sponsor pricing:</strong> £25–40/month. Limited slots per area so it stays useful, not cluttered.</p>
+        <p><strong className="text-[#EAF1F8]">Pricing:</strong> tailored to your business and area — limited slots per area so it stays useful, not cluttered.</p>
         <p>Interested? Email <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com?subject=Advertising%20with%20ParkEasy">parkeasyuk@gmail.com</a> and we&apos;ll set you up.</p>
       </>
     ),
