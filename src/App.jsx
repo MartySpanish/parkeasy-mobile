@@ -2091,20 +2091,24 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // Featured local partner for the current city (e.g. The Red Devil during the
   // Fleadh window) — shown as one card inside the main list, not a directory.
   const [cityPartner, setCityPartner] = useState(null);
+  const [partnerDiag, setPartnerDiag] = useState('');   // shown only with ?debug=1
   useEffect(() => {
     let live = true;
     (async () => {
-      if (!isSupabaseEnabled || !cityCenter) { setCityPartner(null); return; }
+      if (!isSupabaseEnabled || !cityCenter) { setPartnerDiag('partners: supabase disabled'); setCityPartner(null); return; }
       try {
-        const { data } = await supabase.from('partners')
+        const { data, error } = await supabase.from('partners')
           .select('id, slug, name, name_irish, tagline, logo_url, photo_url, photo_urls, link_url, address, lat, lng, radius_m, priority');
-        if (!live || !data?.length) return;
+        if (!live) return;
+        if (error) { setPartnerDiag(`partners: ERROR ${error.message}`); return; }
+        if (!data?.length) { setPartnerDiag('partners: 0 rows visible (inactive or out of window?)'); return; }
         const near = data
           .map(p => ({ ...p, d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000) }))
           .filter(p => p.d < 8000)
           .sort((a, b) => b.priority - a.priority || a.d - b.d);
+        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near[0] ? ` → showing "${near[0].name}"` : ''}`);
         setCityPartner(near[0] || null);
-      } catch { /* no partner — nothing to show */ }
+      } catch (e) { if (live) setPartnerDiag(`partners: FETCH FAILED ${e?.message || e}`); }
     })();
     return () => { live = false; };
   }, [cityCenter?.[0], cityCenter?.[1]]);
@@ -2124,6 +2128,9 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               </span>
             ))}
           </div>
+          {typeof location !== 'undefined' && new URLSearchParams(location.search).get('debug') === '1' && (
+            <p className="text-[10px] text-[#FFD27A] mt-1.5 break-all">🔧 {partnerDiag || 'partners: loading…'} · build {new Date(__BUILD_TIME__).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
+          )}
         </div>
         {searchBlock}
         {onHowItWorks && (
