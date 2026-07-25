@@ -24,7 +24,7 @@ export async function findPartnerForListing(listingLat, listingLng) {
   try {
     const { data, error } = await supabase
       .from('partners')
-      .select('id, slug, name, name_irish, tagline, description, logo_url, link_url, address, lat, lng, radius_m, priority');
+      .select('id, slug, name, name_irish, tagline, description, logo_url, photo_url, photo_urls, link_url, address, lat, lng, radius_m, priority');
     if (error || !data?.length) return null;
     const matches = data
       .map((p) => ({ ...p, distance_m: distanceMetres(listingLat, listingLng, p.lat, p.lng) }))
