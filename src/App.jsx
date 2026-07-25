@@ -16,7 +16,7 @@ import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking, buyPass, redeemPass } from './notify';
-import { findPartnerForListing, trackPartnerEvent } from './partners';
+import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -2184,7 +2184,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                 <React.Fragment key={s.id}>
                   <ListCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
                   {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
-                  {i===2 && cityPartner && <PartnerCard partner={cityPartner} listingId={null} eyebrow={`Featured · ${cityName}`}/>}
+                  {i===2 && cityPartner && <PartnerCard partner={cityPartner} listingId={null} eyebrow={`Featured · ${cityName}`} onOpenSpot={onOpenSpot}/>}
                 </React.Fragment>
               ))}
               {premiumTeaser}
@@ -2982,7 +2982,16 @@ const BookingSheet = ({ listing, onClose }) => {
 // Featured Partner card — a local business near this bookable space. Contextual
 // only; appears because the driver is booking nearby. Renders below the booking
 // control. Counts an impression when actually on screen, and a click on the link.
-const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space' }) => {
+// Closest community spots to a partner's front door — turns the ad into a
+// "park here for this business" guide, which is the value the advertiser pays for.
+const nearestSpotsTo = (lat, lng, max = 3, radiusM = 700) =>
+  ALL_SPOTS
+    .map(s => ({ s, d: distanceMetres(lat, lng, s.lat, s.lng) }))
+    .filter(x => x.d <= radiusM)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, max);
+
+const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSpot }) => {
   const ref = useRef(null);
   const seen = useRef(false);
   useEffect(() => {
@@ -3036,6 +3045,26 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space' }) => {
             Visit {partner.name}<span aria-hidden>↗</span>
           </a>
         )}
+        {(() => {
+          const nearby = nearestSpotsTo(partner.lat, partner.lng, 3, Math.max(700, partner.radius_m || 900));
+          if (!nearby.length) return null;
+          return (
+            <div className="mt-3.5 pt-3 border-t border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[rgba(234,241,248,0.5)] mb-1.5">🅿 Parking near {partner.name}</p>
+              {nearby.map(({ s, d }) => {
+                const row = (
+                  <span className="flex items-center justify-between gap-2 w-full">
+                    <span className="text-[12.5px] text-[#cdd9e8] truncate">{s.name}</span>
+                    <span className="flex-shrink-0 text-[11px] text-[#5BE7DA] font-semibold">{Math.max(1, Math.round(d / 80))} min walk{s.price ? ` · ${String(s.price).split('/')[0]}` : ' · free'}</span>
+                  </span>
+                );
+                return onOpenSpot
+                  ? <button key={s.id} onClick={()=>onOpenSpot(s)} className="w-full text-left py-1 hover:opacity-80">{row}</button>
+                  : <div key={s.id} className="py-1">{row}</div>;
+              })}
+            </div>
+          );
+        })()}
       </div>
       </div>
     </aside>
@@ -4161,6 +4190,25 @@ const AdminOverlay = ({ onClose }) => {
                     <Tile label="Our fees" value={`£${((d.bookings.feePence||0)/100).toFixed(0)}`} accent="#5BE7DA"/>
                     <Tile label="Hosts paid-ready" value={d.bookings.hostsOnboarded}/>
                   </div>
+                </div>
+              )}
+              {d.partners?.length > 0 && (
+                <div>
+                  <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Advertisers</h3>
+                  <div className="glass rounded-2xl p-4 divide-y divide-white/5">
+                    {d.partners.map((p,i)=>(
+                      <div key={i} className="flex items-center justify-between gap-2 py-2">
+                        <span className="min-w-0">
+                          <span className="block font-semibold text-[13px] text-[#EAF1F8] truncate">{p.name} {p.active ? '' : '· off'}</span>
+                          {p.ends_at && <span className="block text-[11px] text-[rgba(234,241,248,0.45)]">until {new Date(p.ends_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}</span>}
+                        </span>
+                        <span className="flex-shrink-0 text-[12px] text-[rgba(234,241,248,0.6)]">
+                          👁 <strong className="text-[#EAF1F8]">{p.impressions}</strong> · 🔗 <strong className="text-[#5BE7DA]">{p.clicks}</strong>{p.ctr != null && <span> · {p.ctr}% CTR</span>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] mt-2">Views are counted only when the card is actually on screen — quote these to advertisers with confidence.</p>
                 </div>
               )}
               {d.promos && (
