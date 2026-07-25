@@ -70,13 +70,22 @@ async function sendBookingEmails(svc, URL_, sessionId) {
       + `<tr><td style="padding:4px 10px;color:#64748b">Address</td><td style="padding:4px 10px">${listing?.address || ''}</td></tr>`
       + `<tr><td style="padding:4px 10px;color:#64748b">When</td><td style="padding:4px 10px">${when} · ${b.duration_hours}h</td></tr>`
       + `<tr><td style="padding:4px 10px;color:#64748b">Total paid</td><td style="padding:4px 10px">${gbp(b.amount_total_pence)}</td></tr>${extra || ''}</table>`;
+    // Local offer for this listing (active + in window) — rides along in the
+    // driver's confirmation email. Best-effort; table may not exist yet.
+    let offerHtml = '';
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const ofr = await fetch(`${URL_}/rest/v1/local_offers?listing_id=eq.${b.listing_id}&active=is.true&or=(start_date.is.null,start_date.lte.${today})&or=(end_date.is.null,end_date.gte.${today})&select=business_name,description,offer_code&limit=1`, { headers: svc });
+      const offer = ofr.ok ? (await ofr.json())?.[0] : null;
+      if (offer) offerHtml = `<div style="font-family:system-ui;margin-top:14px;padding:12px 14px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa"><strong>📍 While you're there:</strong> ${offer.description} — ${offer.business_name}${offer.offer_code ? ` · code <strong>${offer.offer_code}</strong>` : ''}</div>`;
+    } catch { /* no offers table yet */ }
     const send = (to, subject, html) => fetch('https://api.resend.com/emails', {
       method: 'POST', headers: { Authorization: `Bearer ${KEYR}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: FROM, to: [to], subject, html }),
     }).catch(() => {});
     const jobs = [];
     if (b.driver_email) jobs.push(send(b.driver_email, `✅ Parking booked — ${title}`,
-      `<h2 style="font-family:system-ui">Booking confirmed</h2>${rows(listing?.instructions ? `<tr><td style="padding:4px 10px;color:#64748b">How to find it</td><td style="padding:4px 10px">${listing.instructions}</td></tr>` : '')}<p style="font-family:system-ui;color:#64748b;font-size:12px">Free cancellation up to 1 hour before start (full refund 24h+ before). You park at your own risk — see our Terms.</p>`));
+      `<h2 style="font-family:system-ui">Booking confirmed</h2>${rows(listing?.instructions ? `<tr><td style="padding:4px 10px;color:#64748b">How to find it</td><td style="padding:4px 10px">${listing.instructions}</td></tr>` : '')}${offerHtml}<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (£1 fee non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
     if (listing?.contact_email) jobs.push(send(listing.contact_email, `🅿️ Your space was booked — ${title}`,
       `<h2 style="font-family:system-ui">You've got a booking</h2>${rows(`<tr><td style="padding:4px 10px;color:#64748b">You receive</td><td style="padding:4px 10px"><strong>${gbp(b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence))}</strong> (after 15% fee), paid out weekly by Stripe.</td></tr>`)}`));
     if (FOUNDER) jobs.push(send(FOUNDER, `💷 New ParkEasy booking — ${title}`, rows()));
