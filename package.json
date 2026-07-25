@@ -5,7 +5,7 @@
   "type": "module",
   "description": "ParkEasy Belfast \u2014 community parking finder for Belfast locals",
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "vite",
