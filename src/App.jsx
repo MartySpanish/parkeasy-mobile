@@ -1194,6 +1194,15 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
 
 // ── Spot detail sheet ─────────────────────────────────────────────────────────
 const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer }) => {
+  // Featured Partner: a local business within its radius of this spot. Same
+  // contextual placement as on bookable listings — community spots are where
+  // the traffic is, so the partner is visible while supply is still growing.
+  const [partner, setPartner] = useState(null);
+  useEffect(() => {
+    let live = true;
+    findPartnerForListing(spot.lat, spot.lng).then(p => { if (live) setPartner(p); });
+    return () => { live = false; };
+  }, [spot.id]);
   const [shareDone,setShareDone]=useState(false);
   const [confirmedAt,setConfirmedAt]=useState(()=> spot ? (ls.get('pe_confirmed_at',{})[spot.id]||null) : null);
   if (!spot) return null;
@@ -1287,6 +1296,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               </a>
             </div>
           </div>
+          {partner && <PartnerCard partner={partner} listingId={null}/>}
         </div>
       </div>
     </div>
