@@ -64,8 +64,8 @@ export default async function handler(req, res) {
     // Refund policy (Terms §5): host cancel → full refund incl. service fee.
     // Driver cancel before the stored cancellation_deadline (default 24h,
     // CANCEL_CUTOFF_HOURS) → full booking price back, service fee non-refundable.
-    // After the deadline but before the start → 50% of the booking price.
-    // After the start / no-show → nothing.
+    // After the deadline (or no-show) → non-refundable: the slot was held and
+    // the host still receives their share.
     const now = Date.now();
     const startMs = booking.starts_at ? Date.parse(booking.starts_at) : null;
     const cutoffHours = parseInt(process.env.CANCEL_CUTOFF_HOURS || '24', 10);
@@ -75,7 +75,6 @@ export default async function handler(req, res) {
     let refundPence = 0;
     if (isHost) refundPence = booking.amount_total_pence;
     else if (deadlineMs != null && now <= deadlineMs) refundPence = booking.booking_price_pence;
-    else if (startMs != null && now < startMs) refundPence = Math.round(booking.booking_price_pence * 0.5);
     else refundPence = 0;
 
     const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
