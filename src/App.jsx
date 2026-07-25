@@ -1713,9 +1713,10 @@ const walkFromMiles = (mi) => {
 // teasers — approximate pin + area name, never the exact location or notes.
 const isGated = (spot) => {
   if (spot.mine) return false;                                         // community submissions
+  if (spot.badge === 'hidden_gem') return true;                        // EVERY hidden gem is Premium
   if (spot.price) return false;                                        // paid to park → free to view
   if (['official','timed','paid'].includes(spot.badge)) return false;  // car parks, P&R, on-street
-  return spot.premium === true;                                        // founder-curated only
+  return spot.premium === true;                                        // premium-flagged EV picks
 };
 
 // Locked-card labelling for a gated spot: what it is + roughly where, nothing more.
