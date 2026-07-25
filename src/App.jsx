@@ -2811,9 +2811,19 @@ const RENTAL_AMENITIES = [
 // success the money is split 85% host / 15% + service fee to ParkEasy.
 const SERVICE_FEE_GBP = 1.00;  // mirrors DRIVER_SERVICE_FEE_PENCE default (£1.00)
 const BookingSheet = ({ listing, onClose }) => {
-  const rate = Number(listing.price_per_hour) || 0;
+  const baseRate = Number(listing.price_per_hour) || 0;
   const today = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(today);
+  const [override, setOverride] = useState(null);   // event price for the picked date
+  useEffect(() => {
+    let live = true;
+    if (!isSupabaseEnabled || !date) { setOverride(null); return; }
+    supabase.from('listing_price_overrides').select('price_pence')
+      .eq('listing_id', listing.id).eq('override_date', date).maybeSingle()
+      .then(({ data }) => { if (live) setOverride(data?.price_pence ? data.price_pence / 100 : null); });
+    return () => { live = false; };
+  }, [listing.id, date]);
+  const rate = override ?? baseRate;
   const [time, setTime] = useState('09:00');
   const [hours, setHours] = useState(2);
   const [busy, setBusy] = useState(false);
@@ -2859,6 +2869,11 @@ const BookingSheet = ({ listing, onClose }) => {
           <button type="button" onClick={()=>setHours(h=>Math.min(24,h+1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">+</button>
         </div>
 
+        {override != null && (
+          <p className="text-[11.5px] text-[#FFD27A] mt-3 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
+            Event-day price for this date: £{override.toFixed(2)}/hr (normally £{baseRate.toFixed(2)}/hr).
+          </p>
+        )}
         <div className="mt-4 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5 space-y-1.5 text-[13px]">
           <div className="flex justify-between text-[#cdd9e8]"><span>Parking ({hours}h × £{rate.toFixed(2)})</span><span>£{bookingCost.toFixed(2)}</span></div>
           <div className="flex justify-between text-[#cdd9e8]"><span>ParkEasy service fee</span><span>£{SERVICE_FEE_GBP.toFixed(2)}</span></div>
@@ -3484,6 +3499,81 @@ const BookingsPanel = ({ user }) => {
   );
 };
 
+// Host event pricing: set a different hourly price for specific dates
+// (matchdays, festivals). Host-controlled — no auto-surge. One date at a time
+// for v1. Writes go through RLS (owner-only, today/future dates).
+const EventPricingPanel = ({ user }) => {
+  const [myListings, setMyListings] = useState([]);
+  const [overrides, setOverrides] = useState([]);
+  const [listingId, setListingId] = useState('');
+  const today = new Date().toISOString().split('T')[0];
+  const [date, setDate] = useState(today);
+  const [price, setPrice] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    if (!isSupabaseEnabled || !user?.id) return;
+    const { data: ls } = await supabase.from('rental_listings').select('id,title,price_per_hour').eq('owner_id', user.id).eq('status', 'active');
+    setMyListings(ls || []);
+    if (ls?.length) {
+      const { data: os } = await supabase.from('listing_price_overrides').select('id,listing_id,override_date,price_pence')
+        .in('listing_id', ls.map(l => l.id)).gte('override_date', today).order('override_date');
+      setOverrides(os || []);
+      if (!listingId) setListingId(ls[0].id);
+    }
+  };
+  useEffect(() => { load(); }, [user?.id]);
+
+  if (!user || !myListings.length) return null;
+
+  const add = async () => {
+    const p = Math.round(parseFloat(price) * 100);
+    if (!listingId || !date || !(p > 0)) { setMsg('Pick a listing, a date, and a price above £0.'); return; }
+    if (date < today) { setMsg('Date can’t be in the past.'); return; }
+    setBusy(true); setMsg('');
+    const { error } = await supabase.from('listing_price_overrides')
+      .upsert({ listing_id: listingId, override_date: date, price_pence: p, updated_at: new Date().toISOString() }, { onConflict: 'listing_id,override_date' });
+    setMsg(error ? (error.message || 'Could not save') : 'Saved — that date now charges the event price. Existing bookings keep their original price.');
+    setPrice(''); setBusy(false); load();
+  };
+  const remove = async (id) => { await supabase.from('listing_price_overrides').delete().eq('id', id); load(); };
+
+  const inp = "bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2.5 text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-5">
+      <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-1">Event pricing</h3>
+      <p className="text-[12px] text-[rgba(234,241,248,0.55)] mb-3">Charge a different price on big days (matches, concerts, festivals). You set it — we never surge automatically.</p>
+      {myListings.length > 1 && (
+        <select value={listingId} onChange={e=>setListingId(e.target.value)} className={`${inp} w-full mb-2`}>
+          {myListings.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+        </select>
+      )}
+      <div className="flex gap-2">
+        <input type="date" min={today} value={date} onChange={e=>setDate(e.target.value)} className={`${inp} flex-1 min-w-0`}/>
+        <input type="number" min="0.5" step="0.5" placeholder="£/hr" value={price} onChange={e=>setPrice(e.target.value)} className={`${inp} w-24`}/>
+        <button onClick={add} disabled={busy} className="btn-teal text-[#06231f] font-bold text-[13px] px-4 rounded-xl disabled:opacity-50">Set</button>
+      </div>
+      {msg && <p className="text-[12px] text-[#6BEFB9] mt-2">{msg}</p>}
+      {overrides.length > 0 && (
+        <div className="mt-3 divide-y divide-white/5">
+          {overrides.map(o => (
+            <div key={o.id} className="flex items-center justify-between py-1.5 text-[12.5px]">
+              <span className="text-[#EAF1F8]">{new Date(o.override_date + 'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'})}
+                {myListings.length > 1 && <span className="text-[#6b7d96]"> · {myListings.find(l=>l.id===o.listing_id)?.title || ''}</span>}
+              </span>
+              <span className="flex items-center gap-2.5">
+                <strong className="text-[#5BE7DA]">£{(o.price_pence/100).toFixed(2)}/hr</strong>
+                <button onClick={()=>remove(o.id)} aria-label="Remove" className="text-red-300 text-[11px] font-semibold">Remove</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Host payout onboarding (Stripe Connect). Lets a host set up where their
 // booking money is paid out. Test-mode only until the payment flow is verified
 // and insurance is in place — so this is intentionally low-key for now.
@@ -3644,6 +3734,7 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
       </div>
 
       <PayoutSetup user={user}/>
+      <EventPricingPanel user={user}/>
       <BookingsPanel user={user}/>
 
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
