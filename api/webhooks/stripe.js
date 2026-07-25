@@ -111,8 +111,20 @@ export default async function handler(req, res) {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded': {
         const s = event.data.object;
-        await markBooking(svc, URL_, s.id, { status: 'paid', stripe_payment_intent: s.payment_intent || null });
-        await sendBookingEmails(svc, URL_, s.id);
+        if (s.metadata?.pass_id) {
+          // Season-pass purchase → credit the pass (idempotent on session id).
+          await fetch(`${URL_}/rest/v1/pass_purchases?on_conflict=stripe_session_id`, {
+            method: 'POST', headers: { ...svc, Prefer: 'resolution=ignore-duplicates' },
+            body: JSON.stringify({
+              pass_id: s.metadata.pass_id, driver_id: s.metadata.driver_id,
+              stripe_session_id: s.id, stripe_payment_intent_id: s.payment_intent || null,
+              credits_remaining: parseInt(s.metadata.num_credits || '0', 10) || 0,
+            }),
+          }).catch(() => {});
+        } else {
+          await markBooking(svc, URL_, s.id, { status: 'paid', stripe_payment_intent: s.payment_intent || null });
+          await sendBookingEmails(svc, URL_, s.id);
+        }
         break;
       }
       case 'checkout.session.async_payment_failed':

@@ -15,7 +15,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking, buyPass, redeemPass } from './notify';
 import { findPartnerForListing, trackPartnerEvent } from './partners';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
@@ -2815,6 +2815,7 @@ const BookingSheet = ({ listing, onClose }) => {
   const today = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(today);
   const [override, setOverride] = useState(null);   // event price for the picked date
+  const [credit, setCredit] = useState(null);       // {purchaseId, remaining, passName} if the driver holds credits
   useEffect(() => {
     let live = true;
     if (!isSupabaseEnabled || !date) { setOverride(null); return; }
@@ -2823,6 +2824,20 @@ const BookingSheet = ({ listing, onClose }) => {
       .then(({ data }) => { if (live) setOverride(data?.price_pence ? data.price_pence / 100 : null); });
     return () => { live = false; };
   }, [listing.id, date]);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!isSupabaseEnabled) return;
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session) return;
+      const { data } = await supabase.from('pass_purchases')
+        .select('id,credits_remaining,listing_passes!inner(listing_id,name,valid_to)')
+        .eq('listing_passes.listing_id', listing.id).gt('credits_remaining', 0).limit(1);
+      const p = data?.[0];
+      if (live && p) setCredit({ purchaseId: p.id, remaining: p.credits_remaining, passName: p.listing_passes?.name || 'Season pass' });
+    })();
+    return () => { live = false; };
+  }, [listing.id]);
   const rate = override ?? baseRate;
   const [time, setTime] = useState('09:00');
   const [hours, setHours] = useState(2);
@@ -2882,8 +2897,24 @@ const BookingSheet = ({ listing, onClose }) => {
 
         {err && <p className="text-red-300 text-xs mt-3 bg-red-500/12 border border-red-400/40 rounded-xl px-3 py-2.5">{err}</p>}
 
+        {credit && (
+          <button onClick={async ()=>{
+              setBusy(true); setErr('');
+              try {
+                const { data: sess } = await supabase.auth.getSession();
+                const startsAt = date && time ? new Date(`${date}T${time}`).toISOString() : null;
+                if (!startsAt) throw new Error('Pick a date and time first');
+                const r = await redeemPass({ purchaseId: credit.purchaseId, startsAt, durationHours: hours, token: sess?.session?.access_token });
+                alert(`Booked with your ${credit.passName} — ${r.creditsRemaining} credit${r.creditsRemaining!==1?'s':''} left.`);
+                onClose();
+              } catch (e) { setErr(e.message || 'Could not redeem'); setBusy(false); }
+            }} disabled={busy}
+            className="mt-4 w-full font-display font-bold py-3 rounded-2xl text-sm text-[#06231f] disabled:opacity-50" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
+            {busy ? 'Booking…' : `Use pass credit (${credit.remaining} left) — free`}
+          </button>
+        )}
         <button onClick={pay} disabled={busy || rate<=0}
-          className="mt-4 w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50">
+          className={`${credit ? 'mt-2' : 'mt-4'} w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50`}>
           {busy ? 'Opening secure payment…' : `Pay £${total.toFixed(2)} with card`}
         </button>
         <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">Secure payment via Stripe. Cancel up to 24h before the start for a full refund of the parking price (the £1 fee is non-refundable); after that the booking is non-refundable. You park at your own risk — see our Terms.</p>
@@ -2959,12 +2990,27 @@ const ListingCard = ({ listing }) => {
   const typeInfo = RENTAL_SPACE_TYPES.find(t => t.id === listing.space_type) || { emoji:'🅿️', label:'Space' };
   const [booking, setBooking] = useState(false);
   const [partner, setPartner] = useState(null);
+  const [pass, setPass] = useState(null);
   const canBook = Number(listing.price_per_hour) > 0;
   useEffect(() => {
     let active = true;
     findPartnerForListing(listing.lat, listing.lng).then(p => { if (active) setPartner(p); });
+    if (isSupabaseEnabled) {
+      const today = new Date().toISOString().slice(0, 10);
+      supabase.from('listing_passes').select('id,name,num_credits,price_pence,valid_to')
+        .eq('listing_id', listing.id).eq('active', true).or(`valid_to.is.null,valid_to.gte.${today}`)
+        .limit(1).then(({ data }) => { if (active && data?.[0]) setPass(data[0]); });
+    }
     return () => { active = false; };
   }, [listing.id, listing.lat, listing.lng]);
+  const buySeasonPass = async () => {
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session) { alert('Sign in to buy a pass'); return; }
+      const url = await buyPass(pass.id, sess.session.access_token);
+      window.location.href = url;
+    } catch (e) { alert(e.message || 'Could not start pass purchase'); }
+  };
   return (
     <div className="bg-[#0e1a2c] rounded-2xl shadow-sm border border-white/10 overflow-hidden">
       {listing.photos?.[0] ? (
@@ -3009,6 +3055,12 @@ const ListingCard = ({ listing }) => {
           <button onClick={()=>setBooking(true)}
             className="block w-full btn-teal text-[#06231f] text-xs font-bold py-2.5 rounded-xl text-center mb-2">
             Reserve &amp; pay · £{Number(listing.price_per_hour).toFixed(2)}/hr
+          </button>
+        )}
+        {pass && canBook && (
+          <button onClick={buySeasonPass}
+            className="block w-full text-xs font-bold py-2.5 rounded-xl text-center mb-2 text-[#06231f]" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
+            🎟 {pass.name} — {pass.num_credits} bookings for £{(pass.price_pence/100).toFixed(2)}
           </button>
         )}
         <a href={`mailto:${listing.contact_email}?subject=Parking enquiry: ${encodeURIComponent(listing.title)}`}
@@ -3566,6 +3618,65 @@ const EventPricingPanel = ({ user }) => {
                 <strong className="text-[#5BE7DA]">£{(o.price_pence/100).toFixed(2)}/hr</strong>
                 <button onClick={()=>remove(o.id)} aria-label="Remove" className="text-red-300 text-[11px] font-semibold">Remove</button>
               </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <PassCreator listingId={listingId} inp={inp}/>
+    </div>
+  );
+};
+
+// Season-pass creator (host): e.g. "10-Match Season Pass" — N bookings for £X.
+// The 15% commission + £1 service fee are charged once at purchase; unused
+// credits are not refunded after the pass expires (shown at purchase).
+const PassCreator = ({ listingId, inp }) => {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [credits, setCredits] = useState('10');
+  const [price, setPrice] = useState('');
+  const [validTo, setValidTo] = useState('');
+  const [msg, setMsg] = useState('');
+  const [existing, setExisting] = useState([]);
+
+  const load = async () => {
+    if (!isSupabaseEnabled || !listingId) return;
+    const { data } = await supabase.from('listing_passes').select('id,name,num_credits,price_pence,active,valid_to').eq('listing_id', listingId);
+    setExisting(data || []);
+  };
+  useEffect(() => { load(); }, [listingId]);
+
+  const create = async () => {
+    const p = Math.round(parseFloat(price) * 100);
+    const n = parseInt(credits, 10);
+    if (!name.trim() || !(n >= 1 && n <= 100) || !(p > 0)) { setMsg('Name, 1–100 credits, and a price above £0.'); return; }
+    const { error } = await supabase.from('listing_passes').insert({
+      listing_id: listingId, name: name.trim(), num_credits: n, price_pence: p,
+      valid_to: validTo || null, active: true,
+    });
+    setMsg(error ? (error.message || 'Could not create') : 'Pass created — drivers can now buy it on your listing.');
+    if (!error) { setName(''); setPrice(''); load(); }
+  };
+  const toggle = async (pass) => { await supabase.from('listing_passes').update({ active: !pass.active }).eq('id', pass.id); load(); };
+
+  return (
+    <div className="mt-4 pt-3 border-t border-white/10">
+      <button onClick={()=>setOpen(v=>!v)} className="text-[12px] font-bold text-[#C9A7FF]">🎟 Season passes {open ? '▴' : '▾'}</button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <input placeholder='Name — e.g. "10-Match Season Pass"' value={name} onChange={e=>setName(e.target.value)} className={`${inp} w-full`}/>
+          <div className="flex gap-2">
+            <input type="number" min="1" max="100" placeholder="Credits" value={credits} onChange={e=>setCredits(e.target.value)} className={`${inp} w-20`}/>
+            <input type="number" min="1" step="0.5" placeholder="Price £" value={price} onChange={e=>setPrice(e.target.value)} className={`${inp} w-24`}/>
+            <input type="date" value={validTo} onChange={e=>setValidTo(e.target.value)} title="Valid until (optional)" className={`${inp} flex-1 min-w-0`}/>
+            <button onClick={create} className="btn-teal text-[#06231f] font-bold text-[13px] px-3 rounded-xl">Add</button>
+          </div>
+          <p className="text-[11px] text-[#6b7d96]">Buyers pay once (incl. the £1 fee); each booking then uses a credit. Unused credits aren’t refunded after expiry.</p>
+          {msg && <p className="text-[12px] text-[#6BEFB9]">{msg}</p>}
+          {existing.map(p => (
+            <div key={p.id} className="flex items-center justify-between text-[12.5px] py-1">
+              <span className="text-[#EAF1F8]">{p.name} · {p.num_credits} for £{(p.price_pence/100).toFixed(2)}{p.valid_to ? ` · to ${p.valid_to}` : ''}</span>
+              <button onClick={()=>toggle(p)} className={`text-[11px] font-bold ${p.active ? 'text-[#FFD27A]' : 'text-[#6BEFB9]'}`}>{p.active ? 'Deactivate' : 'Activate'}</button>
             </div>
           ))}
         </div>
@@ -4577,6 +4688,14 @@ export default function App() {
         : payouts === 'pending'
           ? { tone: 'warn', msg: 'Almost there — Stripe still needs a few more details before payouts go live.' }
           : { tone: 'warn', msg: 'Payout setup didn’t complete. You can try again from the Spaces tab.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // Season-pass purchase return.
+    const passParam = p.get('pass');
+    if (passParam) {
+      setFlash(passParam === 'success'
+        ? { tone: 'ok', msg: '🎟 Pass purchased! Use a credit next time you book this space.' }
+        : { tone: 'warn', msg: 'Pass purchase cancelled — you weren’t charged.' });
       window.history.replaceState({}, '', window.location.pathname);
     }
     // Booking checkout return (driver paid, or cancelled). Test mode only.
