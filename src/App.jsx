@@ -2861,6 +2861,7 @@ const BookingSheet = ({ listing, onClose }) => {
   const [hours, setHours] = useState(2);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [optIn, setOptIn] = useState(false);   // event-parking updates (GDPR: unchecked by default)
 
   const bookingCost = rate * hours;
   const total = bookingCost + SERVICE_FEE_GBP;
@@ -2874,7 +2875,7 @@ const BookingSheet = ({ listing, onClose }) => {
         token = data?.session?.access_token || null;
       }
       const startsAt = date && time ? new Date(`${date}T${time}`).toISOString() : null;
-      const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token });
+      const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn });
       window.location.href = url;   // full-page redirect to Stripe Checkout
     } catch (e) { setErr(e.message || 'Could not start payment'); setBusy(false); }
   };
@@ -2912,6 +2913,11 @@ const BookingSheet = ({ listing, onClose }) => {
           <div className="flex justify-between text-[#cdd9e8]"><span>ParkEasy service fee</span><span>£{SERVICE_FEE_GBP.toFixed(2)}</span></div>
           <div className="flex justify-between font-bold text-[#EAF1F8] pt-1.5 border-t border-white/10"><span>Total</span><span className="text-[#6BEFB9]">£{total.toFixed(2)}</span></div>
         </div>
+
+        <label className="flex items-start gap-2 mt-3 cursor-pointer select-none">
+          <input type="checkbox" checked={optIn} onChange={e=>setOptIn(e.target.checked)} className="mt-0.5 w-4 h-4 flex-shrink-0 accent-[#2ED3C6]"/>
+          <span className="text-[11.5px] text-[#8da2bd] leading-snug">Email me about parking for the next big events near me (matches, concerts, festivals). No spam, unsubscribe any time.</span>
+        </label>
 
         {err && <p className="text-red-300 text-xs mt-3 bg-red-500/12 border border-red-400/40 rounded-xl px-3 py-2.5">{err}</p>}
 
@@ -3185,6 +3191,7 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   const [draftId, setDraftId] = useState(null);
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState('');
+  const [aiBusy, setAiBusy]   = useState(false);       // AI listing-copy helper
   const [agreed, setAgreed]   = useState(false);       // Host Terms acknowledgement
   const sugTimer = useRef(null);
   const set = (k,v) => setF(p=>({...p,[k]:v}));
@@ -3444,6 +3451,24 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
 
       <label className={lbl}>Description (optional)</label>
       <textarea className={inp} rows={2} placeholder="Anything else drivers should know" value={f.description} onChange={e=>set('description',e.target.value)}/>
+      <button type="button" disabled={aiBusy || !f.address}
+        onClick={async ()=>{
+          setAiBusy(true); setErr('');
+          try {
+            const { data: sess } = await supabase.auth.getSession();
+            const r = await apiFetch('/api/ai/listing-copy', {
+              method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${sess?.session?.access_token}` },
+              body: JSON.stringify({ spaceType: f.space_type, address: f.address, notes: `${f.title} ${f.description} ${f.instructions}`.trim() }),
+            });
+            const d = await r.json().catch(()=>({}));
+            if (!r.ok) throw new Error(d.error || 'AI writing failed');
+            setF(p=>({ ...p, title: p.title || d.title, description: d.description || p.description, instructions: (d.instructions && d.instructions.length >= 30) ? d.instructions : p.instructions }));
+          } catch (ex) { setErr(ex.message); }
+          setAiBusy(false);
+        }}
+        className="mt-2 text-[12px] font-bold text-[#C9A7FF] disabled:opacity-40">
+        {aiBusy ? '✨ Writing…' : '✨ Write it for me (AI)'}
+      </button>
 
       {/* Live requirements checklist */}
       <div className="mt-5 rounded-2xl bg-white/[0.04] border border-white/10 p-4">
@@ -3900,25 +3925,36 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-[#2ED3C6]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">🅿️</span>
-          </div>
-          <h3 className="font-bold text-[#cdd9e8] mb-2">
-            {listings.length === 0 ? 'No listings yet' : 'No matches for this filter'}
-          </h3>
-          <p className="text-[#6b7d96] text-sm mb-5">
-            {listings.length === 0
-              ? 'Be the first to list a space in your area!'
-              : 'Try a different filter above.'}
-          </p>
-          {listings.length === 0 && (
+        listings.length === 0 ? (
+          // Supply-side pitch: while there are no listings, this tab's job is
+          // to SELL hosting, not apologise for the empty list.
+          <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-5 text-left">
+            <p className="text-3xl mb-2">🏠💷</p>
+            <h3 className="font-display font-extrabold text-xl text-[#EAF1F8] leading-tight">Your driveway could be earning</h3>
+            <p className="text-[13px] text-[#cdd9e8] leading-relaxed mt-2">
+              Big matches, concerts and festivals send thousands of drivers hunting for parking near you. A driveway at <strong className="text-[#6BEFB9]">£10/day</strong> during one busy week is <strong className="text-[#6BEFB9]">£70</strong> — a club or church car park with 20 spaces can make <strong className="text-[#6BEFB9]">£1,000+</strong> in a single event week.
+            </p>
+            <ul className="mt-3 space-y-1.5 text-[12.5px] text-[#aebfd4]">
+              <li>✓ <strong className="text-[#EAF1F8]">You keep 85%</strong> of every booking</li>
+              <li>✓ Paid <strong className="text-[#EAF1F8]">weekly, straight to your bank</strong> by Stripe</li>
+              <li>✓ You set the price, the dates and the rules</li>
+              <li>✓ Listing takes about 10 minutes — free</li>
+            </ul>
             <button onClick={() => setView('list')}
-              className="bg-[#5BE7DA] text-[#06231f] font-bold px-6 py-2.5 rounded-2xl text-sm hover:bg-blue-600 transition">
-              List Your Space
+              className="mt-4 w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm">
+              Start earning — list your space
             </button>
-          )}
-        </div>
+            <p className="text-[10.5px] text-[#6b7d96] mt-2 text-center">Drivers park at their own risk — see our Terms.</p>
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-[#2ED3C6]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">🅿️</span>
+            </div>
+            <h3 className="font-bold text-[#cdd9e8] mb-2">No matches for this filter</h3>
+            <p className="text-[#6b7d96] text-sm mb-5">Try a different filter above.</p>
+          </div>
+        )
       ) : (
         <div className="space-y-4">
           {filtered.map(l => <ListingCard key={l.id} listing={l}/>)}
@@ -4352,6 +4388,29 @@ const INFO_PAGES = {
       </>
     ),
   },
+  faq: {
+    title: 'FAQ — quick answers', Icon: Info,
+    body: (
+      <>
+        {[
+          ['How much does ParkEasy cost drivers?', 'The app is free. When you book a private space you pay the host’s price plus a £1 ParkEasy service fee (£2 on major event dates), always shown in full before you pay.'],
+          ['How much do hosts earn?', 'Hosts keep 85% of every booking. ParkEasy’s 15% commission covers payments, the platform and support. Payouts go to your bank weekly via Stripe.'],
+          ['When do hosts get paid?', 'Weekly, automatically, by bank transfer through Stripe. You set up payouts once (identity + bank details, handled securely by Stripe) from the Spaces tab.'],
+          ['What’s the cancellation policy?', 'Cancel 24+ hours before your booking start for a full refund of the parking price (the service fee is non-refundable). Under 24 hours, bookings are non-refundable — the space was held for you. If a host cancels, you get everything back.'],
+          ['What are hidden gems?', 'Free parking spots that locals actually use — shared by the community and unlocked with Premium. Add a verified gem yourself and you get a free week of Premium.'],
+          ['What are season passes?', 'Some hosts sell a bundle (e.g. 10 bookings) at a discount. You pay once, then each booking just uses a credit — no checkout. Unused credits aren’t refunded after the pass expires.'],
+          ['Who is responsible if something happens to my car?', 'Parking arrangements are directly between you and the host. You park at your own risk — hosts aren’t liable for loss, theft or damage except where caused by their own negligence, and neither is ParkEasy. Check your own motor insurance covers you. Full detail in our Terms.'],
+          ['Is my payment safe?', 'All payments are processed by Stripe — the same provider used by Amazon and Deliveroo. ParkEasy never sees or stores your card details.'],
+        ].map(([q, a], i) => (
+          <div key={i} className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
+            <p className="font-display font-bold text-[14px] text-[#EAF1F8]">{q}</p>
+            <p className="text-[13px] text-[rgba(234,241,248,0.6)] leading-relaxed mt-1">{a}</p>
+          </div>
+        ))}
+        <p className="text-[12px] text-[rgba(234,241,248,0.45)]">Something else? Use the Contact page — we aim to reply within 2 working days.</p>
+      </>
+    ),
+  },
   contact: {
     title: 'Contact us', Icon: Mail,
     body: (
@@ -4546,7 +4605,7 @@ const InfoOverlay = ({ page, onClose }) => {
 const Footer = ({ onOpen }) => (
   <footer className="px-4 pt-2 pb-6 text-center">
     <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-[rgba(234,241,248,0.5)]">
-      {[['howitworks','How it works'],['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
+      {[['howitworks','How it works'],['faq','FAQ'],['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
         <button key={id} onClick={()=>onOpen(id)} className="hover:text-[#5BE7DA] transition font-medium">{label}</button>
       ))}
     </div>
