@@ -2871,7 +2871,7 @@ const BookingSheet = ({ listing, onClose }) => {
           className="mt-4 w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50">
           {busy ? 'Opening secure payment…' : `Pay £${total.toFixed(2)} with card`}
         </button>
-        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">Secure payment via Stripe. Cancel up to 24h before for a full refund of the parking price (the £1 fee is non-refundable); under 24h, 50%. You park at your own risk — see our Terms.</p>
+        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">Secure payment via Stripe. Cancel up to 24h before the start for a full refund of the parking price (the £1 fee is non-refundable); after that the booking is non-refundable. You park at your own risk — see our Terms.</p>
       </div>
     </div>
   );
@@ -3430,14 +3430,13 @@ const BookingsPanel = ({ user }) => {
     const dl = b.cancellation_deadline ? Date.parse(b.cancellation_deadline) : (b.starts_at ? Date.parse(b.starts_at) - 24 * 3600000 : null);
     const start = b.starts_at ? Date.parse(b.starts_at) : null;
     if (dl != null && now <= dl) return b.booking_price_pence;
-    if (start != null && now < start) return Math.round(b.booking_price_pence * 0.5);
     return 0;
   };
   const doCancel = async (b) => {
     const exp = previewRefund(b);
     const line = exp > 0
-      ? `You'd get ${gbp(exp)} back${exp < b.amount_total_pence ? ' (the £1 service fee is non-refundable' + (exp < b.booking_price_pence ? '; under 24h to start = 50% of the parking price' : '') + ')' : ''}.`
-      : 'No refund is due this close to the start time.';
+      ? `You'd get ${gbp(exp)} back (the £1 service fee is non-refundable).`
+      : 'This booking is now non-refundable (under 24h to the start time).';
     if (!window.confirm(`Cancel this booking? ${line}`)) return;
     setBusyId(b.id); setMsg('');
     try {
@@ -4219,7 +4218,7 @@ const INFO_PAGES = {
     body: (
       <>
         <p>Operated by <strong className="text-[#EAF1F8]">Parkeasy Apps Ltd</strong>, a company registered in Northern Ireland (company number <strong className="text-[#EAF1F8]">NI742027</strong>), registered office <strong className="text-[#EAF1F8]">17 Gransha Park, Belfast, BT11 8AT</strong> (&ldquo;ParkEasy&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;).</p>
-        <p className="text-[rgba(234,241,248,0.5)] text-xs">Last updated: 8 July 2026 · Version 1.0</p>
+        <p className="text-[rgba(234,241,248,0.5)] text-xs">Last updated: 25 July 2026 · Version 1.1</p>
         <p>These Terms govern use of the ParkEasy platform at parkeasy.uk and any associated app (the &ldquo;Platform&rdquo;). By creating a listing, making a booking, or otherwise using the Platform, you agree to these Terms. Please read them carefully. Nothing in these Terms affects your non-excludable statutory rights as a consumer.</p>
 
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">1 · What ParkEasy is (and is not)</h3>
@@ -4248,7 +4247,7 @@ const INFO_PAGES = {
         <p>4.5 ParkEasy is not currently VAT-registered, so no VAT is charged on our fees. We will update this section if our VAT status changes.</p>
 
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">5 · Cancellations, refunds and no-shows</h3>
-        <p>5.1 <strong className="text-[#EAF1F8]">Driver cancellations:</strong> a Driver who cancels <strong className="text-[#EAF1F8]">24 hours or more</strong> before the Booking start receives a full refund of the booking price; the Driver Service Fee is <strong className="text-[#EAF1F8]">not refundable</strong>. Cancellations made less than 24 hours before the Booking start are refunded at <strong className="text-[#EAF1F8]">50% of the booking price</strong>.</p>
+        <p>5.1 <strong className="text-[#EAF1F8]">Driver cancellations:</strong> a Driver who cancels <strong className="text-[#EAF1F8]">24 hours or more</strong> before the Booking start receives a full refund of the booking price; the Driver Service Fee is <strong className="text-[#EAF1F8]">not refundable</strong>. Cancellations made less than 24 hours before the Booking start are <strong className="text-[#EAF1F8]">non-refundable</strong> — the Space was reserved and unavailable to other Drivers, and the Host still receives their share.</p>
         <p>5.2 <strong className="text-[#EAF1F8]">Host cancellations:</strong> if a Host cancels a confirmed Booking, the Driver receives a full refund and we may apply consequences to the Host&apos;s account.</p>
         <p>5.3 <strong className="text-[#EAF1F8]">No-show:</strong> if a Driver does not use a booked Space, no refund is due unless required by law.</p>
         <p>5.4 <strong className="text-[#EAF1F8]">Consumer cancellation rights:</strong> where the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013 apply, you may have a 14-day right to cancel. Because a Booking is a service for a specific date/period, by making a time-specific Booking you request that the service begin during the cancellation period and acknowledge this may affect that right. This does not remove your statutory rights.</p>
