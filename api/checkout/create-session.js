@@ -123,7 +123,7 @@ export default async function handler(req, res) {
       customer_email: driver?.email || undefined,
       line_items: [
         { price_data: { currency: 'gbp', product_data: { name: `Parking — ${listing.title || 'space'}`, description: listing.address || undefined }, unit_amount: bookingPricePence }, quantity: 1 },
-        { price_data: { currency: 'gbp', product_data: { name: 'ParkEasy service fee' }, unit_amount: SERVICE_FEE_PENCE }, quantity: 1 },
+        { price_data: { currency: 'gbp', product_data: { name: 'Driver service fee' }, unit_amount: SERVICE_FEE_PENCE }, quantity: 1 },
       ],
       payment_intent_data: {
         application_fee_amount: applicationFeePence,

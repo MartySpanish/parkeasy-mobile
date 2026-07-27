@@ -79,7 +79,7 @@ async function handleBuy(req, res) {
       customer_email: driver.email || undefined,
       line_items: [
         { price_data: { currency: 'gbp', product_data: { name: `${pass.name} — ${listing.title}`, description: `${pass.num_credits} bookings. Unused credits are not refunded after ${pass.valid_to || 'the season ends'}.` }, unit_amount: pass.price_pence }, quantity: 1 },
-        { price_data: { currency: 'gbp', product_data: { name: 'ParkEasy service fee (one-off)' }, unit_amount: SERVICE_FEE_PENCE }, quantity: 1 },
+        { price_data: { currency: 'gbp', product_data: { name: 'Driver service fee (one-off)' }, unit_amount: SERVICE_FEE_PENCE }, quantity: 1 },
       ],
       payment_intent_data: { application_fee_amount: feePence, transfer_data: { destination: host.stripe_account_id }, metadata: meta },
       metadata: meta,

@@ -17,6 +17,7 @@ import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking, buyPass, redeemPass } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
+import { paymentError } from './errors';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -2917,7 +2918,7 @@ const BookingSheet = ({ listing, onClose }) => {
       const startsAt = date && time ? new Date(`${date}T${time}`).toISOString() : null;
       const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn });
       window.location.href = url;   // full-page redirect to Stripe Checkout
-    } catch (e) { setErr(e.message || 'Could not start payment'); setBusy(false); }
+    } catch (e) { setErr(paymentError(e.message)); setBusy(false); }
   };
 
   const field = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3.5 py-2.5 text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
@@ -2950,7 +2951,7 @@ const BookingSheet = ({ listing, onClose }) => {
         )}
         <div className="mt-4 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5 space-y-1.5 text-[13px]">
           <div className="flex justify-between text-[#cdd9e8]"><span>Parking ({hours}h × £{rate.toFixed(2)})</span><span>£{bookingCost.toFixed(2)}</span></div>
-          <div className="flex justify-between text-[#cdd9e8]"><span>ParkEasy service fee</span><span>£{SERVICE_FEE_GBP.toFixed(2)}</span></div>
+          <div className="flex justify-between text-[#cdd9e8]"><span>Driver service fee</span><span>£{SERVICE_FEE_GBP.toFixed(2)}</span></div>
           <div className="flex justify-between font-bold text-[#EAF1F8] pt-1.5 border-t border-white/10"><span>Total</span><span className="text-[#6BEFB9]">£{total.toFixed(2)}</span></div>
         </div>
 
@@ -2959,7 +2960,12 @@ const BookingSheet = ({ listing, onClose }) => {
           <span className="text-[11.5px] text-[#8da2bd] leading-snug">Email me about parking for the next big events near me (matches, concerts, festivals). No spam, unsubscribe any time.</span>
         </label>
 
-        {err && <p className="text-red-300 text-xs mt-3 bg-red-500/12 border border-red-400/40 rounded-xl px-3 py-2.5">{err}</p>}
+        {err && (
+          <div className="mt-3 bg-red-500/12 border border-red-400/40 rounded-xl px-3 py-2.5">
+            <p className="text-red-200 text-[13px] font-bold">{typeof err === 'string' ? 'Something went wrong' : err.title}</p>
+            <p className="text-red-300/90 text-[12px] leading-relaxed mt-0.5">{typeof err === 'string' ? err : err.body}</p>
+          </div>
+        )}
 
         {credit && (
           <button onClick={async ()=>{
@@ -2981,7 +2987,7 @@ const BookingSheet = ({ listing, onClose }) => {
           className={`${credit ? 'mt-2' : 'mt-4'} w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50`}>
           {busy ? 'Opening secure payment…' : `Pay £${total.toFixed(2)} with card`}
         </button>
-        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">Secure payment via Stripe. Cancel up to 24h before the start for a full refund of the parking price (the £1 fee is non-refundable); after that the booking is non-refundable. You park at your own risk — see our Terms.</p>
+        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">Free cancellation until 24 hours before your booking. After that, no refund. Secure payment via Stripe — you park at your own risk, see our Terms.</p>
       </div>
     </div>
   );
@@ -3079,6 +3085,23 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
   );
 };
 
+// Item 5 + 6: trust signals. Stars only once there are 3+ ratings (one review
+// shouldn't define a new host); badge omitted when unverified (no negative
+// signal); count omitted at zero.
+const ORG_LABEL = { club: 'club', church: 'church', school: 'school', other: 'space' };
+const TrustRow = ({ listing }) => {
+  const bits = [];
+  if (listing.ratings_count >= 3 && listing.average_rating) {
+    bits.push(`\u2605${Number(listing.average_rating).toFixed(1)} (${listing.ratings_count} ratings)`);
+  }
+  if (listing.is_verified) bits.push(`\u2713 Verified ${ORG_LABEL[listing.verified_org_type] || 'host'}`);
+  if (listing.completed_bookings_count > 0) {
+    bits.push(`${listing.completed_bookings_count} booking${listing.completed_bookings_count !== 1 ? 's' : ''} completed`);
+  }
+  if (!bits.length) return null;
+  return <p className="text-[11px] text-[#6BEFB9] mb-2">{bits.join('  \u00b7  ')}</p>;
+};
+
 const ListingCard = ({ listing }) => {
   const typeInfo = RENTAL_SPACE_TYPES.find(t => t.id === listing.space_type) || { emoji:'🅿️', label:'Space' };
   const [booking, setBooking] = useState(false);
@@ -3119,7 +3142,8 @@ const ListingCard = ({ listing }) => {
           <h3 className="font-bold text-[#EAF1F8] text-sm leading-tight">{listing.title}</h3>
           <span className="flex-shrink-0 text-xs bg-[#2ED3C6]/10 text-[#5BE7DA] font-semibold px-2 py-0.5 rounded-full">{typeInfo.label}</span>
         </div>
-        <p className="text-xs text-[#6b7d96] mb-2">{listing.address}</p>
+        <p className="text-xs text-[#6b7d96] mb-1.5">{listing.address}</p>
+        <TrustRow listing={listing}/>
         <div className="flex gap-3 mb-3">
           {listing.price_per_hour  && <span className="text-xs font-bold text-[#6BEFB9]">£{Number(listing.price_per_hour).toFixed(2)}/hr</span>}
           {listing.price_per_day   && <span className="text-xs font-bold text-[#6BEFB9]">£{Number(listing.price_per_day).toFixed(2)}/day</span>}
@@ -3575,10 +3599,62 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
 
 // A user's bookings — both the ones they made (as a driver) and the ones on
 // their own spaces (as a host). RLS lets them read only their own rows.
+// Item 6: post-booking star rating. Direction is decided server-side from the
+// caller's role on the booking — this just collects stars + an optional note.
+const RatingPrompt = ({ pending, onDone }) => {
+  const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const isDriver = pending.direction === 'driver_to_host';
+  const submit = async () => {
+    if (!stars) { setErr('Pick a star rating first'); return; }
+    setBusy(true); setErr('');
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const r = await apiFetch('/api/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess?.session?.access_token}` },
+        body: JSON.stringify({ bookingId: pending.bookingId, stars, comment }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Could not save your rating');
+      onDone(pending.bookingId);
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-3">
+      <p className="font-display font-bold text-[14px] text-[#EAF1F8]">
+        {isDriver ? 'How was parking there?' : 'How was your driver?'}
+      </p>
+      <div className="flex gap-1.5 mt-2.5">
+        {[1,2,3,4,5].map(n => (
+          <button key={n} onClick={()=>setStars(n)} aria-label={`${n} star${n!==1?'s':''}`}
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl transition"
+            style={{ background: n <= stars ? 'rgba(255,210,122,0.16)' : 'rgba(255,255,255,0.05)' }}>
+            <span style={{ opacity: n <= stars ? 1 : 0.3 }}>{'\u2605'}</span>
+          </button>
+        ))}
+      </div>
+      <textarea rows={2} placeholder="Anything worth mentioning? (optional)" value={comment} maxLength={500}
+        onChange={e=>setComment(e.target.value)}
+        className="w-full mt-2.5 bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2.5 text-sm text-[#EAF1F8] placeholder-[rgba(234,241,248,0.45)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60"/>
+      {err && <p className="text-[12px] text-red-300 mt-1.5">{err}</p>}
+      <div className="flex gap-2 mt-2.5">
+        <button onClick={()=>onDone(pending.bookingId)} className="flex-1 py-2.5 rounded-xl text-[13px] font-bold bg-white/8 border border-white/15 text-[#cdd9e8]">Skip</button>
+        <button onClick={submit} disabled={busy} className="flex-[2] py-2.5 rounded-xl text-[13px] font-display font-bold btn-teal text-[#06231f] disabled:opacity-50">
+          {busy ? 'Sending…' : 'Submit rating'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const BookingsPanel = ({ user }) => {
   const [rows, setRows] = useState(undefined);
   const [titles, setTitles] = useState({});
   const [offers, setOffers] = useState({});
+  const [pendingRatings, setPendingRatings] = useState([]);
   const [busyId, setBusyId] = useState(null);
   const [msg, setMsg] = useState('');
 
@@ -3600,9 +3676,36 @@ const BookingsPanel = ({ user }) => {
     }
   };
   useEffect(() => { load(); }, [user?.id]);
+  // Item 6: which finished bookings still need a rating from me?
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!isSupabaseEnabled || !user?.id) return;
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess?.session) return;
+        const r = await apiFetch('/api/ratings?pending=1', { headers: { Authorization: `Bearer ${sess.session.access_token}` } });
+        const d = await r.json().catch(() => ({}));
+        if (live && d?.pending?.length) setPendingRatings(d.pending);
+      } catch { /* ratings are optional — never block the panel */ }
+    })();
+    return () => { live = false; };
+  }, [user?.id]);
 
   if (rows === undefined || !user) return null;
-  if (!rows.length) return null;
+  if (!rows.length) {
+    if (pendingRatings.length) {
+      return (
+        <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-5">
+          {pendingRatings.map(p => (
+            <RatingPrompt key={p.bookingId} pending={p}
+              onDone={(id)=>setPendingRatings(list => list.filter(x => x.bookingId !== id))}/>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  }
 
   const gbp = (p) => `£${((p || 0) / 100).toFixed(2)}`;
   // Mirror of the server's Terms §5 refund rules, for an honest pre-cancel preview.
@@ -3618,9 +3721,9 @@ const BookingsPanel = ({ user }) => {
   const doCancel = async (b) => {
     const exp = previewRefund(b);
     const line = exp > 0
-      ? `You'd get ${gbp(exp)} back (the £1 service fee is non-refundable).`
-      : 'This booking is now non-refundable (under 24h to the start time).';
-    if (!window.confirm(`Cancel this booking? ${line}`)) return;
+      ? `You'll get a full refund minus the driver service fee (${gbp(exp)} back).\n\nOK = Cancel and refund me · Cancel = Keep booking`
+      : "You won't be refunded — this cancellation is past the free-cancellation window.\n\nOK = Cancel anyway · Cancel = Keep booking";
+    if (!window.confirm(`Cancel this booking?\n\n${line}`)) return;
     setBusyId(b.id); setMsg('');
     try {
       const { data: sess } = await supabase.auth.getSession();
@@ -3634,6 +3737,10 @@ const BookingsPanel = ({ user }) => {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-5">
       <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Your bookings</h3>
+      {pendingRatings.map(p => (
+        <RatingPrompt key={p.bookingId} pending={p}
+          onDone={(id)=>setPendingRatings(list => list.filter(x => x.bookingId !== id))}/>
+      ))}
       {msg && <p className="text-[12px] text-[#6BEFB9] mb-2">{msg}</p>}
       <div className="divide-y divide-white/5">
         {rows.map(b => {
@@ -4521,10 +4628,10 @@ const INFO_PAGES = {
     body: (
       <>
         {[
-          ['How much does ParkEasy cost drivers?', 'The app is free. When you book a private space you pay the host’s price plus a £1 ParkEasy service fee (£2 on major event dates), always shown in full before you pay.'],
+          ['How much does ParkEasy cost drivers?', 'The app is free. When you book a private space you pay the host’s price plus a £1 driver service fee (£2 on major event dates), always shown in full before you pay.'],
           ['How much do hosts earn?', 'Hosts keep 85% of every booking. ParkEasy’s 15% commission covers payments, the platform and support. Payouts go to your bank weekly via Stripe.'],
           ['When do hosts get paid?', 'Weekly, automatically, by bank transfer through Stripe. You set up payouts once (identity + bank details, handled securely by Stripe) from the Spaces tab.'],
-          ['What’s the cancellation policy?', 'Cancel 24+ hours before your booking start for a full refund of the parking price (the service fee is non-refundable). Under 24 hours, bookings are non-refundable — the space was held for you. If a host cancels, you get everything back.'],
+          ['What’s the cancellation policy?', 'Cancel 24+ hours before your booking start for a full refund of the parking price (the driver service fee is non-refundable). Under 24 hours, bookings are non-refundable — the space was held for you. If a host cancels, you get everything back.'],
           ['What are hidden gems?', 'Free parking spots that locals actually use — shared by the community and unlocked with Premium. Add a verified gem yourself and you get a free week of Premium.'],
           ['What are season passes?', 'Some hosts sell a bundle (e.g. 10 bookings) at a discount. You pay once, then each booking just uses a credit — no checkout. Unused credits aren’t refunded after the pass expires.'],
           ['Who is responsible if something happens to my car?', 'Parking arrangements are directly between you and the host. You park at your own risk — hosts aren’t liable for loss, theft or damage except where caused by their own negligence, and neither is ParkEasy. Check your own motor insurance covers you. Full detail in our Terms.'],
