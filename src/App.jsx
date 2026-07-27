@@ -4506,12 +4506,46 @@ const AdminOverlay = ({ onClose }) => {
               {d.premium && (
                 <div>
                   <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Premium members</h3>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <Tile label="Active" value={d.premium.active} accent="#FFD27A"/>
-                    <Tile label="Expiring · 7d" value={d.premium.expiring7}/>
+                    <Tile label="Paying" value={d.premium.paying} accent="#6BEFB9"/>
+                    <Tile label="New · 30d" value={d.premium.new30}/>
+                    <Tile label="of members" value={`${d.premium.conversionPct ?? 0}%`} accent="#5BE7DA"/>
+                  </div>
+                  <div className="glass rounded-2xl p-4 mt-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-display font-extrabold text-3xl text-[#6BEFB9] leading-none">£{((d.premium.mrrPence||0)/100).toFixed(2)}</span>
+                      <span className="text-[12px] text-[rgba(234,241,248,0.55)]">approx. monthly recurring revenue</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+                      {[['💳 Paying', d.premium.paying, '#6BEFB9'], ['🎟 Promo', d.premium.promo, '#C9A7FF'], ['🏆 Reward', d.premium.reward, '#FFD27A']].map(([label, val, colour], i) => (
+                        <div key={i} className="bg-white/5 border border-white/10 rounded-xl py-2">
+                          <div className="font-display font-extrabold text-[17px]" style={{color: colour}}>{val}</div>
+                          <div className="text-[10.5px] text-[rgba(234,241,248,0.5)]">{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-4 mt-3 text-[12px] text-[rgba(234,241,248,0.6)]">
+                      <span>⏳ {d.premium.expiring7} expiring in 7d</span>
+                      <span>· {d.premium.expiring30} in 30d</span>
+                    </div>
+                    {d.premium.latest?.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-white/5 divide-y divide-white/5">
+                        {d.premium.latest.map((m,i)=>(
+                          <div key={i} className="flex items-center justify-between gap-2 py-1.5 text-[12px]">
+                            <span className="font-semibold text-[#EAF1F8] truncate">
+                              {m.kind==='paid' ? '💳' : m.kind==='reward' ? '🏆' : '🎟'} {m.email || 'member'}
+                            </span>
+                            <span className="flex-shrink-0 text-[rgba(234,241,248,0.5)]">
+                              until {new Date(m.expires).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'})}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] leading-relaxed mt-2">
-                    Counts promo, reward &amp; account-linked Stripe Premium that's still active (tracked server-side).
+                    Every entitlement is now account-linked — Stripe purchases, promo codes and hidden-gem rewards. MRR is an estimate: long entitlements are treated as annual (£20 ÷ 12), short ones as £2.99 monthly.
                   </p>
                   <GrantPremium/>
                 </div>

@@ -236,27 +236,58 @@ export default async function handler(req, res) {
       }
     } catch { /* table may not exist yet */ }
 
-    // Premium members we can verify server-side: promo/reward Premium that is
-    // still within its expiry window (distinct accounts). Stripe purchases are
-    // NOT counted — they live in per-device localStorage and aren't yet linked
-    // to accounts (needs a Stripe webhook). VIP emails are also always Premium.
-    let premium = { active: 0, expiring7: 0, source: 'promo_redemptions' };
+    // ── Premium members ────────────────────────────────────────────────
+    // Every entitlement now lives in promo_redemptions, including Stripe
+    // purchases (code STRIPE-SUB, written by the webhook), so this is the
+    // whole picture rather than promos only. Counts are of DISTINCT accounts:
+    // someone with both a promo and a subscription is one member, attributed
+    // to their paid subscription.
+    let premium = {
+      active: 0, expiring7: 0, expiring30: 0, new30: 0,
+      paying: 0, promo: 0, reward: 0,
+      mrrPence: 0, conversionPct: 0,
+      latest: [],
+    };
     try {
       const nowISO = new Date(now).toISOString();
-      const soonISO = new Date(now + 7 * DAY).toISOString();
-      const pr2 = await fetch(`${URL_}/rest/v1/promo_redemptions?expires_at=gt.${nowISO}&select=user_id,expires_at`,
+      const soon7  = new Date(now + 7 * DAY).toISOString();
+      const soon30 = new Date(now + 30 * DAY).toISOString();
+      const pr2 = await fetch(`${URL_}/rest/v1/promo_redemptions?expires_at=gt.${nowISO}&select=user_id,user_email,code,redeemed_at,expires_at&order=redeemed_at.desc`,
         { headers: svc });
       if (pr2.ok) {
         const rows = await pr2.json();
-        const active = new Set(), expiring = new Set();
+        // Collapse to one entry per account, keeping the strongest source
+        // (paid beats promo beats reward) and the latest expiry.
+        const rank = (code) => /STRIPE/i.test(code) ? 3 : /GEM|REWARD/i.test(code) ? 1 : 2;
+        const byUser = new Map();
         for (const r of rows) {
           const id = r.user_id || r.user_email;
           if (!id) continue;
-          active.add(id);
-          if (r.expires_at && r.expires_at < soonISO) expiring.add(id);
+          const prev = byUser.get(id);
+          if (!prev || rank(r.code) > rank(prev.code) ||
+              (rank(r.code) === rank(prev.code) && r.expires_at > prev.expires_at)) {
+            byUser.set(id, r);
+          }
         }
-        premium.active = active.size;
-        premium.expiring7 = expiring.size;
+        const members = [...byUser.values()];
+        premium.active     = members.length;
+        premium.expiring7  = members.filter(r => r.expires_at && r.expires_at < soon7).length;
+        premium.expiring30 = members.filter(r => r.expires_at && r.expires_at < soon30).length;
+        premium.new30      = members.filter(r => r.redeemed_at && (now - Date.parse(r.redeemed_at)) < 30 * DAY).length;
+        premium.paying     = members.filter(r => rank(r.code) === 3).length;
+        premium.reward     = members.filter(r => rank(r.code) === 1).length;
+        premium.promo      = members.filter(r => rank(r.code) === 2).length;
+        // Rough MRR from paying members only. A long entitlement implies an
+        // annual plan (£20/yr) — spread over 12 months; short implies monthly.
+        premium.mrrPence = members.filter(r => rank(r.code) === 3).reduce((sum, r) => {
+          const daysLeft = (Date.parse(r.expires_at) - Date.parse(r.redeemed_at || r.expires_at)) / DAY;
+          return sum + (daysLeft > 200 ? Math.round(2000 / 12) : 299);
+        }, 0);
+        premium.conversionPct = users.length ? Math.round((members.length / users.length) * 1000) / 10 : 0;
+        premium.latest = members.slice(0, 8).map(r => ({
+          email: r.user_email, code: r.code, expires: r.expires_at,
+          kind: rank(r.code) === 3 ? 'paid' : rank(r.code) === 1 ? 'reward' : 'promo',
+        }));
       }
     } catch { /* table may not exist yet */ }
 
