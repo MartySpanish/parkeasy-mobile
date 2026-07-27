@@ -5,7 +5,8 @@
 //   • account.updated / capability.updated                   → host_accounts state
 //   • payout.paid / payout.failed                            → logged (future host UI)
 //
-// Supabase is a cache; Stripe is the source of truth. TEST MODE ONLY.
+//   • invoice.paid                                            → Premium renewal
+// Supabase is a cache; Stripe is the source of truth.
 import Stripe from 'stripe';
 
 // Stripe needs the raw request body to verify the signature — disable parsing.
@@ -44,8 +45,7 @@ async function syncHostAccount(stripe, svc, URL_, accountId) {
 // email and record the entitlement in promo_redemptions (code STRIPE-SUB), so
 // the existing login sync surfaces Premium on every device. Duration: monthly
 // price (< £10) → 35 days; anything bigger (annual/lifetime) → 366 days.
-// Known limit: subscription RENEWALS don't re-fire checkout.session.completed,
-// so monthly extensions need invoice events later — flagged in the runbook.
+// Renewals arrive as invoice.paid and extend the same entitlement.
 async function grantPremiumByEmail(svc, URL_, email, days) {
   if (!email) return;
   let userId = null;
@@ -58,7 +58,16 @@ async function grantPremiumByEmail(svc, URL_, email, days) {
     if (batch.length < 200) break;
   }
   if (!userId) { console.error('premium grant: no account for', email); return; }
-  const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
+  // Never shorten an existing entitlement. A new annual subscription fires
+  // BOTH checkout.session.completed (366d) and invoice.paid for its first
+  // invoice — without this, the renewal path would cut an annual to 35 days.
+  let current = 0;
+  try {
+    const cr = await fetch(`${URL_}/rest/v1/promo_redemptions?user_id=eq.${userId}&code=eq.STRIPE-SUB&select=expires_at`, { headers: svc });
+    if (cr.ok) current = Date.parse((await cr.json())?.[0]?.expires_at || 0) || 0;
+  } catch { /* treat as none */ }
+  const candidate = Date.now() + days * 86400000;
+  const expiresAt = new Date(Math.max(candidate, current)).toISOString();
   await fetch(`${URL_}/rest/v1/promo_redemptions?on_conflict=user_id,code`, {
     method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
     body: JSON.stringify({ user_id: userId, user_email: email, code: 'STRIPE-SUB', expires_at: expiresAt }),
@@ -199,8 +208,11 @@ export default async function handler(req, res) {
         // Subscription renewal → extend account-linked Premium by a month.
         // (Requires the invoice.paid event ticked on the Stripe webhook.)
         const inv = event.data.object;
-        const email = (inv.customer_email || '').trim().toLowerCase();
-        if (email) await grantPremiumByEmail(svc, URL_, email, 35).catch(e => console.error('renewal grant', e));
+        const email = (inv.customer_email || inv.customer_details?.email || '').trim().toLowerCase();
+        // Duration from what they actually paid: annual invoices shouldn't be
+        // treated as a month.
+        const renewalDays = (inv.amount_paid || 0) < 1000 ? 35 : 366;
+        if (email) await grantPremiumByEmail(svc, URL_, email, renewalDays).catch(e => console.error('renewal grant', e));
         break;
       }
       case 'payout.paid':
