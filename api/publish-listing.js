@@ -20,7 +20,7 @@ function applyCors(req, res) {
 export function listingRequirements(l) {
   const missing = [];
   const photos = l.photos || [];
-  const minPhotos = l.host_type === 'organization' ? 5 : 3;
+  const minPhotos = l.host_type === 'organization' ? 4 : 2;
   if (photos.length < minPhotos) missing.push(`${minPhotos - photos.length} more photo${minPhotos - photos.length !== 1 ? 's' : ''} (min ${minPhotos})`);
   if (photos.length > 10) missing.push('Maximum 10 photos');
   if ((l.instructions || '').trim().length < 30) missing.push(`"How to find it" too short — ${(l.instructions || '').trim().length}/30 characters`);

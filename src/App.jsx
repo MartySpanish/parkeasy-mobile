@@ -2921,7 +2921,7 @@ const BookingSheet = ({ listing, onClose }) => {
     } catch (e) { setErr(paymentError(e.message)); setBusy(false); }
   };
 
-  const field = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3.5 py-2.5 text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
+  const field = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3.5 py-3 min-h-[44px] text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
   return (
     <div className="fixed inset-0 z-[215] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} className="bg-[#0d1626] rounded-3xl w-full max-w-sm p-5 shadow-2xl border border-white/10 max-h-[92vh] overflow-y-auto">
@@ -2987,7 +2987,7 @@ const BookingSheet = ({ listing, onClose }) => {
           className={`${credit ? 'mt-2' : 'mt-4'} w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50`}>
           {busy ? 'Opening secure payment…' : `Pay £${total.toFixed(2)} with card`}
         </button>
-        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">Free cancellation until 24 hours before your booking. After that, no refund. Secure payment via Stripe — you park at your own risk, see our Terms.</p>
+        <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">Free cancellation until 24 hours before your booking. After that, no refund. Secure payment via Stripe — you park at your own risk, see our Terms.</p>
       </div>
     </div>
   );
@@ -3170,7 +3170,7 @@ const ListingCard = ({ listing }) => {
         )}
         {canBook && (
           <button onClick={()=>setBooking(true)}
-            className="block w-full btn-teal text-[#06231f] text-xs font-bold py-2.5 rounded-xl text-center mb-2">
+            className="block w-full btn-teal text-[#06231f] text-[13px] font-bold py-3 min-h-[44px] rounded-xl text-center mb-2">
             Reserve &amp; pay · £{Number(listing.price_per_hour).toFixed(2)}/hr
           </button>
         )}
@@ -3185,7 +3185,7 @@ const ListingCard = ({ listing }) => {
           className={`block w-full text-xs font-bold py-2.5 rounded-xl text-center transition ${canBook ? 'bg-white/8 text-[#cdd9e8] hover:bg-white/12' : 'bg-[#5BE7DA] text-[#06231f] hover:bg-[#34E0A0]'}`}>
           Contact Owner
         </a>
-        <p className="text-[10px] text-[#6b7d96] mt-2 text-center leading-snug">
+        <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">
           {canBook ? 'You park at your own risk — see our Terms.' : 'Arranged directly with the owner — you park at your own risk. See our Terms.'}
         </p>
         {partner && <PartnerCard partner={partner} listingId={listing.id}/>}
@@ -3200,14 +3200,12 @@ const PHOTO_SLOTS = {
   residential: [
     { key:'space',    label:'The space itself' },
     { key:'entrance', label:'Entrance from the street' },
-    { key:'street',   label:'Street view / how to approach' },
   ],
   organization: [
     { key:'overview', label:'Space overview' },
     { key:'entrance', label:'Entrance' },
     { key:'barrier',  label:'Barrier / gate' },
     { key:'signage',  label:'Signage' },
-    { key:'street',   label:'Street approach' },
   ],
 };
 const ORG_TYPES = ['school','church','sports club','business','community centre','other'];
@@ -3223,7 +3221,7 @@ const suggestedPrice = (lat, lng) => {
 const checkRequirements = (l) => {
   const missing = [];
   const photos = l.photos || [];
-  const minPhotos = l.host_type === 'organization' ? 5 : 3;
+  const minPhotos = l.host_type === 'organization' ? 4 : 2;
   if (photos.length < minPhotos) missing.push(`${minPhotos - photos.length} more photo${minPhotos-photos.length!==1?'s':''} (min ${minPhotos})`);
   if (photos.length > 10) missing.push('Maximum 10 photos');
   if ((l.instructions||'').trim().length < 30) missing.push(`"How to find it" too short — ${(l.instructions||'').trim().length}/30 characters`);
@@ -3331,6 +3329,8 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   const set = (k,v) => setF(p=>({...p,[k]:v}));
 
   const requiredSlots = PHOTO_SLOTS[hostType];
+  // Item 10: verb-first step labels + progress, derived from real completion.
+  const STEP_LABELS = ['Add your space photos', 'Set your price', 'Choose available dates', 'Review and publish'];
   const photos = [...requiredSlots.map(s=>slots[s.key]).filter(Boolean), ...extras];
   const evAmenities = f.space_type==='ev_charger'
     ? ['ev_charging', ...(f.ev_speed?[`speed:${f.ev_speed}`]:[]), ...(f.ev_connector?[`connector:${f.ev_connector}`]:[])]
@@ -3340,6 +3340,12 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
     spaces: hostType==='organization' ? (parseInt(f.spaces)||1) : 1 };
   const missing = checkRequirements(listingShape);
   const canPublish = missing.length === 0;
+  // Which verb-first step is the host on? Derived from what's actually done,
+  // so the header can't disagree with the form's own requirements checklist.
+  const photosDone = photos.length >= requiredSlots.length;
+  const priceDone  = !!(f.price_per_hour && parseFloat(f.price_per_hour) > 0);
+  const datesDone  = !!f.availability;
+  const stepIdx = !photosDone ? 0 : !priceDone ? 1 : !datesDone ? 2 : 3;
 
   const authed = isSupabaseEnabled && user?.id;
 
@@ -3468,10 +3474,18 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
     <div className="p-4 pb-32">
       <div className="flex items-center gap-3 mb-5">
         <button onClick={()=>setStep(0)} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center"><X size={16} className="text-[#aebfd4]"/></button>
-        <div>
-          <h2 className="font-display font-bold text-[#EAF1F8] text-lg leading-tight">List your space</h2>
-          <p className="text-[11px] text-[#8da2bd]">{hostType==='organization' ? 'Organization listing · reviewed within 24h' : 'Homeowner listing'}</p>
+        <div className="min-w-0">
+          <h2 className="font-display font-bold text-[#EAF1F8] text-lg leading-tight">{STEP_LABELS[stepIdx]}</h2>
+          <p className="text-[11px] text-[#8da2bd]">Step {stepIdx + 1} of 4 · {hostType==='organization' ? 'Organization listing · reviewed within 24h' : 'Homeowner listing'}</p>
         </div>
+      </div>
+
+      <div className="flex gap-1.5 mb-4" aria-hidden>
+        {[0,1,2,3].map(i => (
+          <div key={i} className="flex-1 h-1.5 rounded-full overflow-hidden bg-white/10">
+            <div className="h-full rounded-full transition-all" style={{ width: i <= stepIdx ? '100%' : '0%', background:'linear-gradient(135deg,#54E6D8,#2ED3C6)' }}/>
+          </div>
+        ))}
       </div>
 
       <label className={lbl}>Listing title</label>
@@ -4088,7 +4102,7 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
   return (
     <div className="p-4 pb-28">
       {needsFix.map(l=>{
-        const minP = l.host_type==='organization' ? 5 : 3;
+        const minP = l.host_type==='organization' ? 4 : 2;
         const short = Math.max(0, minP - (l.photos?.length||0));
         return (
           <div key={l.id} className="flex items-start gap-2.5 bg-[#FFC24B]/10 border border-[#FFC24B]/30 text-[#FFD27A] text-xs px-3.5 py-3 rounded-2xl mb-3">
@@ -4162,6 +4176,12 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
               Start earning — list your space
             </button>
             <p className="text-[10.5px] text-[#6b7d96] mt-2 text-center">Drivers park at their own risk — see our Terms.</p>
+            <div className="mt-4 pt-3 border-t border-white/10">
+              <p className="font-display font-bold text-[14px] text-[#EAF1F8]">Already listed a space?</p>
+              <p className="text-[12.5px] text-[rgba(234,241,248,0.6)] leading-relaxed mt-1">
+                It can take a few days for the first booking while drivers discover it nearby. Make sure your price and photos are doing their job.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="text-center py-12">
