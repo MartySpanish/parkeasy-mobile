@@ -114,13 +114,13 @@ const SPOTS = [
   { id:13, name:'Innisfayle Park overflow',            near:'Cave Hill',        tags:['cave hill','innisfayle','antrim road'],                                 badge:'hidden_gem', dist:0.19, walk:'~7 min',         restriction:'Residential — be respectful',  notes:'When the castle car park is rammed, locals use this quiet road. Always space. Short walk up.', lat:54.6350, lng:-5.9580, by:'AntrimRoadAndy',     votes:51, photo:null,                                                                                          price:null,      spaces:null },
   { id:14, name:'Boucher Road area streets',           near:'Balmoral Show',    tags:['balmoral show','boucher road','kings hall'],                            badge:'free',       dist:0.35, walk:'~8 min',         restriction:'Show days — community use',    notes:'Community park in surrounding streets and walk. Saves a fortune vs official show parking.', lat:54.5710, lng:-5.9420, by:'ShowGoer',           votes:66, photo:null, price:null,      spaces:null },
   { id:15, name:'Tates Avenue',                        near:'Balmoral Show',    tags:['balmoral show','tates avenue'],                                         badge:'free',       dist:0.90, walk:'~15 min',        restriction:'No restrictions',              notes:'15 min walk saves the show parking charges entirely. Well used on show days.', lat:54.5720, lng:-5.9370, by:'BalmoralBargain',     votes:44, photo:null,                                                                                          price:null,      spaces:null },
-  { id:16, name:'NCP Victoria Square',                 near:'Victoria Square',  tags:['city centre','victoria square','ncp','belfast city centre'],            badge:'official',   dist:0.10, walk:'2 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey. 547 spaces. Right beside Victoria Square mall. (Separate from Q-Park inside the shopping centre.)', lat:54.5973, lng:-5.9260, by:'NCP Belfast',         votes:0,  photo:null, price:'£2.00/hr', spaces:547, available:330, total:547 },
+  { id:16, name:'NCP Dublin Road',                     near:'Dublin Road',      tags:['dublin road','city centre','ncp','belfast city centre','linen quarter','great victoria street'], badge:'official', dist:0.10, walk:'2 min', restriction:'Open 24/7', notes:'NCP multi-storey on Dublin Road, handy for the Linen Quarter, Great Victoria Street and the Grand Opera House. Pay by NCP app or on exit.', lat:54.5906, lng:-5.9346, by:'NCP Belfast',         votes:0,  photo:null, price:'£2.00/hr', spaces:null },
   { id:17, name:'NCP Montgomery Street',               near:'Cathedral Quarter',tags:['cathedral quarter','montgomery street','ncp','city centre'],             badge:'official',   dist:0.20, walk:'4 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey on Montgomery Street. 447 spaces. Great for Cathedral Quarter bars and restaurants.', lat:54.5998, lng:-5.9270, by:'NCP Belfast',         votes:0,  photo:null,                                                                                          price:'£1.80/hr', spaces:447, available:270, total:447 },
-  { id:18, name:'Q-Park Obel',                         near:'Titanic Quarter',  tags:['titanic quarter','obel','qpark','donegall quay','titanic'],             badge:'official',   dist:0.15, walk:'3 min',          restriction:'Open 24/7',                    notes:'Q-Park at the Obel tower, Donegall Quay. 267 spaces across 2 basement levels. Best option for Titanic Quarter visits.', lat:54.6008, lng:-5.9245, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.50/hr', spaces:267, available:160, total:267 },
+  { id:18, name:'Q-Park St Anne\'s Square',            near:'Cathedral Quarter', tags:['cathedral quarter','st annes square','saint annes square','qpark','q-park','city centre','mac','st anne\'s cathedral'], badge:'official', dist:0.15, walk:'3 min', restriction:'Open 24/7', notes:'Q-Park under St Anne\'s Square in the Cathedral Quarter — the closest covered parking to The MAC, St Anne\'s Cathedral and the Cathedral Quarter bars and restaurants.', lat:54.6013, lng:-5.9283, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.50/hr', spaces:null },
   { id:19, name:'Q-Park Victoria Square',              near:'Victoria Square',  tags:['victoria square','qpark','city centre'],                                badge:'official',   dist:0.05, walk:'1 min',          restriction:'Open 24/7',                    notes:'Q-Park inside Victoria Square shopping centre — 1,000 spaces across 2 basement levels. Validated parking available with some stores.', lat:54.5975, lng:-5.9255, by:'Q-Park Belfast',      votes:0,  photo:null,                                                                                          price:'£2.20/hr', spaces:1000, available:600, total:1000 },
-  { id:20, name:'BCC Bankmore Square',                 near:'City Centre',      tags:['city centre','bankmore','belfast city council'],                        badge:'official',   dist:0.30, walk:'6 min',          restriction:'Mon–Sat 8am–6pm',              notes:'Belfast City Council surface car park — 46 bays. Small but convenient and good rates. Short walk to City Hall.', lat:54.5940, lng:-5.9300, by:'Belfast City Council',votes:0,  photo:null,                                                                                          price:'£1.50/hr', spaces:46, available:28, total:46 },
-  { id:21, name:'Castle Street Multi-Storey',          near:'Castle Court',     tags:['castle court','castle street','royal avenue','city centre'],            badge:'official',   dist:0.10, walk:'2 min',          restriction:'Open 24/7',                    notes:'Multi-storey at 1 Francis Street — 610 spaces, 34 disabled bays. Perfect for Castle Court and Royal Avenue shopping.', lat:54.5985, lng:-5.9335, by:'Castle Street CP',    votes:0,  photo:null,                                                                                          price:'£1.60/hr', spaces:610, available:366, total:610 },
-  { id:22, name:'BCC Tomb Street',                     near:"St George's Market",tags:['city centre','tomb street','belfast city council',"st george's market",'markets'],badge:'official',dist:0.20,walk:'4 min',restriction:'Mon–Sat 8am–6pm',notes:"Belfast City Council car park — 198 spaces. Good for St George's Market and Cathedral Quarter. Free after 6pm weekdays.", lat:54.6002, lng:-5.9280, by:'Belfast City Council',votes:0,  photo:null,                                                                                          price:'£1.40/hr', spaces:198, available:120, total:198 },
+  { id:20, name:'Bankmore Street car park',            near:'City Centre',      tags:['city centre','bankmore','bankmore street','belfast city council','dublin road'], badge:'official',   dist:0.30, walk:'6 min',          restriction:'Mon–Sat 8am–6pm',              notes:'Belfast City Council surface car park on Bankmore Street — 46 bays. Small but convenient and good rates. Short walk to City Hall. Free outside charged hours.', lat:54.5940, lng:-5.9300, by:'Belfast City Council',votes:0,  photo:null,                                                                                          price:'£1.50/hr', spaces:46, available:28, total:46 },
+  { id:21, name:'NCP The Tannery (Francis Street)',    near:'Castle Court',     tags:['castle court','castlecourt','the tannery','tannery','francis street','royal avenue','city centre','ncp'], badge:'official',   dist:0.10, walk:'2 min',          restriction:'Open 24/7',                    notes:'NCP multi-storey at 1 Francis Street — 610 spaces and 34 disabled bays, 1.92m height limit. Perfect for CastleCourt and Royal Avenue shopping.', lat:54.5985, lng:-5.9335, by:'NCP Belfast',         votes:0,  photo:null,                                                                                          price:'£1.60/hr', spaces:610, available:366, total:610 },
+  { id:22, name:'Corporation Square car park',         near:"St George's Market",tags:['city centre','corporation square','tomb street','belfast city council',"st george's market",'markets','cathedral quarter'],badge:'official',dist:0.20,walk:'4 min',restriction:'Mon–Sat 8am–6pm',notes:"Belfast City Council car park at Corporation Square, off Tomb Street — 198 spaces. Good for St George's Market and the Cathedral Quarter. Note: unlike most council car parks, this one is NOT free outside charged hours.", lat:54.6002, lng:-5.9280, by:'Belfast City Council',votes:0,  photo:null,                                                                                          price:'£1.40/hr', spaces:198, available:120, total:198 },
   { id:23, name:'Exchange Street on-street',           near:'Cathedral Quarter',tags:['cathedral quarter','exchange street','custom house square'],            badge:'timed',      dist:0.05, walk:'2 min',          restriction:'Mon–Sat 8am–6pm',              notes:'On-street right in the Cathedral Quarter. Free evenings and Sundays — ideal for a night out.', lat:54.6012, lng:-5.9268, by:'CQ_Regular',         votes:42, photo:null, price:null, spaces:null },
   { id:24, name:'Waring Street hidden lay-by',         near:'Cathedral Quarter',tags:['cathedral quarter','waring street','custom house square'],              badge:'hidden_gem', dist:0.08, walk:'3 min',          restriction:'Evenings & weekends free',     notes:'Small lay-by most people miss — tucked just off Waring Street. Cathedral Quarter regulars swear by it.', lat:54.6010, lng:-5.9275, by:'CQ_Insider',         votes:38, photo:null, price:null, spaces:4 },
   { id:25, name:'Queens Road on-street',               near:'Titanic Quarter',  tags:['titanic quarter','titanic belfast','queens road','titanic','ss nomadic'],badge:'free',      dist:0.10, walk:'3 min',          restriction:'Free all day',                 notes:'Long stretch of free on-street parking on Queens Road. Easy walk to Titanic Belfast and SS Nomadic.', lat:54.6077, lng:-5.9100, by:'TitanicVisitor',      votes:67, photo:null, price:null, spaces:null },
@@ -1282,8 +1282,27 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               {amen.map(a=>(<span key={a} className="text-xs font-semibold text-[#cdd9e8] bg-white/6 border border-white/10 px-3 py-1.5 rounded-full">{a}</span>))}
             </div>
           )}
-          {spot.photo && <img src={spot.photo} alt={spot.name} className="w-full h-40 object-cover rounded-2xl mt-3.5 border border-white/10"/>}
-          {spot.notes && <p className="text-sm text-[rgba(234,241,248,0.65)] leading-relaxed mt-4 italic border-l-[3px] border-[#2ED3C6] pl-3">{spot.notes}</p>}
+          {/* The description: the driver's own photo of the space sits with the
+              notes, not adrift above them, so you read "here's what it looks
+              like" and "here's what to watch for" as one thing. */}
+          {(spot.photo || spot.notes) && (
+            <div className="mt-4">
+              {spot.photo && (
+                <figure className="mb-3">
+                  <img src={spot.photo} alt={`Photo of ${spot.name}`} loading="lazy"
+                    className="w-full max-h-56 object-cover rounded-2xl border border-white/10"/>
+                  {spot.by && (
+                    <figcaption className="text-[11px] text-[rgba(234,241,248,0.45)] mt-1.5 flex items-center gap-1">
+                      <Camera size={11}/> Photo by {spot.by}
+                    </figcaption>
+                  )}
+                </figure>
+              )}
+              {spot.notes && (
+                <p className="text-sm text-[rgba(234,241,248,0.65)] leading-relaxed italic border-l-[3px] border-[#2ED3C6] pl-3">{spot.notes}</p>
+              )}
+            </div>
+          )}
           <div className="flex gap-3 mt-5">
             <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer" className="flex-1 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[#06231f] btn-teal active:scale-95 transition">
               <Navigation size={18}/>Get directions
@@ -2560,7 +2579,8 @@ const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, allSpots = SP
 // ── AddSpotTab ────────────────────────────────────────────────────────────────
 const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
   const [form, setForm] = useState({near:'',street:'',type:'',restriction:'',notes:''});
-  const [preview, setPreview] = useState(null);   // compressed JPEG dataURL of the space
+  const [preview, setPreview] = useState(null);   // compressed JPEG dataURL, shown in the form
+  const [photoFile, setPhotoFile] = useState(null); // the original File, uploaded on submit
   const [done, setDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [coords, setCoords] = useState(null);   // [lat, lng] captured from GPS
@@ -2627,7 +2647,22 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
     e.preventDefault();
     if (!form.type || !form.restriction) return;
     setSubmitting(true);
-    const newSpot = buildSpot();
+
+    // Upload the photo to storage FIRST so the spot carries a real, durable URL.
+    // Previously only a data: URL lived in browser state and a has_photo boolean
+    // reached the database — so the picture disappeared on refresh and nobody
+    // else ever saw it. Best-effort: if the upload fails we still submit the
+    // spot and fall back to the local preview rather than losing the whole thing.
+    let photoUrl = null;
+    if (photoFile && isSupabaseEnabled && user?.id) {
+      try {
+        photoUrl = await uploadListingPhoto(photoFile, user.id, 'spot');
+      } catch (err) {
+        console.warn('spot photo upload failed', err);
+      }
+    }
+
+    const newSpot = { ...buildSpot(), photo: photoUrl || preview };
     await notify('spot', {
       name: form.near,
       near: form.street,
@@ -2646,6 +2681,7 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
           notes: form.notes.trim() || null,
           lat: coords ? coords[0] : null, lng: coords ? coords[1] : null,
           has_photo: !!preview,
+          photo_url: photoUrl,
         });
       } catch { /* non-blocking */ }
     }
@@ -2688,7 +2724,7 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
         <p className="font-bold text-base">🏆 1 week of Premium on the way!</p>
         <p className="text-[#5BE7DA] text-xs leading-relaxed">We'll review your spot within 24 hours. Once approved we'll email you a link to activate your free Premium week.</p>
       </div>
-      <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);setCoords(null);setLocErr('');}}
+      <button onClick={()=>{setDone(false);setForm({near:'',street:'',type:'',restriction:'',notes:''});setPreview(null);setPhotoFile(null);setCoords(null);setLocErr('');}}
         className="text-[#5BE7DA] text-sm font-bold underline">Submit another spot</button>
     </div>
   );
@@ -2724,6 +2760,7 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
             onChange={e=>{
               const f=e.target.files[0]; if(!f) return;
+              setPhotoFile(f);              // kept so submit can upload it for real
               const img=new Image();
               img.onload=()=>{
                 const scale=Math.min(1, 720/Math.max(img.width,img.height));
