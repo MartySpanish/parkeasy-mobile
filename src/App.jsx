@@ -168,6 +168,8 @@ const SPOTS = [
   { id:65, name:'Whiterock Leisure Centre car park', near:'Whiterock Road', tags:['whiterock','whiterock leisure centre','west belfast','ev charging','falls','leisure centre','free parking'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Free car park at Whiterock Leisure Centre with a Tritium eZo rapid EV charger (up to 75kW, 2 connectors) in the green "EV only" bays — one of the few rapid charging spots in West Belfast. Handy for the gym, pool and Falls Park.', lat:54.6002, lng:-5.9840, by:'WhiterockLocal', votes:0, photo:'/whiterock-ev.jpg', price:null, spaces:60, ev:{available:true, ports:2, speed:'75kW'}, premium:true },
   { id:66, name:'LORAG centre / Shaftesbury Rec kerbside', near:'Lower Ormeau / Gasworks', tags:['lorag','shaftesbury','lower ormeau','gasworks','south belfast','free parking','city centre walk'], badge:'hidden_gem', dist:0.30, walk:'8 min', restriction:'Free all day', notes:'Founder pick: free kerbside and community-centre parking around LORAG on the Lower Ormeau, beside the Gasworks. Park up and walk into the city centre in minutes — ideal on match and gig days.', lat:54.5900, lng:-5.9235, by:'ParkEasy', votes:0, photo:null, price:null, spaces:null, premium:true },
   { id:67, name:'Kennedy Centre car park', near:'Falls Road', tags:['kennedy centre','kennedy center','falls road','west belfast','ev charging','andersonstown','shopping centre','free parking'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Free customer car park at the Kennedy Centre on the Falls Road with EV charging points — a handy West Belfast charging stop while you shop. Community estimate on charger speed and availability.', lat:54.5943, lng:-5.9808, by:'WestBelfastLocal', votes:0, photo:null, price:null, spaces:400, ev:{available:true, ports:2, speed:'22kW'}, premium:true },
+  { id:68, name:'Olympia Leisure Centre car park', near:'Olympia / Windsor Park', tags:['olympia','olympia leisure centre','boucher road','windsor park','national football stadium','linfield','south belfast','free parking','leisure centre','swimming'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Big free car park at Olympia Leisure Centre on Boucher Road, right beside Windsor Park. Plenty of room most of the day for the pool and gym. Fills fast before Northern Ireland and Linfield home games — get there early on match days or you will be circling Boucher.', lat:54.5817, lng:-5.9487, by:'ParkEasy', votes:0, photo:null, price:null, spaces:250 },
+  { id:69, name:'Lidl Boucher Road car park', near:'Boucher Road', tags:['lidl','lidl boucher','boucher road','boucher','south belfast','supermarket','free parking','olympia','windsor park'], badge:'free', dist:0.15, walk:'4 min', restriction:'Customers only — time limited', notes:'Free customer car park at Lidl on Boucher Road, a few minutes walk from Olympia and Windsor Park. Shoppers only and time limited — check the signs on the day, as ANPR is common at supermarket car parks. Do not leave it there for a match or a full day at the gym.', lat:54.5793, lng:-5.9452, by:'ParkEasy', votes:0, photo:null, price:null, spaces:120 },
 ];
 
 // ── Cities ───────────────────────────────────────────────────────────────────
@@ -561,6 +563,21 @@ const WELCOME_STATS = [
   [ALL_SPOTS_STATS.filter(s => s.badge === 'official').length, 'Car parks', '#7CC4FF'],
   [CITIES.length, 'Towns', '#5BE7DA'],
 ];
+
+// ── Free hidden-gem taster ────────────────────────────────────────────────────
+// Every hidden gem is Premium EXCEPT five, app-wide, which stay open to everyone.
+// A free user who has never seen a gem has no reason to believe the locked ones
+// are worth paying for, so the five best-rated are given away as proof and the
+// rest stay behind the paywall.
+// Ranked by votes, then id, so the set is stable between renders and deploys.
+const FREE_GEMS_TOTAL = 5;
+const TASTER_GEM_IDS = new Set(
+  ALL_SPOTS_STATS
+    .filter(s => s.badge === 'hidden_gem')
+    .sort((a, b) => (b.votes || 0) - (a.votes || 0) || String(a.id).localeCompare(String(b.id)))
+    .slice(0, FREE_GEMS_TOTAL)
+    .map(s => s.id)
+);
 
 const BUSINESSES = [
   { id:1,  name:"Tommy's Barber",       area:'Glen Road',         addr:'245 Glen Road, West Belfast BT11',    cat:'Barber',         icon:'✂️',  key:'glen road barber',   lat:54.5935, lng:-6.0012 },
@@ -1711,11 +1728,13 @@ const walkFromMiles = (mi) => {
 // near high-demand destinations) and ⚡ selected free EV charger spots.
 // Never locked, regardless of any flag: community-submitted spots, anything the
 // driver already pays to park at, and all council/commercial/timed/on-street
-// parking including Park & Ride. Free users still see gated spots as area-only
-// teasers — approximate pin + area name, never the exact location or notes.
+// parking including Park & Ride, plus the five free taster gems. Free users still
+// see gated spots as area-only teasers — approximate pin + area name, never the
+// exact location or notes.
 const isGated = (spot) => {
   if (spot.mine) return false;                                         // community submissions
-  if (spot.badge === 'hidden_gem') return true;                        // EVERY hidden gem is Premium
+  if (TASTER_GEM_IDS.has(spot.id)) return false;                       // 5 free taster gems, app-wide
+  if (spot.badge === 'hidden_gem') return true;                        // every other hidden gem is Premium
   if (spot.price) return false;                                        // paid to park → free to view
   if (['official','timed','paid'].includes(spot.badge)) return false;  // car parks, P&R, on-street
   return spot.premium === true;                                        // premium-flagged EV picks
