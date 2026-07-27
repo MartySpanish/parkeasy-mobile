@@ -52,6 +52,9 @@ export default async function handler(req, res) {
   const durationHours = Math.max(1, Math.min(24, parseInt(body?.durationHours || 1, 10)));
   const startsAt = body?.startsAt || null;
   const marketingOptIn = body?.marketingOptIn === true;
+  // Recurring bookings: same slot, weekly, paid once up front. Each week is
+  // still an ordinary booking row (same cancellation rules per occurrence).
+  const repeatWeeks = Math.max(1, Math.min(12, parseInt(body?.repeatWeeks || 1, 10)));
   if (!listingId) return res.status(400).json({ error: 'Missing listingId' });
 
   // Optional driver identity (guest checkout is allowed per Terms §3.1).
@@ -97,24 +100,36 @@ export default async function handler(req, res) {
     if (!startsAt) return res.status(400).json({ error: 'Please choose a start date and time' });
     const startMs = Date.parse(startsAt);
     if (Number.isNaN(startMs)) return res.status(400).json({ error: 'Invalid start time' });
-    const endsAtISO = new Date(startMs + durationHours * 3600000).toISOString();
     const spaces = Math.max(1, listing.spaces || 1);
-    // Bookings that overlap [start, end): existing.starts_at < newEnd AND existing.ends_at > newStart.
-    const or = await fetch(`${URL_}/rest/v1/bookings?listing_id=eq.${listing.id}&status=in.(pending,paid)&starts_at=lt.${encodeURIComponent(endsAtISO)}&ends_at=gt.${encodeURIComponent(startsAt)}&select=status,created_at`, { headers: svc });
-    const overlaps = or.ok ? await or.json() : [];
-    // Ignore stale pending checkouts (abandoned) — the Checkout Session expires in 30 min.
     const PENDING_TTL_MS = 30 * 60000;
     const now = Date.now();
-    const held = overlaps.filter(b => b.status === 'paid' || (now - Date.parse(b.created_at) < PENDING_TTL_MS)).length;
-    if (held >= spaces) {
-      return res.status(409).json({ error: 'That time is already booked. Try a different time or duration.' });
+    const WEEK_MS = 7 * 86400000;
+    // Every occurrence must be free, or we'd take money for a slot we can't honour.
+    const occurrences = [];
+    for (let i = 0; i < repeatWeeks; i++) {
+      const s0 = new Date(startMs + i * WEEK_MS).toISOString();
+      const e0 = new Date(startMs + i * WEEK_MS + durationHours * 3600000).toISOString();
+      const or = await fetch(`${URL_}/rest/v1/bookings?listing_id=eq.${listing.id}&status=in.(pending,paid)&starts_at=lt.${encodeURIComponent(e0)}&ends_at=gt.${encodeURIComponent(s0)}&select=status,created_at`, { headers: svc });
+      const overlaps = or.ok ? await or.json() : [];
+      const held = overlaps.filter(b => b.status === 'paid' || (now - Date.parse(b.created_at) < PENDING_TTL_MS)).length;
+      if (held >= spaces) {
+        return res.status(409).json({
+          error: repeatWeeks > 1
+            ? `Week ${i + 1} of that repeat is already booked. Try a different time, or fewer weeks.`
+            : 'That time is already booked. Try a different time or duration.',
+        });
+      }
+      occurrences.push({ starts_at: s0, ends_at: e0 });
     }
+    const endsAtISO = occurrences[0].ends_at;
 
-    const bookingPricePence = Math.round(pricePerHour * durationHours * 100);
+    const perWeekPence = Math.round(pricePerHour * durationHours * 100);
+    const bookingPricePence = perWeekPence * repeatWeeks;
+    // One driver service fee per booking series, not per week.
     const applicationFeePence = Math.round(bookingPricePence * HOST_COMMISSION) + SERVICE_FEE_PENCE;
     const totalPence = bookingPricePence + SERVICE_FEE_PENCE;
 
-    const meta = { listing_id: listing.id, host_id: listing.owner_id, duration: String(durationHours) };
+    const meta = { listing_id: listing.id, host_id: listing.owner_id, duration: String(durationHours), weeks: String(repeatWeeks) };
 
     const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
     const session = await stripe.checkout.sessions.create({
@@ -122,7 +137,7 @@ export default async function handler(req, res) {
       payment_method_types: ['card'],
       customer_email: driver?.email || undefined,
       line_items: [
-        { price_data: { currency: 'gbp', product_data: { name: `Parking — ${listing.title || 'space'}`, description: listing.address || undefined }, unit_amount: bookingPricePence }, quantity: 1 },
+        { price_data: { currency: 'gbp', product_data: { name: repeatWeeks > 1 ? `Parking — ${listing.title || 'space'} (${repeatWeeks} weekly bookings)` : `Parking — ${listing.title || 'space'}`, description: listing.address || undefined }, unit_amount: bookingPricePence }, quantity: 1 },
         { price_data: { currency: 'gbp', product_data: { name: 'Driver service fee' }, unit_amount: SERVICE_FEE_PENCE }, quantity: 1 },
       ],
       payment_intent_data: {
@@ -136,21 +151,25 @@ export default async function handler(req, res) {
       cancel_url: `${APP_URL}/?booking=cancelled`,
     });
 
-    // Record the pending booking; the webhook flips it to paid/failed.
-    await fetch(`${URL_}/rest/v1/bookings`, {
-      method: 'POST', headers: svc,
-      body: JSON.stringify({
-        listing_id: listing.id, host_id: listing.owner_id,
-        driver_id: driver?.id || null, driver_email: driver?.email || null,
-        starts_at: startsAt, duration_hours: durationHours, currency: 'gbp',
-        ends_at: endsAtISO,
-        cancellation_deadline: new Date(startMs - (parseInt(process.env.CANCEL_CUTOFF_HOURS || '24', 10)) * 3600000).toISOString(),
-        amount_total_pence: totalPence, booking_price_pence: bookingPricePence,
-        application_fee_pence: applicationFeePence, service_fee_pence: SERVICE_FEE_PENCE,
-        stripe_session_id: session.id, stripe_destination: host.stripe_account_id, status: 'pending',
-        marketing_opt_in: marketingOptIn,
-      }),
-    });
+    // Record the pending booking(s); the webhook flips them to paid/failed.
+    const recurrenceGroup = repeatWeeks > 1 ? crypto.randomUUID() : null;
+    const rows = occurrences.map((occ, i) => ({
+      listing_id: listing.id, host_id: listing.owner_id,
+      driver_id: driver?.id || null, driver_email: driver?.email || null,
+      starts_at: occ.starts_at, ends_at: occ.ends_at, duration_hours: durationHours, currency: 'gbp',
+      cancellation_deadline: new Date(Date.parse(occ.starts_at) - (parseInt(process.env.CANCEL_CUTOFF_HOURS || '24', 10)) * 3600000).toISOString(),
+      // Money is recorded on the FIRST occurrence only, so totals and refunds
+      // never double-count a series that was paid for once.
+      amount_total_pence: i === 0 ? totalPence : 0,
+      booking_price_pence: i === 0 ? bookingPricePence : 0,
+      application_fee_pence: i === 0 ? applicationFeePence : 0,
+      service_fee_pence: i === 0 ? SERVICE_FEE_PENCE : 0,
+      stripe_session_id: i === 0 ? session.id : `${session.id}#${i}`,
+      stripe_destination: host.stripe_account_id, status: 'pending',
+      marketing_opt_in: marketingOptIn,
+      recurrence_group: recurrenceGroup, recurrence_index: i,
+    }));
+    await fetch(`${URL_}/rest/v1/bookings`, { method: 'POST', headers: svc, body: JSON.stringify(rows) });
 
     return res.status(200).json({ url: session.url });
   } catch (e) {
