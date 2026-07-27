@@ -15,7 +15,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking, buyPass, redeemPass } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { paymentError } from './errors';
 
@@ -2903,8 +2903,9 @@ const BookingSheet = ({ listing, onClose }) => {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [optIn, setOptIn] = useState(false);   // event-parking updates (GDPR: unchecked by default)
+  const [weeks, setWeeks] = useState(1);      // repeat the same slot weekly
 
-  const bookingCost = rate * hours;
+  const bookingCost = rate * hours * weeks;
   const total = bookingCost + SERVICE_FEE_GBP;
 
   const pay = async () => {
@@ -2916,7 +2917,7 @@ const BookingSheet = ({ listing, onClose }) => {
         token = data?.session?.access_token || null;
       }
       const startsAt = date && time ? new Date(`${date}T${time}`).toISOString() : null;
-      const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn });
+      const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks });
       window.location.href = url;   // full-page redirect to Stripe Checkout
     } catch (e) { setErr(paymentError(e.message)); setBusy(false); }
   };
@@ -2944,13 +2945,26 @@ const BookingSheet = ({ listing, onClose }) => {
           <button type="button" onClick={()=>setHours(h=>Math.min(24,h+1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">+</button>
         </div>
 
+        <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Repeat weekly</label>
+        <div className="flex gap-1.5 flex-wrap">
+          {[1,4,8,12].map(w => (
+            <button key={w} type="button" onClick={()=>setWeeks(w)}
+              className={`text-xs font-semibold px-3 py-2.5 min-h-[44px] rounded-xl border transition ${weeks===w?'teal-grad text-[#06231f] border-transparent':'bg-white/[0.05] border-white/12 text-[#cdd9e8]'}`}>
+              {w === 1 ? 'One-off' : `${w} weeks`}
+            </button>
+          ))}
+        </div>
+        {weeks > 1 && (
+          <p className="text-[11.5px] text-[#6BEFB9] mt-1.5">Same day &amp; time each week for {weeks} weeks — paid once, one service fee. Each week can be cancelled on its own.</p>
+        )}
+
         {override != null && (
           <p className="text-[11.5px] text-[#FFD27A] mt-3 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
             Event-day price for this date: £{override.toFixed(2)}/hr (normally £{baseRate.toFixed(2)}/hr).
           </p>
         )}
         <div className="mt-4 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5 space-y-1.5 text-[13px]">
-          <div className="flex justify-between text-[#cdd9e8]"><span>Parking ({hours}h × £{rate.toFixed(2)})</span><span>£{bookingCost.toFixed(2)}</span></div>
+          <div className="flex justify-between text-[#cdd9e8]"><span>Parking ({hours}h × £{rate.toFixed(2)}{weeks>1?` × ${weeks} wks`:''})</span><span>£{bookingCost.toFixed(2)}</span></div>
           <div className="flex justify-between text-[#cdd9e8]"><span>Driver service fee</span><span>£{SERVICE_FEE_GBP.toFixed(2)}</span></div>
           <div className="flex justify-between font-bold text-[#EAF1F8] pt-1.5 border-t border-white/10"><span>Total</span><span className="text-[#6BEFB9]">£{total.toFixed(2)}</span></div>
         </div>
@@ -3705,6 +3719,109 @@ const RatingPrompt = ({ pending, onDone }) => {
   );
 };
 
+// Item 14: host payout dashboard — this week, next payout, running total,
+// plus a calendar subscribe link. Reads the host's own bookings (RLS-scoped).
+const HostEarnings = ({ user }) => {
+  const [rows, setRows] = useState(null);
+  const [calToken, setCalToken] = useState(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!isSupabaseEnabled || !user?.id) return;
+      const { data } = await supabase.from('bookings')
+        .select('id,starts_at,status,booking_price_pence,application_fee_pence,service_fee_pence')
+        .eq('host_id', user.id).in('status', ['paid','completed']);
+      const { data: ha } = await supabase.from('host_accounts').select('calendar_token').eq('host_id', user.id).maybeSingle();
+      if (!live) return;
+      setRows(data || []);
+      setCalToken(ha?.calendar_token || null);
+    })();
+    return () => { live = false; };
+  }, [user?.id]);
+
+  if (!user || !rows || !rows.length) return null;
+  // Host keeps the booking price minus the 15% commission; the driver service
+  // fee was never theirs, so it's excluded from earnings.
+  const earned = (b) => (b.booking_price_pence || 0) - ((b.application_fee_pence || 0) - (b.service_fee_pence || 0));
+  const gbp = (p) => `£${(p / 100).toFixed(2)}`;
+  const weekAgo = Date.now() - 7 * 86400000;
+  const thisWeek = rows.filter(b => b.starts_at && Date.parse(b.starts_at) >= weekAgo);
+  const total = rows.reduce((a, b) => a + earned(b), 0);
+  const weekTotal = thisWeek.reduce((a, b) => a + earned(b), 0);
+  const calUrl = calToken ? `https://parkeasy-gray.vercel.app/api/calendar?token=${calToken}` : null;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-5">
+      <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Your earnings</h3>
+      <div className="grid grid-cols-3 gap-2">
+        {[['This week', gbp(weekTotal)], ['Bookings', String(rows.length)], ['Total earned', gbp(total)]].map(([label, val], i) => (
+          <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
+            <div className="text-[10.5px] text-[rgba(234,241,248,0.5)] font-semibold">{label}</div>
+            <div className="font-display font-extrabold text-[17px] text-[#6BEFB9] mt-0.5">{val}</div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] mt-2">You keep 85% of each booking. Stripe pays out to your bank weekly.</p>
+      {calUrl && (
+        <button onClick={()=>{ navigator.clipboard?.writeText(calUrl); setCopied(true); setTimeout(()=>setCopied(false), 2500); }}
+          className="mt-2.5 w-full text-[12.5px] font-bold py-2.5 min-h-[44px] rounded-xl bg-white/8 border border-white/15 text-[#cdd9e8]">
+          {copied ? '✓ Link copied — add it in your calendar app' : '📅 Copy calendar subscribe link'}
+        </button>
+      )}
+    </div>
+  );
+};
+
+// Item 14: in-app thread for "can't find the entrance" — neither side ever
+// sees the other's email or phone number.
+const MessageThread = ({ bookingId }) => {
+  const [open, setOpen] = useState(false);
+  const [msgs, setMsgs] = useState([]);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [role, setRole] = useState(null);
+  const load = async () => {
+    const { data: sess } = await supabase.auth.getSession();
+    const d = await fetchMessages(bookingId, sess?.session?.access_token);
+    setMsgs(d.messages || []); setRole(d.role || null);
+  };
+  useEffect(() => { if (open) load(); }, [open]);
+  const send = async () => {
+    if (!text.trim()) return;
+    setBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      await sendMessage(bookingId, text.trim(), sess?.session?.access_token);
+      setText(''); await load();
+    } catch (e) { alert(e.message); }
+    setBusy(false);
+  };
+  return (
+    <div className="mt-1.5">
+      <button onClick={()=>setOpen(v=>!v)} className="text-[11.5px] font-semibold text-[#5BE7DA]">
+        💬 Message {open ? '▴' : '▾'}{msgs.length ? ` (${msgs.length})` : ''}
+      </button>
+      {open && (
+        <div className="mt-1.5 rounded-xl bg-white/[0.04] border border-white/10 p-2.5">
+          {msgs.map(m => (
+            <p key={m.id} className={`text-[12px] leading-relaxed mb-1 ${m.sender_role === role ? 'text-[#EAF1F8]' : 'text-[#8da2bd]'}`}>
+              <strong>{m.sender_role === role ? 'You' : (m.sender_role === 'host' ? 'Host' : 'Driver')}:</strong> {m.body}
+            </p>
+          ))}
+          {!msgs.length && <p className="text-[11.5px] text-[rgba(234,241,248,0.45)] mb-1.5">No messages yet — ask about access, gates or anything else.</p>}
+          <div className="flex gap-1.5 mt-1.5">
+            <input value={text} onChange={e=>setText(e.target.value)} maxLength={1000} placeholder="Type a message…"
+              className="flex-1 min-w-0 bg-white/[0.06] border border-white/12 rounded-lg px-2.5 py-2 text-[12.5px] text-[#EAF1F8]"/>
+            <button onClick={send} disabled={busy} className="btn-teal text-[#06231f] font-bold text-[12px] px-3 rounded-lg disabled:opacity-50">Send</button>
+          </div>
+          <p className="text-[10px] text-[rgba(234,241,248,0.4)] mt-1.5">Your email and phone number are never shared.</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const BookingsPanel = ({ user }) => {
   const [rows, setRows] = useState(undefined);
   const [titles, setTitles] = useState({});
@@ -3821,6 +3938,7 @@ const BookingsPanel = ({ user }) => {
                   {offers[b.listing_id].offer_code ? <> · code <strong>{offers[b.listing_id].offer_code}</strong></> : null}
                 </p>
               )}
+              {b.status === 'paid' && <MessageThread bookingId={b.id}/>}
               {cancellable && (
                 <button onClick={()=>doCancel(b)} disabled={busyId===b.id}
                   className="mt-1.5 text-[11px] font-semibold text-red-300 border border-red-400/40 rounded-lg px-2.5 py-1 disabled:opacity-50">
@@ -4129,6 +4247,7 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
       </div>
 
       <PayoutSetup user={user}/>
+      <HostEarnings user={user}/>
       <EventPricingPanel user={user}/>
       <BookingsPanel user={user}/>
 
