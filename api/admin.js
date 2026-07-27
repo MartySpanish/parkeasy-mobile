@@ -190,16 +190,25 @@ export default async function handler(req, res) {
       .slice(0, 12)
       .map(u => ({ email: u.email, name: u.user_metadata?.name || '', created: u.created_at, lastSeen: u.last_sign_in_at }));
 
-    // Rental listings
-    let listings = { total: 0, latest: [] };
+    // Private space listings, split by status — a draft is NOT bookable and
+    // shouldn't be presented as if it were.
+    let listings = { total: 0, live: 0, draft: 0, pending: 0, latest: [] };
     try {
-      const lr = await fetch(`${URL_}/rest/v1/rental_listings?select=id,title,address,created_at,status&order=created_at.desc&limit=100`,
+      const lr = await fetch(`${URL_}/rest/v1/rental_listings?select=id,title,address,created_at,status,owner_email,price_per_hour,photos&order=created_at.desc&limit=100`,
         { headers: { ...svc, Prefer: 'count=exact' } });
       if (lr.ok) {
         const rows = await lr.json();
         const range = lr.headers.get('content-range');
-        listings.total = range?.includes('/') ? parseInt(range.split('/')[1]) || rows.length : rows.length;
-        listings.latest = rows.slice(0, 6);
+        listings.total   = range?.includes('/') ? parseInt(range.split('/')[1]) || rows.length : rows.length;
+        listings.live    = rows.filter(r => r.status === 'active').length;
+        listings.draft   = rows.filter(r => r.status === 'draft').length;
+        listings.pending = rows.filter(r => r.status === 'pending_approval').length;
+        listings.latest  = rows.slice(0, 8).map(r => ({
+          id: r.id, title: r.title, address: r.address, status: r.status,
+          created_at: r.created_at, owner_email: r.owner_email,
+          price_per_hour: r.price_per_hour,
+          photos: Array.isArray(r.photos) ? r.photos.length : 0,
+        }));
       }
     } catch { /* table may not exist yet */ }
 

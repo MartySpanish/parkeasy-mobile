@@ -1171,6 +1171,7 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
         )}
         <div className="flex items-center gap-1.5 mt-0.5 text-[11.5px] text-[rgba(234,241,248,0.55)]">
           <Clock size={11}/>{spot.walk}{spot.dist?` · ${spot.dist} mi`:''}
+          {spot.rental && <span className="text-[10px] font-bold text-[#06231f] px-1.5 py-0.5 rounded-full" style={{background:'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>BOOKABLE</span>}
         </div>
         <div className="flex items-center gap-2 mt-2">
           <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -1769,6 +1770,9 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
         <div className="min-w-0">
           <h3 className="font-display font-bold text-[16px] text-[#EAF1F8] leading-tight">{spot.name}</h3>
           <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] font-semibold mt-1 truncate">{spot.near}{spot.walk?` · ${spot.walk}`:''}{spot.dist?` · ${spot.dist} mi`:''}</p>
+          {spot.rental && (
+            <span className="inline-block mt-1 text-[10px] font-bold text-[#06231f] px-2 py-0.5 rounded-full" style={{background:'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>BOOKABLE SPACE</span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="font-display font-extrabold text-[18px] whitespace-nowrap">
@@ -4683,17 +4687,38 @@ const AdminOverlay = ({ onClose }) => {
                 </div>
               </div>
               <div>
-                <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Space listings</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <Tile label="Total listings" value={d.listings.total} accent="#C9A7FF"/>
-                  <Tile label="Latest shown" value={d.listings.latest.length}/>
+                <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Private space listings</h3>
+                <div className="grid grid-cols-4 gap-2">
+                  <Tile label="Live" value={d.listings.live ?? 0} accent="#6BEFB9"/>
+                  <Tile label="Draft" value={d.listings.draft ?? 0} accent="#FFD27A"/>
+                  <Tile label="In review" value={d.listings.pending ?? 0}/>
+                  <Tile label="Total" value={d.listings.total} accent="#C9A7FF"/>
                 </div>
+                {d.listings.draft > 0 && (
+                  <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2 leading-relaxed">
+                    ⚠️ {d.listings.draft} draft — drafts are <strong>not</strong> on the map and can&apos;t be booked. A nudge to the host usually finishes them.
+                  </p>
+                )}
                 {d.listings.latest.length > 0 && (
                   <div className="glass rounded-2xl divide-y divide-white/5 overflow-hidden mt-2">
                     {d.listings.latest.map((l,i)=>(
                       <div key={i} className="px-4 py-2.5">
-                        <p className="text-[13px] font-semibold text-[#EAF1F8] truncate">{l.title}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[13px] font-semibold text-[#EAF1F8] truncate">{l.title}</p>
+                          <span className={`flex-shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                            l.status==='active' ? 'bg-[#34E0A0]/15 text-[#6BEFB9]'
+                            : l.status==='draft' ? 'bg-[#FFC24B]/15 text-[#FFD27A]'
+                            : 'bg-white/10 text-[#aebfd4]'}`}>
+                            {l.status==='active' ? 'live' : l.status==='pending_approval' ? 'review' : (l.status || '—')}
+                          </span>
+                        </div>
                         <p className="text-[11px] text-[rgba(234,241,248,0.5)] truncate">{l.address} · {new Date(l.created_at).toLocaleDateString('en-GB')}</p>
+                        {l.owner_email && (
+                          <p className="text-[11px] text-[rgba(234,241,248,0.45)] truncate">
+                            {l.owner_email} · {l.price_per_hour ? `£${Number(l.price_per_hour).toFixed(2)}/hr` : 'no price'} · {l.photos ?? 0} photo{(l.photos ?? 0)!==1?'s':''}
+                            {l.status==='draft' && !l.photos && <span className="text-[#FFD27A]"> · needs photos</span>}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -5128,9 +5153,46 @@ export default function App() {
 
   const currentCity = CITIES.find(c => c.id === city) || CITIES[0];
   // Seeded spots for the city + any community spots the user has added there.
+  // Bookable private spaces (hosts' listings) shown alongside community spots
+  // on the map and in search — otherwise a driver would never find them.
+  const [rentalSpots, setRentalSpots] = useState([]);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!isSupabaseEnabled) return;
+      const { data } = await supabase.from('rental_listings')
+        .select('id,title,address,lat,lng,price_per_hour,spaces,space_type,photos,instructions,is_verified,verified_org_type,average_rating,ratings_count,completed_bookings_count')
+        .eq('status', 'active').limit(200);
+      if (!live || !data) return;
+      setRentalSpots(data.filter(l => l.lat != null && l.lng != null).map(l => ({
+        id: `rental-${l.id}`,
+        listingId: l.id,
+        rental: true,                       // marks it bookable
+        name: l.title || 'Private space',
+        near: l.address || '',
+        tags: [String(l.title||''), String(l.address||'')].join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2),
+        badge: 'paid',
+        dist: 0, walk: 'Bookable',
+        restriction: 'Private space — book in advance',
+        notes: l.instructions || 'A private space you can book in advance through ParkEasy.',
+        lat: l.lat, lng: l.lng,
+        by: 'ParkEasy host', votes: 0,
+        photo: l.photos?.[0] || null,
+        price: l.price_per_hour ? `£${Number(l.price_per_hour).toFixed(2)}/hr` : null,
+        spaces: l.spaces || 1,
+        listing: l,
+      })));
+    })();
+    return () => { live = false; };
+  }, []);
+
   const citySpots   = useMemo(
-    () => [...userSpots.filter(s => s.city === currentCity.id), ...getCitySpots(currentCity.id)],
-    [userSpots, currentCity.id]
+    () => [
+      ...userSpots.filter(s => s.city === currentCity.id),
+      ...rentalSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
+      ...getCitySpots(currentCity.id),
+    ],
+    [userSpots, rentalSpots, currentCity.id]
   );
   // Everything addressable by id (used by Saved, which can hold community spots too).
   const allSpots    = useMemo(() => [...userSpots, ...Object.values(CITY_SPOTS).flat()], [userSpots]);
