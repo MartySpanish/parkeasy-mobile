@@ -3249,24 +3249,65 @@ const checkRequirements = (l) => {
 };
 
 // Compress an image file and upload it to Supabase Storage; returns public URL.
+//
+// NOTE: this deliberately uses canvas.toBlob() rather than toDataURL() + a
+// fetch() of the data: URL. Fetching a data: URL is blocked by our CSP
+// (connect-src doesn't allow data:), which silently broke EVERY photo upload
+// and therefore every attempt to publish a listing.
 const uploadListingPhoto = async (file, uid, slotKey) => {
-  const dataUrl = await new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, 1100 / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(img.src);
-      resolve(c.toDataURL('image/jpeg', 0.82));
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
-  const blob = await (await fetch(dataUrl)).blob();
-  const path = `${uid}/${Date.now()}-${slotKey}.jpg`;
-  const { error } = await supabase.storage.from('listing-photos').upload(path, blob, { contentType:'image/jpeg', upsert:true });
-  if (error) throw error;
+  if (!file) throw new Error('No photo selected');
+  if (!/^image\//.test(file.type || '')) {
+    throw new Error('That file isn’t a photo — pick a JPEG, PNG or HEIC image.');
+  }
+
+  // Decode + downscale. Some phone formats (HEIC on non-Safari browsers) can't
+  // be decoded here; we fall back to uploading the original file as-is.
+  let blob = null;
+  let contentType = 'image/jpeg';
+  try {
+    blob = await new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width * scale);
+          c.height = Math.round(img.height * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          // toBlob avoids the base64 round-trip entirely — no CSP involvement.
+          c.toBlob(b => b ? resolve(b) : reject(new Error('compress failed')), 'image/jpeg', 0.82);
+        } catch (e) { URL.revokeObjectURL(url); reject(e); }
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+      img.src = url;
+    });
+  } catch {
+    // Couldn't decode/compress (e.g. HEIC on Android/Chrome) — upload the
+    // original rather than failing the host outright, if it's not enormous.
+    if (file.size > 12 * 1024 * 1024) {
+      throw new Error('That photo is too large to upload (over 12MB). Try a smaller one, or take a new photo.');
+    }
+    blob = file;
+    contentType = file.type || 'image/jpeg';
+  }
+
+  const ext = contentType.includes('png') ? 'png' : contentType.includes('heic') ? 'heic' : 'jpg';
+  const path = `${uid}/${Date.now()}-${slotKey}.${ext}`;
+  const { error } = await supabase.storage.from('listing-photos')
+    .upload(path, blob, { contentType, upsert: true });
+  if (error) {
+    // Surface something the host can act on instead of a raw storage error.
+    const m = String(error.message || '').toLowerCase();
+    if (m.includes('row-level security') || m.includes('unauthorized') || m.includes('jwt')) {
+      throw new Error('Your session expired while uploading. Sign in again and retry.');
+    }
+    if (m.includes('exceeded') || m.includes('too large') || m.includes('payload')) {
+      throw new Error('That photo is too large. Try a smaller one, or take a new photo.');
+    }
+    throw new Error(`Upload failed — ${error.message || 'please try again'}`);
+  }
   return supabase.storage.from('listing-photos').getPublicUrl(path).data.publicUrl;
 };
 
@@ -3325,7 +3366,7 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
       const url = await uploadListingPhoto(file, user.id, slotKey);
       if (isExtra) setExtras(p => [...p, url].slice(0, 10 - requiredSlots.length));
       else setSlots(p => ({ ...p, [slotKey]: url }));
-    } catch (ex) { setErr('Photo upload failed — ' + (ex.message || 'try again')); }
+    } catch (ex) { setErr(ex?.message || 'Photo upload failed — please try again.'); }
     setUploading(null);
   };
 
