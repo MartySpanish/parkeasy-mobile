@@ -1,4 +1,5 @@
 -- Vehicle registration on bookings.
+-- APPLIED to production project bbgqregyogtjzaustbng on 28 Jul 2026.
 --
 -- Asked for directly by the Katherine Methodist committee: "will we be able to
 -- access the car registration of the cars booked through ParkEasy... this is
