@@ -117,6 +117,41 @@ export async function cancelBooking(bookingId, token) {
   return d;
 }
 
+// ── Live occupancy, fed by the parking timer ────────────────────────────────
+// An opaque per-device key, so a guest (no account) can still start and end
+// their own session. Generated once and kept locally; it identifies a device to
+// itself, not a person to us.
+export function clientKey() {
+  try {
+    let k = localStorage.getItem('pe_client_key');
+    if (!k) {
+      k = (crypto.randomUUID?.() || String(Math.random()).slice(2) + Date.now().toString(36));
+      localStorage.setItem('pe_client_key', k);
+    }
+    return k;
+  } catch { return 'anon'; }
+}
+
+// Best-effort both ways: a parking timer must never fail because a
+// nice-to-have signal could not be recorded.
+export async function reportOccupancy(spotId, action, city) {
+  try {
+    await apiFetch('/api/occupancy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spotId: String(spotId), key: clientKey(), action, city }),
+    });
+  } catch { /* ignore */ }
+}
+
+export async function fetchOccupancy() {
+  try {
+    const r = await apiFetch('/api/occupancy');
+    if (!r.ok) return {};
+    return (await r.json())?.counts || {};
+  } catch { return {}; }
+}
+
 // POST a notification to /api/notify, which emails CONTACT_EMAIL via Resend.
 // Fails silently so the app keeps working even if email is down.
 export async function notify(type, data = {}) {
