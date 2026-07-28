@@ -1,5 +1,7 @@
--- Security and integrity fixes. Each block is independent and idempotent, so
--- this can be run whole or in pieces, and re-run safely.
+-- Security and integrity fixes.
+-- APPLIED to production project bbgqregyogtjzaustbng on 28 Jul 2026.
+-- Each block is independent and idempotent, so this can be run whole or in
+-- pieces, and re-run safely.
 --
 -- Ordered by severity. 1 and 2 are live data-exposure / fraud holes; 3 is a
 -- money bug; 4 makes guest bookings visible to the guest at all.
@@ -21,13 +23,13 @@
 create or replace view public.listings_public
 with (security_invoker = true) as
 select
-  id, title, address, lat, lng,
+  id, title, description, address, lat, lng,
   space_type, host_type, spaces,
   price_per_hour, price_per_day, price_per_month,
   amenities, photos, availability,
   is_verified, verified_org_type,
   completed_bookings_count, average_rating, ratings_count,
-  created_at
+  published_at, created_at
 from public.rental_listings
 where status = 'active';
 
@@ -57,9 +59,13 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  -- The service role is the app's own backend; it is allowed to set these.
-  if current_setting('request.jwt.claim.role', true) = 'service_role'
-     or current_user = 'service_role' then
+  -- Supabase runs service-role PostgREST requests as the service_role role;
+  -- migrations and the SQL editor run as postgres/supabase_admin. VERIFIED on
+  -- production: the JWT claim GUCs (request.jwt.claim.role and
+  -- request.jwt.claims) are BOTH null in this context, so keying off them would
+  -- have silently locked the backend out of its own publish flow. Key off the
+  -- role actually in use instead.
+  if current_user in ('service_role', 'postgres', 'supabase_admin', 'supabase_auth_admin') then
     return new;
   end if;
 

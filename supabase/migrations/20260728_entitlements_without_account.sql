@@ -1,4 +1,5 @@
 -- Let a Premium entitlement exist before the payer has an account.
+-- APPLIED to production project bbgqregyogtjzaustbng on 28 Jul 2026.
 --
 -- promo_redemptions.user_id is uuid NOT NULL with an FK to auth.users. Stripe
 -- checkout does not require an account, so when someone paid without one the
