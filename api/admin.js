@@ -136,9 +136,47 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     let body = req.body;
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
-    const { action, id, reason } = body || {};
+    const { action, id, reason, kind } = body || {};
     if (!id || !['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Bad request' });
     if (action === 'reject' && !(reason || '').trim()) return res.status(400).json({ error: 'Rejection requires a reason' });
+
+    // ── Community spot submissions ──
+    // Approving is what makes a submitted spot public: spots_public selects
+    // only status='approved'. Kept service-role-only and deliberately given no
+    // update policy for authenticated users, so a submitter can never approve
+    // their own spot — which is the whole point of the review step.
+    if (kind === 'spot') {
+      const sr = await fetch(`${URL_}/rest/v1/spot_submissions?id=eq.${encodeURIComponent(id)}&select=*`, { headers: svcH });
+      const sub = (await sr.json())?.[0];
+      if (!sub) return res.status(404).json({ error: 'Submission not found' });
+      if (action === 'approve' && (sub.lat == null || sub.lng == null)) {
+        return res.status(400).json({ error: 'This submission has no location, so it cannot go on the map. Reject it and ask them to resubmit with location on.' });
+      }
+
+      const patch = action === 'approve'
+        ? { status: 'approved', reviewed_at: new Date().toISOString(), review_note: null }
+        : { status: 'rejected', reviewed_at: new Date().toISOString(), review_note: reason.trim() };
+      const up = await fetch(`${URL_}/rest/v1/spot_submissions?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH', headers: svcH, body: JSON.stringify(patch),
+      });
+      if (!up.ok) return res.status(502).json({ error: 'Update failed', detail: await up.text().catch(() => '') });
+
+      if (sub.submitter_email && process.env.RESEND_API_KEY) {
+        const place = sub.street || sub.near || 'your spot';
+        const subj = action === 'approve'
+          ? `✅ Your ParkEasy spot is live — ${place}`
+          : `About the spot you sent us — ${place}`;
+        const html = action === 'approve'
+          ? `<p>Thanks for adding <strong>${String(place).replace(/</g, '&lt;')}</strong> to ParkEasy — it's been checked and it's now on the map for every driver in Northern Ireland.</p><p>That's one more space someone won't circle the block looking for. <a href="https://parkeasy.uk">See it on the map →</a></p>`
+          : `<p>Thanks for sending us <strong>${String(place).replace(/</g, '&lt;')}</strong>. We haven't put this one on the map:</p><blockquote style="border-left:3px solid #2ED3C6;padding-left:12px;margin:12px 0;color:#334155">${(reason || '').replace(/</g, '&lt;')}</blockquote><p>If we've got that wrong, just reply and tell us — and please do keep sending spots.</p>`;
+        fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>', to: [sub.submitter_email], subject: subj, html }),
+        }).catch(() => {});
+      }
+      return res.status(200).json({ ok: true, status: patch.status });
+    }
 
     const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${encodeURIComponent(id)}&select=*`, { headers: svcH });
     const listing = (await lr.json())?.[0];
@@ -235,13 +273,20 @@ export default async function handler(req, res) {
     // Community spot submissions (from the "Add a Spot" tab) — total + recent.
     let spots = { total: 0, latest: [] };
     try {
-      const sr = await fetch(`${URL_}/rest/v1/spot_submissions?select=near,street,type,restriction,notes,submitter_name,submitter_email,has_photo,lat,lng,status,created_at&order=created_at.desc&limit=30`,
+      // id and photo_url are needed so the dashboard can show what was
+      // photographed and act on it — you cannot approve a spot you can't see.
+      const sr = await fetch(`${URL_}/rest/v1/spot_submissions?select=id,near,street,type,restriction,notes,submitter_name,submitter_email,has_photo,photo_url,lat,lng,status,created_at,reviewed_at,review_note&order=created_at.desc&limit=50`,
         { headers: { ...svc, Prefer: 'count=exact' } });
       if (sr.ok) {
         const rows = await sr.json();
         const range = sr.headers.get('content-range');
         spots.total = range?.includes('/') ? parseInt(range.split('/')[1]) || rows.length : rows.length;
-        spots.latest = rows.slice(0, 12);
+        // Awaiting review comes first and in full — that is the queue Marty
+        // works through. The rest is history and only needs a short tail.
+        spots.pending  = rows.filter(r => r.status === 'new');
+        spots.approved = rows.filter(r => r.status === 'approved').length;
+        spots.rejected = rows.filter(r => r.status === 'rejected').length;
+        spots.latest   = rows.slice(0, 12);
       }
     } catch { /* table may not exist yet */ }
 
