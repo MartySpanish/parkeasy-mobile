@@ -3455,6 +3455,17 @@ const suggestedPrice = (lat, lng) => {
 // minimum booking in a sensible number of hours.
 const MIN_PRICE_PER_HOUR = 1.5;
 
+// Restriction wording a submitter picks -> public map badge. Anything that
+// isn't clearly unrestricted is shown as timed rather than free, so an
+// approved community spot never over-promises to the next driver.
+const RESTRICTION_TO_PUBLIC_BADGE = {
+  'Free all day':    'free',
+  'No restrictions': 'free',
+  'Time limited':    'timed',
+  'Evenings free':   'timed',
+  'Weekends free':   'timed',
+};
+
 const checkRequirements = (l) => {
   const missing = [];
   const photos = l.photos || [];
@@ -4661,10 +4672,14 @@ const AdminOverlay = ({ onClose }) => {
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
   const [acting, setActing] = useState(null);
-  const act = async (action, id) => {
+  // kind 'spot' routes to the community-submission queue; omitted means an
+  // organization rental listing, which is the original behaviour.
+  const act = async (action, id, kind) => {
     let reason;
     if (action === 'reject') {
-      reason = window.prompt('Reason for rejection (sent to the host by email):');
+      reason = window.prompt(kind === 'spot'
+        ? 'Why not? This is emailed to the person who sent it in:'
+        : 'Reason for rejection (sent to the host by email):');
       if (!reason || !reason.trim()) return;
     }
     setActing(id);
@@ -4673,7 +4688,7 @@ const AdminOverlay = ({ onClose }) => {
       const token = sess?.session?.access_token;
       const r = await apiFetch('/api/admin', { method:'POST',
         headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
-        body: JSON.stringify({ action, id, reason }) });
+        body: JSON.stringify({ action, id, reason, kind }) });
       if (r.ok) setRefresh(x=>x+1);
       else { const d = await r.json().catch(()=>({})); alert(d.error || 'Action failed'); }
     } catch (e) { alert(e.message || 'Action failed'); }
@@ -4898,7 +4913,61 @@ const AdminOverlay = ({ onClose }) => {
                     <div className="flex items-baseline gap-2">
                       <span className="font-display font-extrabold text-3xl text-[#5BE7DA] leading-none">{d.spots.total}</span>
                       <span className="text-[12px] text-[rgba(234,241,248,0.55)]">spot{d.spots.total!==1?'s':''} submitted by drivers</span>
+                      {(d.spots.approved!=null) && (
+                        <span className="text-[11.5px] text-[rgba(234,241,248,0.45)] ml-auto">{d.spots.approved} live · {d.spots.rejected} rejected</span>
+                      )}
                     </div>
+
+                    {/* The review queue. Nothing a driver submits reaches the
+                        public map until it is approved here, so this list is
+                        the gate — and it shows the photo, because you cannot
+                        judge a spot you cannot see. */}
+                    {d.spots.pending?.length > 0 && (
+                      <div className="mt-3.5">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#FFD27A] mb-2">
+                          {d.spots.pending.length} awaiting your review
+                        </p>
+                        <div className="space-y-2.5">
+                          {d.spots.pending.map(s => (
+                            <div key={s.id} className="rounded-2xl bg-white/5 border border-[#FFC24B]/25 overflow-hidden">
+                              {s.photo_url && (
+                                <img src={s.photo_url} alt="Submitted spot" loading="lazy"
+                                  className="w-full h-36 object-cover border-b border-white/10"/>
+                              )}
+                              <div className="p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-semibold text-[13.5px] text-[#EAF1F8] truncate">{s.street || s.near || 'Spot'}</span>
+                                  <span className="flex-shrink-0 text-[11px] text-[rgba(234,241,248,0.5)]">{new Date(s.created_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}</span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-[rgba(234,241,248,0.55)] mt-0.5">
+                                  {s.near && s.street && <span>near {s.near}</span>}
+                                  {s.type && <span className="text-[#5BE7DA]">{s.type}</span>}
+                                  {s.restriction && <span>· {s.restriction}</span>}
+                                  {(s.lat!=null && s.lng!=null)
+                                    ? <a className="text-[#5BE7DA] underline" target="_blank" rel="noreferrer" href={`https://www.google.com/maps?q=${s.lat},${s.lng}`}>check on map ↗</a>
+                                    : <span className="text-[#FFD27A]">· no GPS — can’t be mapped</span>}
+                                  {!s.photo_url && s.has_photo && <span className="text-[#FFD27A]">· photo failed to upload</span>}
+                                  {!s.photo_url && !s.has_photo && <span>· no photo</span>}
+                                </div>
+                                {s.notes && <p className="text-[12px] text-[rgba(234,241,248,0.6)] mt-1.5 italic">“{s.notes}”</p>}
+                                <p className="text-[11px] text-[rgba(234,241,248,0.4)] mt-1">by {s.submitter_name || s.submitter_email || 'someone'}</p>
+                                <div className="flex gap-2 mt-2.5">
+                                  <button onClick={()=>act('approve', s.id, 'spot')} disabled={acting===s.id || s.lat==null}
+                                    title={s.lat==null ? 'No location captured, so it cannot go on the map' : undefined}
+                                    className="flex-1 py-2 rounded-xl btn-teal text-[#06231f] font-bold text-[12px] disabled:opacity-40">
+                                    {acting===s.id ? '…' : 'Approve & publish'}
+                                  </button>
+                                  <button onClick={()=>act('reject', s.id, 'spot')} disabled={acting===s.id}
+                                    className="px-3 py-2 rounded-xl border border-red-400/40 text-red-300 font-bold text-[12px] disabled:opacity-40">
+                                    Reject
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {d.spots.latest?.length > 0 ? (
                       <div className="mt-3 divide-y divide-white/5">
                         {d.spots.latest.map((s,i)=>(
@@ -5473,13 +5542,53 @@ export default function App() {
     return () => { live = false; };
   }, []);
 
+  // Community spots that Marty has approved. These are public — every driver
+  // sees them — which is exactly why they only appear after review. The view
+  // itself filters to status='approved', so an unreviewed or rejected spot
+  // cannot reach here even if this query were wrong.
+  const [approvedSpots, setApprovedSpots] = useState([]);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!isSupabaseEnabled) return;
+      const { data } = await supabase.from('spots_public')
+        .select('id,near,street,type,restriction,notes,lat,lng,photo_url,submitter_name,created_at')
+        .limit(500);
+      if (!live || !data) return;
+      setApprovedSpots(data.map(s => ({
+        id: `sub-${s.id}`,
+        name: s.street || s.near || 'Community spot',
+        near: s.near || s.street || '',
+        tags: [s.near, s.street, s.type].filter(Boolean).join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2),
+        badge: RESTRICTION_TO_PUBLIC_BADGE[s.restriction] || 'free',
+        dist: 0, walk: 'Community find',
+        restriction: s.restriction || 'Community reported',
+        notes: s.notes || `${s.type || 'Spot'} added by a local driver.`,
+        lat: s.lat, lng: s.lng,
+        by: s.submitter_name || 'A local driver',
+        votes: 0,
+        photo: s.photo_url || null,
+        price: null, spaces: null,
+        community: true,
+      })));
+    })();
+    return () => { live = false; };
+  }, []);
+
   const citySpots   = useMemo(
-    () => [
-      ...userSpots.filter(s => s.city === currentCity.id),
-      ...rentalSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
-      ...getCitySpots(currentCity.id),
-    ],
-    [userSpots, rentalSpots, currentCity.id]
+    () => {
+      // A submitter's own copy is kept locally so their spot shows immediately
+      // while it waits for review. Once approved it arrives from the server too,
+      // so drop the local duplicate rather than showing the same spot twice.
+      const approvedKeys = new Set(approvedSpots.map(s => `${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`));
+      return [
+        ...userSpots.filter(s => s.city === currentCity.id && !approvedKeys.has(`${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`)),
+        ...approvedSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
+        ...rentalSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
+        ...getCitySpots(currentCity.id),
+      ];
+    },
+    [userSpots, approvedSpots, rentalSpots, currentCity.id]
   );
   // Everything addressable by id (used by Saved, which can hold community spots too).
   const allSpots    = useMemo(() => [...userSpots, ...Object.values(CITY_SPOTS).flat()], [userSpots]);
