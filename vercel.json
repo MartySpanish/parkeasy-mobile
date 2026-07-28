@@ -64,5 +64,167 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/antrim",
+      "destination": "/area/antrim.html",
+      "permanent": true
+    },
+    {
+      "source": "/ballycastle",
+      "destination": "/area/ballycastle.html",
+      "permanent": true
+    },
+    {
+      "source": "/ballymena",
+      "destination": "/area/ballymena.html",
+      "permanent": true
+    },
+    {
+      "source": "/banbridge",
+      "destination": "/area/banbridge.html",
+      "permanent": true
+    },
+    {
+      "source": "/bangor",
+      "destination": "/area/bangor.html",
+      "permanent": true
+    },
+    {
+      "source": "/belfast",
+      "destination": "/area/belfast.html",
+      "permanent": true
+    },
+    {
+      "source": "/botanic",
+      "destination": "/area/botanic.html",
+      "permanent": true
+    },
+    {
+      "source": "/carrickfergus",
+      "destination": "/area/carrickfergus.html",
+      "permanent": true
+    },
+    {
+      "source": "/cathedral-quarter",
+      "destination": "/area/cathedral-quarter.html",
+      "permanent": true
+    },
+    {
+      "source": "/city-hospital",
+      "destination": "/area/city-hospital.html",
+      "permanent": true
+    },
+    {
+      "source": "/coleraine",
+      "destination": "/area/coleraine.html",
+      "permanent": true
+    },
+    {
+      "source": "/cookstown",
+      "destination": "/area/cookstown.html",
+      "permanent": true
+    },
+    {
+      "source": "/craigavon",
+      "destination": "/area/craigavon.html",
+      "permanent": true
+    },
+    {
+      "source": "/derry",
+      "destination": "/area/derry.html",
+      "permanent": true
+    },
+    {
+      "source": "/derry-londonderry",
+      "destination": "/area/derry.html",
+      "permanent": true
+    },
+    {
+      "source": "/londonderry",
+      "destination": "/area/derry.html",
+      "permanent": true
+    },
+    {
+      "source": "/downpatrick",
+      "destination": "/area/downpatrick.html",
+      "permanent": true
+    },
+    {
+      "source": "/dungannon",
+      "destination": "/area/dungannon.html",
+      "permanent": true
+    },
+    {
+      "source": "/enniskillen",
+      "destination": "/area/enniskillen.html",
+      "permanent": true
+    },
+    {
+      "source": "/larne",
+      "destination": "/area/larne.html",
+      "permanent": true
+    },
+    {
+      "source": "/lisburn",
+      "destination": "/area/lisburn.html",
+      "permanent": true
+    },
+    {
+      "source": "/magherafelt",
+      "destination": "/area/magherafelt.html",
+      "permanent": true
+    },
+    {
+      "source": "/newcastle",
+      "destination": "/area/newcastle.html",
+      "permanent": true
+    },
+    {
+      "source": "/newry",
+      "destination": "/area/newry.html",
+      "permanent": true
+    },
+    {
+      "source": "/newtownabbey",
+      "destination": "/area/newtownabbey.html",
+      "permanent": true
+    },
+    {
+      "source": "/omagh",
+      "destination": "/area/omagh.html",
+      "permanent": true
+    },
+    {
+      "source": "/portadown",
+      "destination": "/area/portadown.html",
+      "permanent": true
+    },
+    {
+      "source": "/portrush",
+      "destination": "/area/portrush.html",
+      "permanent": true
+    },
+    {
+      "source": "/qub",
+      "destination": "/area/qub.html",
+      "permanent": true
+    },
+    {
+      "source": "/sse-arena",
+      "destination": "/area/sse-arena.html",
+      "permanent": true
+    },
+    {
+      "source": "/strabane",
+      "destination": "/area/strabane.html",
+      "permanent": true
+    },
+    {
+      "source": "/titanic-quarter",
+      "destination": "/area/titanic-quarter.html",
+      "permanent": true
+    }
   ]
 }
