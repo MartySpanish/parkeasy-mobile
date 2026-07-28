@@ -56,6 +56,17 @@ export default async function handler(req, res) {
   const repeatWeeks = Math.max(1, Math.min(12, parseInt(body?.repeatWeeks || 1, 10)));
   if (!listingId) return res.status(400).json({ error: 'Missing listingId' });
 
+  // Vehicle registration — the host uses this to match a car to a paid booking.
+  // Normalised uppercase without separators so 'ab12 cde' and 'AB12CDE' compare
+  // equal when a marshal is checking a plate against their list. Kept permissive
+  // (UK current, older UK and Irish plates all differ) — a driver blocked from
+  // paying by an over-strict pattern is a lost booking, and a wrong plate is a
+  // conversation on the day, not a payment failure.
+  const vehicleReg = String(body?.vehicleReg || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+  if (vehicleReg && vehicleReg.length < 2) {
+    return res.status(400).json({ error: 'That vehicle registration looks too short — please check it.' });
+  }
+
   // Optional driver identity (guest checkout is allowed per Terms §3.1).
   let driver = null;
   const jwt = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
@@ -169,6 +180,10 @@ export default async function handler(req, res) {
       listing_id: listing.id, host_id: listing.owner_id,
       driver_id: driver?.id || null, driver_email: driver?.email || null,
       starts_at: occ.starts_at, ends_at: occ.ends_at, duration_hours: durationHours, currency: 'gbp',
+      // On EVERY occurrence, not just the first: a marshal checking week 7 of a
+      // repeat booking needs the plate as much as week 1 does. (Money stays on
+      // the first row only — that's a different concern.)
+      vehicle_reg: vehicleReg || null,
       cancellation_deadline: new Date(Date.parse(occ.starts_at) - (parseInt(process.env.CANCEL_CUTOFF_HOURS || '24', 10)) * 3600000).toISOString(),
       // Money is recorded on the FIRST occurrence only, so totals and refunds
       // never double-count a series that was paid for once.

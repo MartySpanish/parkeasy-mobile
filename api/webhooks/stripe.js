@@ -130,10 +130,29 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     const findIt = listing?.instructions
       ? `<div style="font-family:system-ui;margin:10px 0;padding:12px 14px;border-left:4px solid #2ED3C6;background:#f0fdfa;border-radius:8px"><strong>📍 How to find your space</strong><br>${listing.instructions}</div>`
       : '';
+    const regRow = b.vehicle_reg
+      ? `<tr><td style="padding:4px 10px;color:#64748b">Vehicle</td><td style="padding:4px 10px"><strong>${b.vehicle_reg}</strong></td></tr>`
+      : '';
     if (b.driver_email) jobs.push(send(b.driver_email, `✅ Parking booked — ${title}`,
-      `<h2 style="font-family:system-ui">Booking confirmed</h2>${findIt}${rows('')}${offerHtml}<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (£1 fee non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
-    if (listing?.contact_email) jobs.push(send(listing.contact_email, `🅿️ Your space was booked — ${title}`,
-      `<h2 style="font-family:system-ui">You've got a booking</h2>${rows(`<tr><td style="padding:4px 10px;color:#64748b">You receive</td><td style="padding:4px 10px"><strong>${gbp(b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence))}</strong> (after 15% fee), paid out weekly by Stripe.</td></tr>`)}`));
+      `<h2 style="font-family:system-ui">Booking confirmed</h2>${findIt}${rows(regRow)}${offerHtml}<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (the driver service fee is non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
+    // The host's email is what a volunteer marshal actually stands in the car
+    // park holding, so the registration goes at the TOP, big — not buried in a
+    // table under the address. Asked for directly by a host committee: "this is
+    // how we know who has booked and paid so we can direct them to their space."
+    const APP = process.env.APP_URL || 'https://parkeasy.uk';
+    const regBlock = b.vehicle_reg
+      ? `<div style="font-family:system-ui;margin:12px 0;padding:14px;border:2px solid #2ED3C6;border-radius:10px;background:#f0fdfa;text-align:center">
+           <div style="font-size:12px;color:#0f766e;letter-spacing:.12em;font-weight:700">VEHICLE REGISTRATION</div>
+           <div style="font-size:26px;font-weight:800;letter-spacing:.12em;color:#083344;margin-top:4px">${b.vehicle_reg}</div>
+           <div style="font-size:12px;color:#64748b;margin-top:4px">Look for this car — it's the one that has paid.</div>
+         </div>`
+      : `<p style="font-family:system-ui;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px">No registration was given for this booking.</p>`;
+    const manageBtn = `<p style="font-family:system-ui;margin:16px 0">
+        <a href="${APP}/?tab=spaces" style="background:#2ED3C6;color:#06231f;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:24px;display:inline-block">View all your bookings →</a>
+      </p>
+      <p style="font-family:system-ui;color:#64748b;font-size:12px">Every booking, with its registration and arrival time, is in the app under <strong>Spaces → Your bookings</strong>. You can also subscribe to your bookings calendar there so they appear alongside everything else in your diary.</p>`;
+    if (listing?.contact_email) jobs.push(send(listing.contact_email, `🅿️ Your space was booked — ${title}${b.vehicle_reg ? ` (${b.vehicle_reg})` : ''}`,
+      `<h2 style="font-family:system-ui">You've got a booking</h2>${regBlock}${rows(`<tr><td style="padding:4px 10px;color:#64748b">You receive</td><td style="padding:4px 10px"><strong>${gbp(b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence))}</strong> (after 15% fee), paid out weekly by Stripe.</td></tr>`)}${manageBtn}`));
     if (FOUNDER) jobs.push(send(FOUNDER, `💷 New ParkEasy booking — ${title}`, rows()));
     await Promise.all(jobs);
   } catch (e) { console.error('sendBookingEmails', e); }
