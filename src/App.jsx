@@ -2987,6 +2987,14 @@ const BookingSheet = ({ listing, onClose }) => {
   const [err, setErr] = useState('');
   const [optIn, setOptIn] = useState(false);   // event-parking updates (GDPR: unchecked by default)
   const [weeks, setWeeks] = useState(1);      // repeat the same slot weekly
+  // Remembered between bookings — people drive the same car, and retyping a
+  // plate every time is friction on the one screen we can least afford it.
+  const [vehicleReg, setVehicleReg] = useState(() => ls.get('pe_vehicle_reg', '') || '');
+  // Permissive on purpose: UK current (AB12 CDE), older UK, and Irish
+  // (12-D-3456) plates all have to pass, and a driver blocked from paying by an
+  // over-strict regex is a lost booking.
+  const regClean = vehicleReg.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const regValid = regClean.length >= 2 && regClean.length <= 10;
 
   const bookingCost = rate * hours * weeks;
   const serviceFee = driverServiceFee(bookingCost);
@@ -3006,7 +3014,8 @@ const BookingSheet = ({ listing, onClose }) => {
         token = data?.session?.access_token || null;
       }
       const startsAt = date && time ? new Date(`${date}T${time}`).toISOString() : null;
-      const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks });
+      ls.set('pe_vehicle_reg', regClean);
+      const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks, vehicleReg: regClean });
       window.location.href = url;   // full-page redirect to Stripe Checkout
     } catch (e) { setErr(paymentError(e.message)); setBusy(false); }
   };
@@ -3033,6 +3042,20 @@ const BookingSheet = ({ listing, onClose }) => {
           <div className="flex-1 text-center"><span className="font-display font-extrabold text-2xl text-[#EAF1F8]">{hours}</span><span className="text-xs text-[#8da2bd]"> hour{hours!==1?'s':''}</span></div>
           <button type="button" onClick={()=>setHours(h=>Math.min(24,h+1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">+</button>
         </div>
+
+        {/* The host needs this to match a car to a paid booking on the day —
+            without it a marshal in a car park has no way to tell who has paid. */}
+        <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Vehicle registration</label>
+        <input
+          value={vehicleReg}
+          onChange={e=>setVehicleReg(e.target.value.toUpperCase().slice(0,12))}
+          placeholder="e.g. ABC 1234"
+          autoComplete="off" autoCapitalize="characters" spellCheck={false}
+          aria-label="Your vehicle registration"
+          className={`${field} tracking-[0.15em] font-bold uppercase`}/>
+        <p className="text-[11px] text-[#8da2bd] mt-1 leading-snug">
+          Shared with this host only, so they can spot your car and point you to your space.
+        </p>
 
         <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Repeat weekly</label>
         <div className="flex gap-1.5 flex-wrap">
@@ -3092,9 +3115,12 @@ const BookingSheet = ({ listing, onClose }) => {
             {busy ? 'Booking…' : `Use pass credit (${credit.remaining} left) — free`}
           </button>
         )}
-        <button onClick={pay} disabled={busy || rate<=0 || belowMin}
+        <button onClick={pay} disabled={busy || rate<=0 || belowMin || !regValid}
           className={`${credit ? 'mt-2' : 'mt-4'} w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50`}>
-          {busy ? 'Opening secure payment…' : belowMin ? `Add ${hoursForMin - hours} more hour${hoursForMin - hours !== 1 ? 's' : ''} to book` : `Pay £${total.toFixed(2)} with card`}
+          {busy ? 'Opening secure payment…'
+            : belowMin ? `Add ${hoursForMin - hours} more hour${hoursForMin - hours !== 1 ? 's' : ''} to book`
+            : !regValid ? 'Enter your vehicle registration'
+            : `Pay £${total.toFixed(2)} with card`}
         </button>
         <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">Free cancellation until 24 hours before your booking. After that, no refund. Secure payment via Stripe — you park at your own risk, see our Terms.</p>
       </div>
@@ -3847,7 +3873,7 @@ const HostEarnings = ({ user }) => {
     (async () => {
       if (!isSupabaseEnabled || !user?.id) return;
       const { data } = await supabase.from('bookings')
-        .select('id,starts_at,status,booking_price_pence,application_fee_pence,service_fee_pence')
+        .select('id,starts_at,ends_at,duration_hours,status,vehicle_reg,booking_price_pence,application_fee_pence,service_fee_pence')
         .eq('host_id', user.id).in('status', ['paid','completed']);
       const { data: ha } = await supabase.from('host_accounts').select('calendar_token').eq('host_id', user.id).maybeSingle();
       if (!live) return;
@@ -3867,6 +3893,12 @@ const HostEarnings = ({ user }) => {
   const total = rows.reduce((a, b) => a + earned(b), 0);
   const weekTotal = thisWeek.reduce((a, b) => a + earned(b), 0);
   const calUrl = calToken ? `https://parkeasy-gray.vercel.app/api/calendar?token=${calToken}` : null;
+  // Still to arrive: anything whose slot hasn't finished yet, soonest first. A
+  // booking that started an hour ago but runs for three is still "expected" —
+  // that car is in the car park now and the marshal may still need to place it.
+  const upcoming = rows
+    .filter(b => b.starts_at && Date.parse(b.ends_at || b.starts_at) >= Date.now())
+    .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-5">
@@ -3880,6 +3912,36 @@ const HostEarnings = ({ user }) => {
         ))}
       </div>
       <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] mt-2">You keep 85% of each booking. Stripe pays out to your bank weekly.</p>
+
+      {/* Who's coming, and in what. This is the list a volunteer marshal stands
+          in the car park holding: a plate is the only thing that ties a car in
+          front of them to a booking that has actually been paid for. */}
+      {upcoming.length > 0 && (
+        <div className="mt-4 pt-3.5 border-t border-white/10">
+          <h4 className="font-display font-bold text-[12px] text-[#EAF1F8] uppercase tracking-widest mb-2">
+            Expected arrivals <span className="text-[rgba(234,241,248,0.45)] font-semibold normal-case tracking-normal">· {upcoming.length} upcoming</span>
+          </h4>
+          <div className="space-y-1.5">
+            {upcoming.slice(0, 8).map(b => (
+              <div key={b.id} className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+                <span className="font-mono font-bold text-[13px] text-[#06231f] bg-[#6BEFB9] px-2 py-1 rounded-md tracking-widest flex-shrink-0">
+                  {b.vehicle_reg || '—'}
+                </span>
+                <span className="text-[12px] text-[#cdd9e8] truncate">
+                  {new Date(b.starts_at).toLocaleString('en-GB', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
+                  {b.duration_hours ? ` · ${b.duration_hours}h` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+          {upcoming.some(b => !b.vehicle_reg) && (
+            <p className="text-[11px] text-[#FFD27A] mt-2 leading-snug">
+              Some bookings predate registration capture, so show no plate. Newer ones will always have one.
+            </p>
+          )}
+        </div>
+      )}
+
       {calUrl && (
         <button onClick={()=>{ navigator.clipboard?.writeText(calUrl); setCopied(true); setTimeout(()=>setCopied(false), 2500); }}
           className="mt-2.5 w-full text-[12.5px] font-bold py-2.5 min-h-[44px] rounded-xl bg-white/8 border border-white/15 text-[#cdd9e8]">

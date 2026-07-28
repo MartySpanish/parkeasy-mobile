@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     if (!host) return res.status(404).send('Calendar not found');
 
     const from = new Date(Date.now() - 30 * 86400000).toISOString();
-    const br = await fetch(`${URL_}/rest/v1/bookings?host_id=eq.${host.host_id}&status=in.(paid,completed)&starts_at=gte.${from}&select=id,listing_id,starts_at,ends_at,duration_hours,driver_email,amount_total_pence&order=starts_at`, { headers: svc });
+    const br = await fetch(`${URL_}/rest/v1/bookings?host_id=eq.${host.host_id}&status=in.(paid,completed)&starts_at=gte.${from}&select=id,listing_id,starts_at,ends_at,duration_hours,driver_email,vehicle_reg,amount_total_pence&order=starts_at`, { headers: svc });
     const bookings = br.ok ? await br.json() : [];
 
     const ids = [...new Set(bookings.map(b => b.listing_id).filter(Boolean))];
@@ -44,8 +44,11 @@ export default async function handler(req, res) {
         `DTSTAMP:${stamp(Date.now())}`,
         `DTSTART:${stamp(b.starts_at)}`,
         `DTEND:${stamp(end)}`,
-        `SUMMARY:${ics(`Parking booked — ${l.title || 'your space'}`)}`,
-        `DESCRIPTION:${ics(`Booked by ${who}. You receive £${(((b.amount_total_pence || 0) * 0.85) / 100).toFixed(2)} (approx, after fees). Manage at parkeasy.uk`)}`,
+        // Registration goes in the SUMMARY, not just the body: a calendar
+        // notification on a phone shows the title and little else, and the
+        // plate is the one thing a marshal needs at a glance.
+        `SUMMARY:${ics(`🅿️ ${b.vehicle_reg ? `${b.vehicle_reg} — ` : ''}${l.title || 'your space'}`)}`,
+        `DESCRIPTION:${ics(`${b.vehicle_reg ? `Vehicle registration: ${b.vehicle_reg}\n` : ''}Booked by ${who}. You receive £${(((b.amount_total_pence || 0) * 0.85) / 100).toFixed(2)} (approx, after fees). Manage at parkeasy.uk`)}`,
         `LOCATION:${ics(l.address || '')}`,
         'END:VEVENT');
     }
