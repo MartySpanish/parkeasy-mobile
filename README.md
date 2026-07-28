@@ -122,9 +122,12 @@ The app uses a demo authentication system. Use any email and password to login.
 - Adjust search radius (1-10 miles)
 
 ### Pricing
-- Transparent pricing display
-- 10% service fee on all bookings
-- Free cancellation up to 1 hour before booking
+- Transparent pricing display — the full breakdown is shown before payment
+- Host keeps **85%**; ParkEasy takes 15% commission
+- Driver service fee: **15% of the booking, min £0.99, max £3.50**
+- Minimum booking **£4.00**
+- Free cancellation up to 24 hours before booking; non-refundable after that
+- Rules live in `api/_pricing.js` (mirrored in `src/App.jsx`)
 
 ### Mock Data
 The app includes 6 mock parking spots with various features:

@@ -3,17 +3,17 @@
 // success Stripe transfers 85% of the booking price to the host's connected
 // account and keeps 15% + the driver service fee as the application fee.
 //
-// Money rules (all integer pence, GBP):
+// Money rules live in api/_pricing.js — that module is the single source of
+// truth and this endpoint must not re-derive any of it. In short:
 //   booking_price   = price_per_hour * duration
-//   service_fee     = DRIVER_SERVICE_FEE_PENCE (flat, configurable)
+//   service_fee     = 15% of booking_price, floored at 99p, capped at £3.50
 //   driver pays     = booking_price + service_fee
 //   application_fee = round(booking_price * 0.15) + service_fee   (ParkEasy)
 //   host receives   = booking_price - round(booking_price * 0.15) = 85%
 //
 // The price is ALWAYS read from the DB, never from the client. TEST MODE ONLY.
 import Stripe from 'stripe';
-
-const HOST_COMMISSION = 0.15;
+import { MIN_BOOKING_PENCE, priceBreakdown } from '../_pricing.js';
 
 const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
 function applyCors(req, res) {
@@ -38,7 +38,6 @@ export default async function handler(req, res) {
   const ANON = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const APP_URL = process.env.APP_URL || 'https://parkeasy.uk';
-  const SERVICE_FEE_PENCE = parseInt(process.env.DRIVER_SERVICE_FEE_PENCE || '100', 10); // £1.00 default (Terms §4.2)
 
   if (!KEY) return res.status(500).json({ error: 'Stripe not configured (STRIPE_SECRET_KEY)' });
   if (!KEY.startsWith('sk_test_') && process.env.STRIPE_LIVE_ENABLED !== 'true') {
@@ -125,9 +124,22 @@ export default async function handler(req, res) {
 
     const perWeekPence = Math.round(pricePerHour * durationHours * 100);
     const bookingPricePence = perWeekPence * repeatWeeks;
+
+    // Below the minimum the fixed part of the card fee makes the booking not
+    // worth running. Checked against the FIRST week, not the series total, so
+    // a repeat booking can't sneak a sub-minimum slot through by multiplying up.
+    if (perWeekPence < MIN_BOOKING_PENCE) {
+      const needHours = Math.ceil(MIN_BOOKING_PENCE / Math.max(1, Math.round(pricePerHour * 100)));
+      return res.status(400).json({
+        error: `Minimum booking is £${(MIN_BOOKING_PENCE / 100).toFixed(2)}. At £${pricePerHour.toFixed(2)}/hr that's ${needHours} hour${needHours !== 1 ? 's' : ''} — please book a bit longer.`,
+      });
+    }
+
     // One driver service fee per booking series, not per week.
-    const applicationFeePence = Math.round(bookingPricePence * HOST_COMMISSION) + SERVICE_FEE_PENCE;
-    const totalPence = bookingPricePence + SERVICE_FEE_PENCE;
+    const money = priceBreakdown(bookingPricePence, process.env);
+    const SERVICE_FEE_PENCE = money.serviceFeePence;
+    const applicationFeePence = money.applicationFeePence;
+    const totalPence = money.totalPence;
 
     const meta = { listing_id: listing.id, host_id: listing.owner_id, duration: String(durationHours), weeks: String(repeatWeeks) };
 

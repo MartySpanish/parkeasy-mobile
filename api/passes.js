@@ -3,8 +3,7 @@
 // the pass price + the driver service fee, charged ONCE here; redemptions are
 // then free. The webhook credits the pass on checkout.session.completed.
 import Stripe from 'stripe';
-
-const HOST_COMMISSION = 0.15;
+import { priceBreakdown } from './_pricing.js';
 
 const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
 function applyCors(req, res) {
@@ -26,7 +25,6 @@ async function handleBuy(req, res) {
   const ANON = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const APP_URL = process.env.APP_URL || 'https://parkeasy.uk';
-  const SERVICE_FEE_PENCE = parseInt(process.env.DRIVER_SERVICE_FEE_PENCE || '100', 10);
 
   if (!KEY) return res.status(500).json({ error: 'Stripe not configured' });
   if (!KEY.startsWith('sk_test_') && process.env.STRIPE_LIVE_ENABLED !== 'true') {
@@ -68,8 +66,10 @@ async function handleBuy(req, res) {
       return res.status(409).json({ error: 'This host hasn’t finished payout setup yet.' });
     }
 
-    const feePence = Math.round(pass.price_pence * HOST_COMMISSION) + SERVICE_FEE_PENCE;
-    const totalPence = pass.price_pence + SERVICE_FEE_PENCE;
+    const money = priceBreakdown(pass.price_pence, process.env);
+    const SERVICE_FEE_PENCE = money.serviceFeePence;
+    const feePence = money.applicationFeePence;
+    const totalPence = money.totalPence;
     const meta = { pass_id: pass.id, driver_id: driver.id, num_credits: String(pass.num_credits) };
 
     const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });

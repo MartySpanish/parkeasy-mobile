@@ -2936,7 +2936,17 @@ const RENTAL_AMENITIES = [
 // Driver booking + payment (Stripe Checkout, test mode). Pick a start and
 // duration, see the price broken down, then pay on Stripe's hosted page — on
 // success the money is split 85% host / 15% + service fee to ParkEasy.
-const SERVICE_FEE_GBP = 1.00;  // mirrors DRIVER_SERVICE_FEE_PENCE default (£1.00)
+// ── PRICING MIRROR ───────────────────────────────────────────────────────────
+// These MUST match api/_pricing.js, which is the source of truth and is what
+// actually charges the card. This copy only draws the breakdown; the server
+// recomputes everything from the DB price and would reject a mismatch.
+const DRIVER_FEE_RATE      = 0.15;
+const DRIVER_FEE_MIN_GBP   = 0.99;
+const DRIVER_FEE_MAX_GBP   = 3.50;
+const MIN_BOOKING_GBP      = 4.00;
+const driverServiceFee = (bookingGbp) =>
+  bookingGbp <= 0 ? 0
+    : Math.min(DRIVER_FEE_MAX_GBP, Math.max(DRIVER_FEE_MIN_GBP, Math.round(bookingGbp * DRIVER_FEE_RATE * 100) / 100));
 const BookingSheet = ({ listing, onClose }) => {
   const baseRate = Number(listing.price_per_hour) || 0;
   const today = new Date().toISOString().split('T')[0];
@@ -2974,7 +2984,13 @@ const BookingSheet = ({ listing, onClose }) => {
   const [weeks, setWeeks] = useState(1);      // repeat the same slot weekly
 
   const bookingCost = rate * hours * weeks;
-  const total = bookingCost + SERVICE_FEE_GBP;
+  const serviceFee = driverServiceFee(bookingCost);
+  const total = bookingCost + serviceFee;
+  // The minimum applies per week, matching the server, so a repeat booking
+  // can't multiply its way past a slot that's too small to be worth charging.
+  const perWeekCost = rate * hours;
+  const belowMin = perWeekCost > 0 && perWeekCost < MIN_BOOKING_GBP;
+  const hoursForMin = belowMin ? Math.ceil(MIN_BOOKING_GBP / rate) : 0;
 
   const pay = async () => {
     setBusy(true); setErr('');
@@ -3033,9 +3049,15 @@ const BookingSheet = ({ listing, onClose }) => {
         )}
         <div className="mt-4 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5 space-y-1.5 text-[13px]">
           <div className="flex justify-between text-[#cdd9e8]"><span>Parking ({hours}h × £{rate.toFixed(2)}{weeks>1?` × ${weeks} wks`:''})</span><span>£{bookingCost.toFixed(2)}</span></div>
-          <div className="flex justify-between text-[#cdd9e8]"><span>Driver service fee</span><span>£{SERVICE_FEE_GBP.toFixed(2)}</span></div>
+          <div className="flex justify-between text-[#cdd9e8]"><span>Driver service fee</span><span>£{serviceFee.toFixed(2)}</span></div>
           <div className="flex justify-between font-bold text-[#EAF1F8] pt-1.5 border-t border-white/10"><span>Total</span><span className="text-[#6BEFB9]">£{total.toFixed(2)}</span></div>
         </div>
+
+        {belowMin && (
+          <p className="text-[11.5px] text-[#FFD27A] mt-3 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
+            Minimum booking is £{MIN_BOOKING_GBP.toFixed(2)}. At £{rate.toFixed(2)}/hr that&apos;s {hoursForMin} hour{hoursForMin!==1?'s':''} — add {hoursForMin - hours} more to book.
+          </p>
+        )}
 
         <label className="flex items-start gap-2 mt-3 cursor-pointer select-none">
           <input type="checkbox" checked={optIn} onChange={e=>setOptIn(e.target.checked)} className="mt-0.5 w-4 h-4 flex-shrink-0 accent-[#2ED3C6]"/>
@@ -3065,9 +3087,9 @@ const BookingSheet = ({ listing, onClose }) => {
             {busy ? 'Booking…' : `Use pass credit (${credit.remaining} left) — free`}
           </button>
         )}
-        <button onClick={pay} disabled={busy || rate<=0}
+        <button onClick={pay} disabled={busy || rate<=0 || belowMin}
           className={`${credit ? 'mt-2' : 'mt-4'} w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50`}>
-          {busy ? 'Opening secure payment…' : `Pay £${total.toFixed(2)} with card`}
+          {busy ? 'Opening secure payment…' : belowMin ? `Add ${hoursForMin - hours} more hour${hoursForMin - hours !== 1 ? 's' : ''} to book` : `Pay £${total.toFixed(2)} with card`}
         </button>
         <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">Free cancellation until 24 hours before your booking. After that, no refund. Secure payment via Stripe — you park at your own risk, see our Terms.</p>
       </div>
@@ -3294,11 +3316,19 @@ const ORG_TYPES = ['school','church','sports club','business','community centre'
 const AVAILABILITY_PRESETS = ['Event dates only','Weekdays','Weekends','Always'];
 
 // Suggested £/hr for the area (no zone_pricing table yet — city heuristic).
+// Suggested hourly rate. Deliberately anchored UP: the official Fleadh
+// park-and-ride charges £10/day from sites that are further out and need a
+// bus, so a walkable space near a venue is worth more than that, not less.
+// Most first-time hosts underprice — every marketplace in this space says so —
+// and a host who lists at £1.20 makes the booking barely worth processing.
 const suggestedPrice = (lat, lng) => {
-  if (lat == null) return 1.5;
+  if (lat == null) return 2.5;
   const c = nearestCity(lat, lng);
-  return ['belfast','derry'].includes(c?.id) ? 2.0 : 1.2;
+  return ['belfast','derry'].includes(c?.id) ? 3.0 : 2.0;
 };
+// Floor for a listing's hourly rate. Anything under this can't reach the £4
+// minimum booking in a sensible number of hours.
+const MIN_PRICE_PER_HOUR = 1.5;
 
 const checkRequirements = (l) => {
   const missing = [];
@@ -3309,6 +3339,7 @@ const checkRequirements = (l) => {
   if ((l.instructions||'').trim().length < 30) missing.push(`"How to find it" too short — ${(l.instructions||'').trim().length}/30 characters`);
   if (l.lat == null || l.lng == null) missing.push('Verified address (pick a suggestion)');
   if (!(l.price_per_hour ?? l.price_per_day ?? l.price_per_month)) missing.push('A price');
+  else if (l.price_per_hour != null && Number(l.price_per_hour) < MIN_PRICE_PER_HOUR) missing.push(`Price of at least £${MIN_PRICE_PER_HOUR.toFixed(2)}/hr`);
   if (!l.availability) missing.push('Availability preset');
   if (!(l.contact_phone||'').trim()) missing.push('Your mobile number');
   const cap = l.spaces ?? 1;
@@ -3666,7 +3697,20 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
       <textarea className={inp} rows={3} placeholder="e.g. Turn right at the red gate, first driveway on the left. Ring the doorbell if the gate is closed." value={f.instructions} onChange={e=>set('instructions',e.target.value)}/>
 
       <label className={lbl}>Price (£/hour) * <span className="normal-case font-medium text-[#6b7d96]">{f.lat!=null?`· suggested £${suggestedPrice(f.lat,f.lng).toFixed(2)} for this area`:''}</span></label>
-      <input className={inp} type="number" min="0" step="0.10" placeholder="2.00" value={f.price_per_hour} onChange={e=>set('price_per_hour',e.target.value)}/>
+      <input className={inp} type="number" min={MIN_PRICE_PER_HOUR} step="0.10" placeholder={suggestedPrice(f.lat,f.lng).toFixed(2)} value={f.price_per_hour} onChange={e=>set('price_per_hour',e.target.value)}/>
+      {/* Hosts consistently underprice, so give them a real benchmark to price
+          against rather than leaving them to guess from nothing. */}
+      <div className="mt-1.5 rounded-xl bg-[#2ED3C6]/8 border border-[#2ED3C6]/20 px-3 py-2.5">
+        <p className="text-[11.5px] text-[#cdd9e8] leading-snug">
+          <strong className="text-[#5BE7DA]">Most first-time hosts charge too little.</strong> The official event park-and-ride is <strong className="text-[#EAF1F8]">£10 a day</strong> — from a car park miles out that still needs a bus. A space someone can walk from is worth more than that.
+        </p>
+        {f.price_per_hour && parseFloat(f.price_per_hour) > 0 && (
+          <p className="text-[11.5px] text-[#8da2bd] mt-1.5">
+            At £{parseFloat(f.price_per_hour).toFixed(2)}/hr you keep <strong className="text-[#6BEFB9]">£{(parseFloat(f.price_per_hour) * 4 * 0.85).toFixed(2)}</strong> of a 4-hour booking, after our 15%.
+            {parseFloat(f.price_per_hour) < MIN_PRICE_PER_HOUR && <span className="text-[#FFD27A]"> Minimum is £{MIN_PRICE_PER_HOUR.toFixed(2)}/hr.</span>}
+          </p>
+        )}
+      </div>
 
       <label className={lbl}>Availability *</label>
       <div className="flex flex-wrap gap-2">
@@ -4931,7 +4975,7 @@ const INFO_PAGES = {
     body: (
       <>
         {[
-          ['How much does ParkEasy cost drivers?', 'The app is free. When you book a private space you pay the host’s price plus a £1 driver service fee (£2 on major event dates), always shown in full before you pay.'],
+          ['How much does ParkEasy cost drivers?', 'The app is free. When you book a private space you pay the host’s price plus a driver service fee of 15% (minimum £0.99, never more than £3.50), always shown in full before you pay. Minimum booking is £4.'],
           ['How much do hosts earn?', 'Hosts keep 85% of every booking. ParkEasy’s 15% commission covers payments, the platform and support. Payouts go to your bank weekly via Stripe.'],
           ['When do hosts get paid?', 'Weekly, automatically, by bank transfer through Stripe. You set up payouts once (identity + bank details, handled securely by Stripe) from the Spaces tab.'],
           ['What’s the cancellation policy?', 'Cancel 24+ hours before your booking start for a full refund of the parking price (the driver service fee is non-refundable). Under 24 hours, bookings are non-refundable — the space was held for you. If a host cancels, you get everything back.'],
