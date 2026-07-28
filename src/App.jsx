@@ -3049,12 +3049,12 @@ const BookingSheet = ({ listing, onClose }) => {
         <input
           value={vehicleReg}
           onChange={e=>setVehicleReg(e.target.value.toUpperCase().slice(0,12))}
-          placeholder="e.g. ABC 1234"
+          placeholder="e.g. BT11 ABC"
           autoComplete="off" autoCapitalize="characters" spellCheck={false}
-          aria-label="Your vehicle registration"
+          aria-label="Vehicle registration"
           className={`${field} tracking-[0.15em] font-bold uppercase`}/>
         <p className="text-[11px] text-[#8da2bd] mt-1 leading-snug">
-          Shared with this host only, so they can spot your car and point you to your space.
+          So the host knows it&apos;s you when you arrive. Shared with this host only.
         </p>
 
         <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Repeat weekly</label>
@@ -4012,7 +4012,7 @@ const BookingsPanel = ({ user }) => {
   const load = async () => {
     if (!isSupabaseEnabled || !user?.id) { setRows([]); return; }
     const { data } = await supabase.from('bookings')
-      .select('id,listing_id,host_id,driver_id,starts_at,duration_hours,amount_total_pence,booking_price_pence,application_fee_pence,service_fee_pence,status,refund_pence,refund_status,cancellation_deadline,created_at')
+      .select('id,listing_id,host_id,driver_id,driver_email,vehicle_reg,starts_at,duration_hours,amount_total_pence,booking_price_pence,application_fee_pence,service_fee_pence,status,refund_pence,refund_status,cancellation_deadline,created_at')
       .or(`driver_id.eq.${user.id},host_id.eq.${user.id}`)
       .order('created_at', { ascending: false }).limit(30);
     const list = data || [];
@@ -4109,6 +4109,21 @@ const BookingsPanel = ({ user }) => {
               <div className="flex items-center justify-between gap-2 text-[11.5px] text-[rgba(234,241,248,0.55)] mt-0.5">
                 <span>{asHost ? '🅿️ your space' : '🚗 you booked'} · {when} · {b.duration_hours}h</span>
                 <span>{asHost ? `earns ${gbp(hostEarns)}` : gbp(b.amount_total_pence)}</span>
+              </div>
+              {/* Registration, driver and reference on one line. The host reads
+                  this at the gate; the driver reads it to check they typed the
+                  plate right before setting off. Null shows an em dash rather
+                  than a blank, so a pre-launch booking doesn't look broken. */}
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className={`font-mono font-bold text-[12px] px-2 py-0.5 rounded-md tracking-widest ${b.vehicle_reg ? 'text-[#06231f] bg-[#6BEFB9]' : 'text-[rgba(234,241,248,0.45)] bg-white/8 border border-white/12'}`}>
+                  {b.vehicle_reg || '—'}
+                </span>
+                {asHost && b.driver_email && (
+                  <span className="text-[11px] text-[rgba(234,241,248,0.5)] truncate max-w-[45%]">{b.driver_email}</span>
+                )}
+                <span className="text-[10.5px] text-[rgba(234,241,248,0.35)] ml-auto font-mono">
+                  ref {String(b.id).slice(0, 8).toUpperCase()}
+                </span>
               </div>
               {b.status === 'cancelled' && b.refund_pence > 0 && <p className="text-[11px] text-[#FFD27A] mt-0.5">Refunded {gbp(b.refund_pence)}</p>}
               {b.status === 'paid' && !asHost && offers[b.listing_id] && (
@@ -5474,7 +5489,11 @@ export default function App() {
     // Booking checkout return (driver paid, or cancelled). Test mode only.
     const booking = p.get('booking');
     if (booking === 'success') {
-      setFlash({ tone: 'ok', msg: '✅ Booking confirmed — your payment went through.' });
+      // Echo the registration straight back so the driver can catch a typo
+      // before they travel, not at the gate. Read from the value we stored on
+      // the way to Stripe, so there's no round-trip on the return leg.
+      const reg = ls.get('pe_vehicle_reg', '') || '';
+      setFlash({ tone: 'ok', msg: `✅ Booking confirmed — your payment went through.${reg ? ` Vehicle ${reg} — check it's right in Your bookings.` : ''}` });
       window.history.replaceState({}, '', window.location.pathname);
     } else if (booking === 'cancelled') {
       setFlash({ tone: 'warn', msg: 'Booking cancelled — you weren’t charged.' });
