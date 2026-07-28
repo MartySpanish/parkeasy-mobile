@@ -209,6 +209,13 @@ export default async function handler(req, res) {
 
     if (!ins.ok) {
       const detail = await ins.text().catch(() => '');
+      // 23P01 = exclusion constraint violation, i.e. bookings_no_overlap fired:
+      // someone paid for this slot between our availability check above and
+      // this insert. That's a race we can only lose at write time, so report it
+      // as "just taken" rather than a server error.
+      if (/23P01|bookings_no_overlap/.test(detail)) {
+        return res.status(409).json({ error: 'That slot was just taken by another driver. Pick a different time — you haven’t been charged.' });
+      }
       // Degrade rather than block if the vehicle_reg migration hasn't been
       // applied yet: retry once without the column. A booking that records
       // everything except the plate beats a checkout that refuses to run.
