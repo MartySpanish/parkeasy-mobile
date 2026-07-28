@@ -151,8 +151,35 @@ export default async function handler(req, res) {
       });
     }
 
+    // Event day = the host has set a price override for that date. That IS what
+    // an event day means in this product, so there is no separate flag to keep
+    // in step. Fee goes 15% -> 20%; the host's 85% is untouched either way.
+    let eventDay = false;
+    try {
+      const day = occurrences[0].starts_at.slice(0, 10);
+      const ov = await fetch(`${URL_}/rest/v1/listing_price_overrides?listing_id=eq.${listing.id}&override_date=eq.${day}&select=price_pence`, { headers: svc });
+      eventDay = ov.ok && ((await ov.json())?.length > 0);
+    } catch { /* not an event day if we can't tell */ }
+
+    // Overnight lock-in: a car left in after the gates close. Charged once per
+    // series and paid to the host IN FULL — priceBreakdown keeps it outside the
+    // commission base, because the signed agreement says every penny is theirs.
+    let surchargePence = 0;
+    let overnight = false;
+    if (listing.overnight_fee_pence > 0 && listing.gate_closes_at) {
+      const end = new Date(occurrences[0].ends_at);
+      const [gh, gm] = String(listing.gate_closes_at).split(':').map(Number);
+      // Compare in Europe/London, since gate times are wall-clock local.
+      const local = new Date(end.toLocaleString('en-GB', { timeZone: 'Europe/London' }));
+      const endMins = local.getHours() * 60 + local.getMinutes();
+      if (endMins > (gh * 60 + (gm || 0))) {
+        overnight = true;
+        surchargePence = listing.overnight_fee_pence;
+      }
+    }
+
     // One driver service fee per booking series, not per week.
-    const money = priceBreakdown(bookingPricePence, process.env);
+    const money = priceBreakdown(bookingPricePence, process.env, { eventDay, surchargePence });
     const SERVICE_FEE_PENCE = money.serviceFeePence;
     const applicationFeePence = money.applicationFeePence;
     const totalPence = money.totalPence;
@@ -166,7 +193,20 @@ export default async function handler(req, res) {
       customer_email: driver?.email || undefined,
       line_items: [
         { price_data: { currency: 'gbp', product_data: { name: repeatWeeks > 1 ? `Parking — ${listing.title || 'space'} (${repeatWeeks} weekly bookings)` : `Parking — ${listing.title || 'space'}`, description: listing.address || undefined }, unit_amount: bookingPricePence }, quantity: 1 },
-        { price_data: { currency: 'gbp', product_data: { name: 'Driver service fee' }, unit_amount: SERVICE_FEE_PENCE }, quantity: 1 },
+        { price_data: { currency: 'gbp', product_data: { name: eventDay ? 'Driver service fee (event day)' : 'Driver service fee' }, unit_amount: SERVICE_FEE_PENCE }, quantity: 1 },
+        // Itemised so the driver sees exactly what the extra is for, and that
+        // it belongs to the site rather than to us.
+        ...(surchargePence > 0 ? [{
+          price_data: {
+            currency: 'gbp',
+            product_data: {
+              name: 'Overnight fee — vehicle left in after the gates close',
+              description: `Paid in full to ${listing.title || 'the site'}`,
+            },
+            unit_amount: surchargePence,
+          },
+          quantity: 1,
+        }] : []),
       ],
       payment_intent_data: {
         application_fee_amount: applicationFeePence,
