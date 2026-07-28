@@ -62,8 +62,13 @@ export default async function handler(req, res) {
   // (UK current, older UK and Irish plates all differ) — a driver blocked from
   // paying by an over-strict pattern is a lost booking, and a wrong plate is a
   // conversation on the day, not a payment failure.
+  // Required for new bookings, and enforced HERE rather than trusting the
+  // client — the button being disabled is a courtesy, not a control.
   const vehicleReg = String(body?.vehicleReg || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-  if (vehicleReg && vehicleReg.length < 2) {
+  if (!vehicleReg) {
+    return res.status(400).json({ error: 'Please enter your vehicle registration so the host knows it’s you when you arrive.' });
+  }
+  if (vehicleReg.length < 2) {
     return res.status(400).json({ error: 'That vehicle registration looks too short — please check it.' });
   }
 
@@ -183,7 +188,7 @@ export default async function handler(req, res) {
       // On EVERY occurrence, not just the first: a marshal checking week 7 of a
       // repeat booking needs the plate as much as week 1 does. (Money stays on
       // the first row only — that's a different concern.)
-      vehicle_reg: vehicleReg || null,
+      vehicle_reg: vehicleReg,
       cancellation_deadline: new Date(Date.parse(occ.starts_at) - (parseInt(process.env.CANCEL_CUTOFF_HOURS || '24', 10)) * 3600000).toISOString(),
       // Money is recorded on the FIRST occurrence only, so totals and refunds
       // never double-count a series that was paid for once.

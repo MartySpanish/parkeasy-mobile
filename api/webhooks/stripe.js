@@ -107,10 +107,19 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     const gbp = (p) => `£${(p / 100).toFixed(2)}`;
     const when = b.starts_at ? new Date(b.starts_at).toLocaleString('en-GB', { timeZone: 'Europe/London' }) : 'see app';
     const title = listing?.title || 'a space';
-    const rows = (extra) => `<table style="border-collapse:collapse"><tr><td style="padding:4px 10px;color:#64748b">Space</td><td style="padding:4px 10px"><strong>${title}</strong></td></tr>`
+    const ref = String(b.id || '').slice(0, 8).toUpperCase();
+    // "Your booking" (what you need to turn up) is kept separate from the
+    // receipt (what you paid). The registration belongs in the first: a driver
+    // checks it before setting off, and it is not a payment detail.
+    const bookingRows = (extra) => `<table style="border-collapse:collapse"><tr><td style="padding:4px 10px;color:#64748b">Space</td><td style="padding:4px 10px"><strong>${title}</strong></td></tr>`
       + `<tr><td style="padding:4px 10px;color:#64748b">Address</td><td style="padding:4px 10px">${listing?.address || ''}</td></tr>`
       + `<tr><td style="padding:4px 10px;color:#64748b">When</td><td style="padding:4px 10px">${when} · ${b.duration_hours}h</td></tr>`
-      + `<tr><td style="padding:4px 10px;color:#64748b">Total paid</td><td style="padding:4px 10px">${gbp(b.amount_total_pence)}</td></tr>${extra || ''}</table>`;
+      + `<tr><td style="padding:4px 10px;color:#64748b">Vehicle</td><td style="padding:4px 10px"><strong style="letter-spacing:.08em">${b.vehicle_reg || '—'}</strong></td></tr>`
+      + `<tr><td style="padding:4px 10px;color:#64748b">Reference</td><td style="padding:4px 10px">${ref}</td></tr>${extra || ''}</table>`;
+    const receiptRows = () => `<h3 style="font-family:system-ui;margin:18px 0 4px;font-size:15px">Receipt</h3>`
+      + `<table style="border-collapse:collapse"><tr><td style="padding:4px 10px;color:#64748b">Total paid</td><td style="padding:4px 10px">${gbp(b.amount_total_pence)}</td></tr></table>`;
+    // Kept for the founder/host notifications, which want one flat summary.
+    const rows = (extra) => bookingRows(`<tr><td style="padding:4px 10px;color:#64748b">Total paid</td><td style="padding:4px 10px">${gbp(b.amount_total_pence)}</td></tr>${extra || ''}`);
     // Local offer for this listing (active + in window) — rides along in the
     // driver's confirmation email. Best-effort; table may not exist yet.
     let offerHtml = '';
@@ -130,11 +139,11 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     const findIt = listing?.instructions
       ? `<div style="font-family:system-ui;margin:10px 0;padding:12px 14px;border-left:4px solid #2ED3C6;background:#f0fdfa;border-radius:8px"><strong>📍 How to find your space</strong><br>${listing.instructions}</div>`
       : '';
-    const regRow = b.vehicle_reg
-      ? `<tr><td style="padding:4px 10px;color:#64748b">Vehicle</td><td style="padding:4px 10px"><strong>${b.vehicle_reg}</strong></td></tr>`
-      : '';
     if (b.driver_email) jobs.push(send(b.driver_email, `✅ Parking booked — ${title}`,
-      `<h2 style="font-family:system-ui">Booking confirmed</h2>${findIt}${rows(regRow)}${offerHtml}<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (the driver service fee is non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
+      `<h2 style="font-family:system-ui">Booking confirmed</h2>${findIt}`
+      + `<h3 style="font-family:system-ui;margin:18px 0 4px;font-size:15px">Your booking</h3>${bookingRows('')}`
+      + `${receiptRows()}${offerHtml}`
+      + `<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (the driver service fee is non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
     // The host's email is what a volunteer marshal actually stands in the car
     // park holding, so the registration goes at the TOP, big — not buried in a
     // table under the address. Asked for directly by a host committee: "this is
