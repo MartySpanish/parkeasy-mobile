@@ -21,7 +21,13 @@ export const HOST_COMMISSION = 0.15;      // host keeps 85% — do not raise
 export const DRIVER_FEE_RATE = 0.15;      // driver fee as a share of the booking
 export const DRIVER_FEE_EVENT_RATE = 0.20;// event days — matches how every parking operator prices
 export const DRIVER_FEE_MIN_PENCE = 99;   // floor: below this the card fee eats it
-export const DRIVER_FEE_MAX_PENCE = 350;  // cap: a £40 monthly booking is not £6 of fee
+// Cap. Raised 350 -> 500 on 28 Jul 2026, tuned for "reasonable but as
+// profitable as possible": at 350 the take rate FELL to 18-22% on long and
+// event bookings, which is where we were leaving the most money. At 500 those
+// land around 20-26%, still comfortably under JustPark's ~30%. The cap only
+// binds above a £33.33 space price, so every ordinary hourly booking is
+// completely unaffected.
+export const DRIVER_FEE_MAX_PENCE = 500;
 
 // Minimum a driver can be charged for parking, before the service fee. Below
 // this the fixed part of the card fee makes the transaction not worth running.
