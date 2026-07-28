@@ -53,9 +53,26 @@ export default async function handler(req, res) {
   // across devices (returns null once it has expired).
   if (req.method === 'GET') {
     try {
-      const r = await fetch(`${URL_}/rest/v1/promo_redemptions?user_id=eq.${caller.id}&order=expires_at.desc&limit=1&select=expires_at`, { headers: svc });
+      // Match on the account OR the email it was bought with. Someone who paid
+      // Stripe before creating an account has an entitlement stored against
+      // their email with user_id null; looking up by user_id alone made that
+      // invisible forever, so they paid and saw nothing.
+      const email = (caller.email || '').trim().toLowerCase();
+      const filter = email
+        ? `or=(user_id.eq.${caller.id},and(user_id.is.null,user_email.eq.${encodeURIComponent(email)}))`
+        : `user_id=eq.${caller.id}`;
+      const r = await fetch(`${URL_}/rest/v1/promo_redemptions?${filter}&order=expires_at.desc&limit=1&select=id,expires_at,user_id`, { headers: svc });
       const row = (await r.json())?.[0];
       const until = row ? Date.parse(row.expires_at) : 0;
+
+      // Claim it: attach the account so later lookups are a plain user_id hit
+      // and the row can't be picked up by anyone else who later takes that
+      // address. Best-effort — the entitlement is already being returned.
+      if (row && !row.user_id && until > Date.now()) {
+        fetch(`${URL_}/rest/v1/promo_redemptions?id=eq.${row.id}`, {
+          method: 'PATCH', headers: svc, body: JSON.stringify({ user_id: caller.id }),
+        }).catch(() => {});
+      }
       return res.status(200).json({ ok: true, premiumUntil: until > Date.now() ? until : null });
     } catch { return res.status(200).json({ ok: true, premiumUntil: null }); }
   }
