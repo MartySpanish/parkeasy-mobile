@@ -12,7 +12,15 @@
     <!-- Primary meta -->
     <title>ParkEasy — Northern Ireland Parking Finder</title>
     <meta name="description" content="Find where locals actually park across Northern Ireland. Street spots, hidden gems and official car parks — community-powered. Plus private driveways to rent." />
-    <link rel="canonical" href="https://parkeasy.uk/" />
+
+    <!-- NO hard-coded canonical here, deliberately. This file is served for
+         EVERY SPA route, so a canonical of "/" told Google that /belfast,
+         /derry and all 30 town URLs were duplicates of the homepage and should
+         be dropped from the index. A canonical is a directive, not a hint, so
+         every inbound link to a town URL was handing its value to the homepage
+         while the town page fell out of search.
+         No canonical beats a wrong one. The static /area/*.html pages carry
+         their own correct self-referencing canonicals. -->
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -39,7 +47,8 @@
     <meta property="og:title" content="ParkEasy — Belfast Parking Finder" />
     <meta property="og:description" content="Find where locals actually park in Belfast — street spots, hidden gems and official car parks, community-powered." />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://parkeasy.uk/" />
+    <!-- og:url omitted for the same reason as the canonical: this file serves
+         every SPA route, so a fixed "/" would mislabel every shared town link. -->
     <meta property="og:site_name" content="ParkEasy" />
     <meta property="og:locale" content="en_GB" />
     <meta property="og:image" content="https://parkeasy.uk/og-image.png" />
