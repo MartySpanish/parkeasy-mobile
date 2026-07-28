@@ -1015,6 +1015,17 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
               </div>
             ))}
           </div>
+          {/* The exact failure this prevents: a driver paid, the app still
+              showed "Subscribe" because his entitlement hadn't attached to an
+              account, so he assumed it hadn't worked and paid a second time
+              three minutes later. Entitlements are no longer dropped, but a
+              payer who hasn't signed in yet still sees this screen — so tell
+              them where their Premium is before they buy it twice. */}
+          <div className="mb-3 rounded-xl bg-[#FFC24B]/10 border border-[#FFC24B]/25 px-3 py-2.5">
+            <p className="text-[11.5px] text-[#FFD27A] leading-snug">
+              <strong>Already paid?</strong> Don&apos;t buy again — sign in with the email you paid with and your Premium is applied automatically.
+            </p>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <a href={STRIPE_MONTHLY} target="_blank" rel="noreferrer"
               className="block rounded-2xl border-2 border-[#5BE7DA] p-4 text-center hover:bg-[#2ED3C6]/10 active:scale-[0.98] transition-all">
