@@ -74,7 +74,11 @@ export default async function handler(req, res) {
       : (startMs != null ? startMs - cutoffHours * 3600000 : null);
     let refundPence = 0;
     if (isHost) refundPence = booking.amount_total_pence;
-    else if (deadlineMs != null && now <= deadlineMs) refundPence = booking.booking_price_pence;
+    // Space price AND any host surcharge. The surcharge (e.g. the overnight
+    // lock-in fee) is only owed if the car is actually left in overnight — on a
+    // cancellation the driver never turns up, so keeping it would be charging
+    // them for a night they did not have. Only the service fee is retained.
+    else if (deadlineMs != null && now <= deadlineMs) refundPence = (booking.booking_price_pence || 0) + (booking.surcharge_pence || 0);
     else refundPence = 0;
 
     const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });

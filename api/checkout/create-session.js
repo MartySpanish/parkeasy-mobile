@@ -236,6 +236,10 @@ export default async function handler(req, res) {
       booking_price_pence: i === 0 ? bookingPricePence : 0,
       application_fee_pence: i === 0 ? applicationFeePence : 0,
       service_fee_pence: i === 0 ? SERVICE_FEE_PENCE : 0,
+      // Recorded separately so a cancellation can hand it back. It is inside
+      // amount_total_pence but is NOT ours — it belongs to the host, and it is
+      // owed only if the car is actually left in overnight.
+      surcharge_pence: i === 0 ? surchargePence : 0,
       stripe_session_id: i === 0 ? session.id : `${session.id}#${i}`,
       stripe_destination: host.stripe_account_id, status: 'pending',
       marketing_opt_in: marketingOptIn,

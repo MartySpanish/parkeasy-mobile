@@ -3021,9 +3021,11 @@ const RENTAL_AMENITIES = [
 // These MUST match api/_pricing.js, which is the source of truth and is what
 // actually charges the card. This copy only draws the breakdown; the server
 // recomputes everything from the DB price and would reject a mismatch.
+// Cap is £5.00 (raised from £3.50, 28 Jul 2026) and only binds above a £33.33
+// space price, so ordinary hourly bookings are unaffected.
 const DRIVER_FEE_RATE      = 0.15;
 const DRIVER_FEE_MIN_GBP   = 0.99;
-const DRIVER_FEE_MAX_GBP   = 3.50;
+const DRIVER_FEE_MAX_GBP   = 5.00;
 const MIN_BOOKING_GBP      = 4.00;
 const driverServiceFee = (bookingGbp) =>
   bookingGbp <= 0 ? 0
