@@ -1253,6 +1253,12 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
     return () => { live = false; };
   }, [spot.id]);
   const [shareDone,setShareDone]=useState(false);
+  // When a submitter supplied a photo of the space, that is far more useful at
+  // the top than a map: it answers "will I recognise this when I get there".
+  // The map stays one tap away rather than being replaced.
+  const [showMap,setShowMap]=useState(false);
+  const [photoBroken,setPhotoBroken]=useState(false);
+  const hasPhoto = !!spot?.photo && !photoBroken;
   const [confirmedAt,setConfirmedAt]=useState(()=> spot ? (ls.get('pe_confirmed_at',{})[spot.id]||null) : null);
   if (!spot) return null;
   const confirmCount=(spot.votes||0)+(voted?1:0);
@@ -1269,15 +1275,40 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
     <div className="fixed inset-0 z-[70] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.6)'}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] overflow-hidden animate-fade-in-up" style={{maxWidth:680,width:'100%',margin:'0 auto',maxHeight:'92vh',background:'var(--sheet)',borderTop:'1px solid var(--hairline)',boxShadow:'var(--sheet-shadow)'}}>
         <div className="relative h-44">
-          {/* Zoom 15 showed a whole district — you could not tell which street
-              the spot was on, which is the one thing this header exists to
-              answer. 17 shows named streets. Safe to zoom in here because a
+          {/* A photo of the actual space beats a map here — it answers "will I
+              recognise this when I pull up", which a street layout cannot. Shown
+              whenever the submitter supplied one; the map is one tap away.
+              Falls back to the map if the image 404s (a deleted storage object
+              must not leave a blank header).
+              Zoom 15 showed a whole district — you could not tell which street
+              the spot was on. 17 shows named streets. Safe to zoom in because a
               gated spot never reaches this view; free users get the area-only
-              teaser card instead, so no approximate pin is being shown as exact. */}
-          <MapContainer key={spot.id} center={[spot.lat,spot.lng]} zoom={17} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
-            <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
-            <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
-          </MapContainer>
+              teaser card, so no approximate pin is shown as exact. */}
+          {hasPhoto && !showMap ? (
+            <>
+              <img src={spot.photo} alt={`Photo of ${spot.name}`} loading="lazy"
+                onError={()=>setPhotoBroken(true)}
+                className="w-full h-full object-cover"/>
+              <div className="absolute inset-x-0 bottom-0 h-16 pointer-events-none" style={{background:'linear-gradient(to top, rgba(6,11,20,0.75), transparent)'}}/>
+              {spot.by && (
+                <span className="absolute left-3 bottom-2.5 z-[600] flex items-center gap-1 text-[11px] text-white/80">
+                  <Camera size={11}/> Photo by {spot.by}
+                </span>
+              )}
+            </>
+          ) : (
+            <MapContainer key={spot.id} center={[spot.lat,spot.lng]} zoom={17} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
+              <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+              <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
+            </MapContainer>
+          )}
+          {hasPhoto && (
+            <button onClick={()=>setShowMap(m=>!m)}
+              aria-label={showMap ? 'Show photo of this spot' : 'Show this spot on the map'}
+              className="absolute right-3 bottom-2.5 z-[600] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 border border-white/25 text-white text-[11.5px] font-bold backdrop-blur active:scale-95 transition">
+              {showMap ? <><Camera size={12}/>Photo</> : <><MapPin size={12}/>Map</>}
+            </button>
+          )}
           <button onClick={onClose} aria-label="Close" style={{top:'calc(env(safe-area-inset-top) + 10px)'}} className="absolute left-3 z-[600] w-11 h-11 rounded-full bg-black/60 border border-white/25 flex items-center justify-center text-white backdrop-blur active:scale-90 transition"><X size={19}/></button>
           <button onClick={()=>onSave(spot.id)} aria-label={saved?'Remove from saved':'Save spot'} style={{top:'calc(env(safe-area-inset-top) + 10px)'}} className={`absolute right-3 z-[600] w-11 h-11 rounded-full flex items-center justify-center active:scale-90 transition ${saved?'bg-white text-[#06231f]':'bg-black/60 border border-white/25 text-white backdrop-blur'}`}><Bookmark size={16} fill={saved?'#06231f':'none'}/></button>
         </div>
@@ -1317,26 +1348,12 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               {amen.map(a=>(<span key={a} className="text-xs font-semibold text-[#cdd9e8] bg-white/6 border border-white/10 px-3 py-1.5 rounded-full">{a}</span>))}
             </div>
           )}
-          {/* The description: the driver's own photo of the space sits with the
-              notes, not adrift above them, so you read "here's what it looks
-              like" and "here's what to watch for" as one thing. */}
-          {(spot.photo || spot.notes) && (
-            <div className="mt-4">
-              {spot.photo && (
-                <figure className="mb-3">
-                  <img src={spot.photo} alt={`Photo of ${spot.name}`} loading="lazy"
-                    className="w-full max-h-56 object-cover rounded-2xl border border-white/10"/>
-                  {spot.by && (
-                    <figcaption className="text-[11px] text-[rgba(234,241,248,0.45)] mt-1.5 flex items-center gap-1">
-                      <Camera size={11}/> Photo by {spot.by}
-                    </figcaption>
-                  )}
-                </figure>
-              )}
-              {spot.notes && (
-                <p className="text-sm text-[rgba(234,241,248,0.65)] leading-relaxed italic border-l-[3px] border-[#2ED3C6] pl-3">{spot.notes}</p>
-              )}
-            </div>
+          {/* The photo now leads in the header with its credit, so it is not
+              repeated here — only the notes. If the header fell back to the map
+              (broken image) the photo is simply absent, which is correct: we
+              would otherwise show a broken image twice. */}
+          {spot.notes && (
+            <p className="text-sm text-[rgba(234,241,248,0.65)] leading-relaxed italic border-l-[3px] border-[#2ED3C6] pl-3 mt-4">{spot.notes}</p>
           )}
           <div className="flex gap-3 mt-5">
             <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer" className="flex-1 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[#06231f] btn-teal active:scale-95 transition">
