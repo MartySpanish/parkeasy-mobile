@@ -2952,6 +2952,28 @@ const MIN_BOOKING_GBP      = 4.00;
 const driverServiceFee = (bookingGbp) =>
   bookingGbp <= 0 ? 0
     : Math.min(DRIVER_FEE_MAX_GBP, Math.max(DRIVER_FEE_MIN_GBP, Math.round(bookingGbp * DRIVER_FEE_RATE * 100) / 100));
+
+// ── All-in pricing (DMCCA 2024 s.230) ────────────────────────────────────────
+// Wherever a consumer is shown a price so they can decide whether to buy, that
+// price must be the TOTAL they will necessarily pay, including any mandatory
+// fee. A bare "£3.00/hr" on a card with the service fee appearing only at
+// checkout is the exposed pattern — a drip-priced headline.
+//
+// The total varies with duration, so we show the lowest total anyone can
+// actually pay for this space: the shortest booking that clears the £4 minimum,
+// with the service fee already in it. That's a real, payable, total price, and
+// the duration it assumes is stated next to it rather than hidden.
+//
+// Applies ONLY to bookable rental listings. Community spots are informational —
+// the driver pays the council or operator directly and ParkEasy takes nothing,
+// so there is no fee to fold in and no total for us to state.
+const allInFrom = (pricePerHour) => {
+  const rate = Number(pricePerHour) || 0;
+  if (rate <= 0) return null;
+  const hours = Math.max(1, Math.ceil(MIN_BOOKING_GBP / rate));
+  const booking = rate * hours;
+  return { hours, rate, total: booking + driverServiceFee(booking) };
+};
 const BookingSheet = ({ listing, onClose }) => {
   const baseRate = Number(listing.price_per_hour) || 0;
   const today = new Date().toISOString().split('T')[0];
@@ -3279,10 +3301,25 @@ const ListingCard = ({ listing }) => {
         </div>
         <p className="text-xs text-[#6b7d96] mb-1.5">{listing.address}</p>
         <TrustRow listing={listing}/>
+        {/* All-in headline price (DMCCA 2024 s.230): the total a driver will
+            actually pay leads, with the hourly rate as the secondary detail.
+            The old layout led with "£3.00/hr" and revealed the fee only at
+            checkout, which is exactly the drip-pricing pattern the Act bans. */}
+        <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+          {(() => {
+            const ai = allInFrom(listing.price_per_hour);
+            return ai ? (
+              <>
+                <span className="text-sm font-extrabold text-[#6BEFB9]">from £{ai.total.toFixed(2)}</span>
+                <span className="text-[11px] text-[#6b7d96]">all-in for {ai.hours}h · inc. booking fee</span>
+              </>
+            ) : null;
+          })()}
+        </div>
         <div className="flex gap-3 mb-3">
-          {listing.price_per_hour  && <span className="text-xs font-bold text-[#6BEFB9]">£{Number(listing.price_per_hour).toFixed(2)}/hr</span>}
-          {listing.price_per_day   && <span className="text-xs font-bold text-[#6BEFB9]">£{Number(listing.price_per_day).toFixed(2)}/day</span>}
-          {listing.price_per_month && <span className="text-xs font-bold text-[#6BEFB9]">£{Number(listing.price_per_month).toFixed(0)}/mo</span>}
+          {listing.price_per_hour  && <span className="text-xs font-semibold text-[#8da2bd]">£{Number(listing.price_per_hour).toFixed(2)}/hr</span>}
+          {listing.price_per_day   && <span className="text-xs font-semibold text-[#8da2bd]">£{Number(listing.price_per_day).toFixed(2)}/day</span>}
+          {listing.price_per_month && <span className="text-xs font-semibold text-[#8da2bd]">£{Number(listing.price_per_month).toFixed(0)}/mo</span>}
           {listing.spaces > 1 && <span className="text-xs text-[#6b7d96]">{listing.spaces} spaces</span>}
         </div>
         {listing.amenities?.length > 0 && (
@@ -3306,7 +3343,7 @@ const ListingCard = ({ listing }) => {
         {canBook && (
           <button onClick={()=>setBooking(true)}
             className="block w-full btn-teal text-[#06231f] text-[13px] font-bold py-3 min-h-[44px] rounded-xl text-center mb-2">
-            Reserve &amp; pay · £{Number(listing.price_per_hour).toFixed(2)}/hr
+            Reserve &amp; pay · from £{(allInFrom(listing.price_per_hour)?.total ?? 0).toFixed(2)}
           </button>
         )}
         {pass && canBook && (
@@ -5057,7 +5094,7 @@ const INFO_PAGES = {
     body: (
       <>
         {[
-          ['How much does ParkEasy cost drivers?', 'The app is free. When you book a private space you pay the host’s price plus a driver service fee of 15% (minimum £0.99, never more than £3.50), always shown in full before you pay. Minimum booking is £4.'],
+          ['How much does ParkEasy cost drivers?', 'The app is free. Prices on bookable spaces are shown all-in — the figure you see is the total you pay, with the booking fee already included. That fee is 15% of the space price (minimum £0.99, never more than £3.50), and it is itemised again on the payment screen so you can see exactly what makes up the total. Minimum booking is £4. Community spots are different: those are free or paid to the council or operator directly, and ParkEasy takes nothing.'],
           ['How much do hosts earn?', 'Hosts keep 85% of every booking. ParkEasy’s 15% commission covers payments, the platform and support. Payouts go to your bank weekly via Stripe.'],
           ['When do hosts get paid?', 'Weekly, automatically, by bank transfer through Stripe. You set up payouts once (identity + bank details, handled securely by Stripe) from the Spaces tab.'],
           ['What’s the cancellation policy?', 'Cancel 24+ hours before your booking start for a full refund of the parking price (the driver service fee is non-refundable). Under 24 hours, bookings are non-refundable — the space was held for you. If a host cancels, you get everything back.'],
@@ -5368,7 +5405,10 @@ export default function App() {
         lat: l.lat, lng: l.lng,
         by: 'ParkEasy host', votes: 0,
         photo: l.photos?.[0] || null,
-        price: l.price_per_hour ? `£${Number(l.price_per_hour).toFixed(2)}/hr` : null,
+        // All-in on the map and in search results too — a price chip on a pin
+        // is a price shown to a consumer to decide on, so s.230 applies there
+        // exactly as it does on the card.
+        price: allInFrom(l.price_per_hour) ? `£${allInFrom(l.price_per_hour).total.toFixed(2)}/all-in` : null,
         spaces: l.spaces || 1,
         listing: l,
       })));
