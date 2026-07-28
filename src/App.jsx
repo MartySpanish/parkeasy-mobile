@@ -3507,41 +3507,65 @@ const uploadListingPhoto = async (file, uid, slotKey) => {
     throw new Error('That file isn’t a photo — pick a JPEG, PNG or HEIC image.');
   }
 
-  // Decode + downscale. Some phone formats (HEIC on non-Safari browsers) can't
-  // be decoded here; we fall back to uploading the original file as-is.
+  // Everything is re-encoded to JPEG. That matters more than it sounds: an
+  // iPhone photo is HEIC, and Chrome, Firefox and Edge cannot display HEIC at
+  // all. We previously uploaded the original when decoding failed, which kept
+  // the host unblocked but put files on real listings that most drivers see as
+  // a broken image. It happened on our first live listing — two of three photos
+  // went up as .heic.
+  //
+  // Two decoders are tried, because they don't fail together: createImageBitmap
+  // handles several formats <img> won't, and vice versa on older browsers.
+  const toJpeg = (source, w, h) => {
+    const scale = Math.min(1, 1600 / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * scale);
+    c.height = Math.round(h * scale);
+    c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+    // toBlob avoids the base64 round-trip entirely — no CSP involvement.
+    return new Promise((resolve, reject) =>
+      c.toBlob(b => b ? resolve(b) : reject(new Error('compress failed')), 'image/jpeg', 0.82));
+  };
+
   let blob = null;
-  let contentType = 'image/jpeg';
-  try {
-    blob = await new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        try {
-          const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
-          const c = document.createElement('canvas');
-          c.width = Math.round(img.width * scale);
-          c.height = Math.round(img.height * scale);
-          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-          URL.revokeObjectURL(url);
-          // toBlob avoids the base64 round-trip entirely — no CSP involvement.
-          c.toBlob(b => b ? resolve(b) : reject(new Error('compress failed')), 'image/jpeg', 0.82);
-        } catch (e) { URL.revokeObjectURL(url); reject(e); }
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
-      img.src = url;
-    });
-  } catch {
-    // Couldn't decode/compress (e.g. HEIC on Android/Chrome) — upload the
-    // original rather than failing the host outright, if it's not enormous.
-    if (file.size > 12 * 1024 * 1024) {
-      throw new Error('That photo is too large to upload (over 12MB). Try a smaller one, or take a new photo.');
-    }
-    blob = file;
-    contentType = file.type || 'image/jpeg';
+  // 1) createImageBitmap — decodes HEIC on Safari/iOS where <img> often won't.
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bmp = await createImageBitmap(file);
+      blob = await toJpeg(bmp, bmp.width, bmp.height);
+      bmp.close?.();
+    } catch { /* fall through to the <img> decoder */ }
+  }
+  // 2) <img> decode.
+  if (!blob) {
+    try {
+      blob = await new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          toJpeg(img, img.width, img.height).then(b => { URL.revokeObjectURL(url); resolve(b); },
+                                                  e => { URL.revokeObjectURL(url); reject(e); });
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+        img.src = url;
+      });
+    } catch { /* handled below */ }
   }
 
-  const ext = contentType.includes('png') ? 'png' : contentType.includes('heic') ? 'heic' : 'jpg';
-  const path = `${uid}/${Date.now()}-${slotKey}.${ext}`;
+  // Neither decoder could read it. Uploading the original would put an image on
+  // the listing that most drivers cannot see, so say so plainly instead — and
+  // give the one setting that actually fixes it on an iPhone.
+  if (!blob) {
+    const heic = /heic|heif/i.test(file.type || '') || /\.(heic|heif)$/i.test(file.name || '');
+    throw new Error(heic
+      ? 'This photo is in Apple’s HEIC format, which most browsers can’t display. On your iPhone: Settings → Camera → Formats → Most Compatible, then take the photo again. (A screenshot of the photo also works.)'
+      : 'That image couldn’t be read on this device. Try a different photo, or take a new one with the camera.');
+  }
+  const contentType = 'image/jpeg';
+
+  // Always .jpg now — everything that reaches here has been re-encoded, so a
+  // .heic or .png can no longer end up on a listing.
+  const path = `${uid}/${Date.now()}-${slotKey}.jpg`;
   const { error } = await supabase.storage.from('listing-photos')
     .upload(path, blob, { contentType, upsert: true });
   if (error) {
