@@ -11,7 +11,18 @@
 account via **hosted Stripe Checkout**; Stripe auto-transfers **85%** of the
 booking price to the host's **Express** connected account (transfers capability
 only). ParkEasy keeps **15% of the booking + 100% of the driver service fee**
-(a flat £1.00 by default) as the application fee. Host payouts are **weekly**.
+as the application fee. Host payouts are **weekly**.
+
+The driver service fee is **15% of the booking price, floored at £0.99 and
+capped at £3.50**, and the **minimum booking is £4.00**. All of that lives in
+`api/_pricing.js` — the single source of truth, imported by both
+`/api/checkout/create-session` and `/api/passes`, and mirrored in `src/App.jsx`
+(search `PRICING MIRROR`). Setting `DRIVER_SERVICE_FEE_PENCE` still forces a
+flat fee, so the old behaviour is one env var away without a redeploy.
+
+**The 15% host commission does not change.** It is in signed host agreements
+and in the press; host supply is the binding constraint on this marketplace, so
+extra take comes from the driver side or not at all.
 
 - **DB** (`supabase/migrations/20260724_stripe_connect.sql`, already applied to project `bbgqregyogtjzaustbng`):
   - `host_accounts` — one Stripe account per host (`stripe_account_id`, `onboarding_status`, `transfers_active`). A cache of Stripe state; the webhook keeps it current.
@@ -76,7 +87,7 @@ Until step 3, everything stays exactly as it is (test mode). Setting `STRIPE_LIV
 
 ## Still to consider
 - **Restricted/interrupted onboarding** shows a generic "continue setup" — no per-requirement prompting yet.
-- Refund fee-retention is generous by design (full refund ≥24h incl. the £1 service fee) — tighten later if you want to keep the fee on driver cancels, once verified in test mode.
+- Refund fee-retention is generous by design (full refund ≥24h incl. the driver service fee) — tighten later if you want to keep the fee on driver cancels, once verified in test mode.
 
 ## Safety notes
 

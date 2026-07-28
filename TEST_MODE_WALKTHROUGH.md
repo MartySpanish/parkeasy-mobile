@@ -12,23 +12,28 @@ the booking → payment → payout → cancel → refund loop before you flip to
 1. **Open the app → Spaces tab.** You should see the 🧪 TEST driveway with a
    **"Reserve & pay · £2.00/hr"** button.
 2. **Tap Reserve & pay.** Pick any date/time, set duration to e.g. 2 hours.
-   The breakdown should read: Parking £4.00 + service fee £1.00 = **£5.00**.
-3. **Tap "Pay £5.00 with card."** You land on Stripe's hosted checkout.
+   The breakdown should read: Parking £4.00 + service fee £0.99 = **£4.99**.
+   (The fee is 15% of the booking, floored at £0.99 and capped at £3.50 —
+   £4.00 × 15% = 60p, so the floor applies here. See `api/_pricing.js`.)
+   Try 1 hour too: £2.00 is under the **£4.00 minimum booking**, so the button
+   should read "Add 1 more hour to book" and be disabled.
+3. **Tap "Pay £4.99 with card."** You land on Stripe's hosted checkout.
    Pay with test card **4242 4242 4242 4242**, any future expiry, any CVC/postcode.
 4. **You return to the app** with a green **"Booking confirmed"** banner.
    - Check **Spaces → Your bookings**: the booking shows **PAID**.
    - Check email: you should get a driver confirmation + a host "your space was
      booked" email.
 5. **Cancel it.** In "Your bookings", tap **Cancel booking** → confirm.
-   Because the start time is >24h away, you should see **"£5.00 refunded."**
+   Because the start time is >24h away, you should see **"£4.99 refunded."**
    The booking flips to **CANCELLED**.
 6. **Admin check.** Header → **Analytics → Bookings & payouts** shows the paid
    count, gross, and your fees.
 
 ## What proves it worked
-- In the **Stripe test dashboard → Payments**: one payment of £5.00, with an
-  **application fee** (£1.60) and a **transfer** to the connected account (£3.40),
-  then a **refund** + **transfer reversal** after you cancel.
+- In the **Stripe test dashboard → Payments**: one payment of £4.99, with an
+  **application fee** (£1.59 = 60p commission + 99p service fee) and a
+  **transfer** to the connected account (£3.40), then a **refund** +
+  **transfer reversal** after you cancel.
 - In Supabase, the `bookings` row goes `pending → paid → cancelled` with
   `refund_pence = 500`.
 
