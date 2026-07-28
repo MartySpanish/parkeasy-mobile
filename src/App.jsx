@@ -15,7 +15,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { paymentError } from './errors';
 
@@ -677,6 +677,25 @@ const TypeBadge = ({ badge }) => {
   return <span className="inline-flex items-center text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
     style={{color:b.c, border:`1px solid ${b.c}59`, background:`${b.c}1a`}}>{b.label}</span>;
 };
+// Live "someone is parked here" from the in-app timer.
+//
+// Wording is deliberately careful. This only knows about ParkEasy users who
+// started a timer, so it can say a driver IS there — it can never say a space
+// is full. "1 driver here now" is true and useful; "no spaces" would be a
+// guess, and a wrong one would send someone past a spot that was empty.
+const InUseBadge = ({ spot }) => {
+  const n = spot.inUse || 0;
+  if (!n) return null;
+  const total = spot.spaces;
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
+      style={{color:'#FFC24B',border:'1px solid rgba(255,194,75,0.35)',background:'rgba(255,194,75,0.10)'}}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{background:'#FFC24B',boxShadow:'0 0 6px #FFC24B'}}/>
+      {total ? `${n} of ${total} in use` : `${n} driver${n!==1?'s':''} here now`}
+    </span>
+  );
+};
+
 const FreeNowBadge = ({ spot }) => {
   if (spot.badge === 'official') return null;
   if (!isSpotFree(spot) && isFreeNow(spot)) return <span className="inline-flex items-center text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap" style={{color:'#34E0A0',border:'1px solid rgba(52,224,160,0.35)',background:'rgba(52,224,160,0.10)'}}>Free right now</span>;
@@ -1315,7 +1334,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
         <div className="overflow-auto p-5" style={{maxHeight:'calc(92vh - 112px)'}}>
           <h2 className="font-display font-bold text-2xl text-[#EAF1F8] leading-tight">{spot.name}</h2>
           <div className="flex items-center gap-1.5 mt-1.5 text-sm text-[rgba(234,241,248,0.55)]"><MapPin size={14}/>{spot.near}</div>
-          <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/></div>
+          <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/><InUseBadge spot={spot}/></div>
           <div className="flex items-center gap-4 mt-4 p-4 rounded-2xl bg-white/5 border border-white/10">
             <div className="relative w-16 h-16 flex-shrink-0">
               <svg width="64" height="64" viewBox="0 0 64 64">
@@ -1892,7 +1911,7 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
           </span>
         </div>
       </div>
-      <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/></div>
+      <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/><InUseBadge spot={spot}/></div>
       <div className="flex items-center gap-2.5 mt-3">
         <div className="flex-1 h-[7px] rounded-full bg-white/10 overflow-hidden"><div style={{width:`${Math.round(occ.pct*100)}%`,background:occ.grad}} className="h-full rounded-full"/></div>
         <span className={`text-[12px] font-bold whitespace-nowrap ${occCls}`}>{occ.label}</span>
@@ -5532,6 +5551,19 @@ export default function App() {
   // Seeded spots for the city + any community spots the user has added there.
   // Bookable private spaces (hosts' listings) shown alongside community spots
   // on the map and in search — otherwise a driver would never find them.
+  // Live "in use" counts, keyed by spot id. Refreshed on a slow poll — this is
+  // a helpful hint, not something worth a socket or a tight loop.
+  const [occupancy, setOccupancy] = useState({});
+  useEffect(() => {
+    let live = true;
+    const load = () => fetchOccupancy().then(c => { if (live) setOccupancy(c); });
+    load();
+    const id = setInterval(load, 60000);
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { live = false; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+  }, []);
+
   const [rentalSpots, setRentalSpots] = useState([]);
   useEffect(() => {
     let live = true;
@@ -5605,14 +5637,20 @@ export default function App() {
       // while it waits for review. Once approved it arrives from the server too,
       // so drop the local duplicate rather than showing the same spot twice.
       const approvedKeys = new Set(approvedSpots.map(s => `${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`));
-      return [
+      const all = [
         ...userSpots.filter(s => s.city === currentCity.id && !approvedKeys.has(`${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`)),
         ...approvedSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
         ...rentalSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
         ...getCitySpots(currentCity.id),
       ];
+      // Attach the live count here rather than threading a prop through every
+      // card, row, pin and sheet — they all already receive the spot.
+      return all.map(s => {
+        const n = occupancy[String(s.id)] || 0;
+        return n ? { ...s, inUse: n } : s;
+      });
     },
-    [userSpots, approvedSpots, rentalSpots, currentCity.id]
+    [userSpots, approvedSpots, rentalSpots, currentCity.id, occupancy]
   );
   // Everything addressable by id (used by Saved, which can hold community spots too).
   const allSpots    = useMemo(() => [...userSpots, ...Object.values(CITY_SPOTS).flat()], [userSpots]);
@@ -5845,8 +5883,23 @@ export default function App() {
     const sess = { spotId: spot.id, name: spot.name, rate, startedAt: Date.now() };
     setParkSession(sess); ls.set('pe_session', sess);
     setDetailSpot(null); setShowSession(true); setNowTs(Date.now());
+    // Tell the next driver this one is taken. Optimistically bump the local
+    // count too, so the badge appears immediately rather than after the poll.
+    reportOccupancy(spot.id, 'start', currentCity.id);
+    setOccupancy(o => ({ ...o, [String(spot.id)]: (o[String(spot.id)] || 0) + 1 }));
   };
-  const endSession = () => { setParkSession(null); ls.set('pe_session', null); setShowSession(false); };
+  const endSession = () => {
+    if (parkSession?.spotId != null) {
+      reportOccupancy(parkSession.spotId, 'end');
+      setOccupancy(o => {
+        const k = String(parkSession.spotId);
+        const n = Math.max(0, (o[k] || 1) - 1);
+        const next = { ...o }; if (n) next[k] = n; else delete next[k];
+        return next;
+      });
+    }
+    setParkSession(null); ls.set('pe_session', null); setShowSession(false);
+  };
 
   const handleSpotAdded = (newSpot) => {
     if (user) {
