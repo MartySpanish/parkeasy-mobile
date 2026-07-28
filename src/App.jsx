@@ -1269,7 +1269,12 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
     <div className="fixed inset-0 z-[70] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.6)'}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] overflow-hidden animate-fade-in-up" style={{maxWidth:680,width:'100%',margin:'0 auto',maxHeight:'92vh',background:'var(--sheet)',borderTop:'1px solid var(--hairline)',boxShadow:'var(--sheet-shadow)'}}>
         <div className="relative h-44">
-          <MapContainer key={spot.id} center={[spot.lat,spot.lng]} zoom={15} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
+          {/* Zoom 15 showed a whole district — you could not tell which street
+              the spot was on, which is the one thing this header exists to
+              answer. 17 shows named streets. Safe to zoom in here because a
+              gated spot never reaches this view; free users get the area-only
+              teaser card instead, so no approximate pin is being shown as exact. */}
+          <MapContainer key={spot.id} center={[spot.lat,spot.lng]} zoom={17} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
             <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
             <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
           </MapContainer>
@@ -1564,10 +1569,23 @@ const pricePin = (spot, selected) => {
   const color = selected ? '#06231f' : light ? '#0B1220' : '#EAF1F8';
   const border = selected ? 'rgba(255,255,255,0.5)' : light ? 'rgba(13,27,54,0.18)' : 'rgba(255,255,255,0.18)';
   const shadow = light && !selected ? '0 4px 12px rgba(13,27,54,0.2)' : '0 6px 16px rgba(0,0,0,0.45)';
+  // The pill used to be anchored at its centre with no tail, so it sat dead
+  // centre over the coordinate and read as a floating UI chip rather than
+  // something marking a place — most obvious on the spot sheet's map header,
+  // where it lined up with the close and save buttons. Now it has a pointer
+  // and a dot at the exact coordinate, and is anchored at the tip.
+  const tail = selected ? '#2ED3C6' : light ? 'rgba(255,255,255,0.96)' : 'rgba(16,24,40,0.92)';
+  const dot  = selected ? '#06231f' : light ? '#0B1220' : '#EAF1F8';
   return L.divIcon({
     className: 'pe-price-pin',
-    html: `<div style="padding:4px 9px;border-radius:999px;font:700 12px/1 Manrope,system-ui,sans-serif;color:${color};background:${bg};border:1px solid ${border};box-shadow:${shadow};white-space:nowrap;backdrop-filter:blur(6px)">${label}</div>`,
-    iconSize: [44, 22], iconAnchor: [22, 11],
+    html:
+      `<div style="display:flex;flex-direction:column;align-items:center;line-height:0">
+         <div style="padding:4px 9px;border-radius:999px;font:700 12px/1 Manrope,system-ui,sans-serif;color:${color};background:${bg};border:1px solid ${border};box-shadow:${shadow};white-space:nowrap;backdrop-filter:blur(6px)">${label}</div>
+         <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid ${tail};filter:drop-shadow(0 2px 2px rgba(0,0,0,0.35))"></div>
+         <div style="width:6px;height:6px;margin-top:-1px;border-radius:999px;background:${dot};border:1.5px solid ${bg.includes('gradient') ? '#fff' : border};box-shadow:${shadow}"></div>
+       </div>`,
+    // Anchored at the dot, so the marker points at the real coordinate.
+    iconSize: [56, 34], iconAnchor: [28, 34],
   });
 };
 
