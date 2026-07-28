@@ -201,7 +201,27 @@ export default async function handler(req, res) {
       marketing_opt_in: marketingOptIn,
       recurrence_group: recurrenceGroup, recurrence_index: i,
     }));
-    await fetch(`${URL_}/rest/v1/bookings`, { method: 'POST', headers: svc, body: JSON.stringify(rows) });
+    // The response here was previously ignored. If the insert failed we still
+    // handed back the Stripe URL, so the driver paid and no booking row
+    // existed — no confirmation, no host email, nothing for support to find.
+    // Never send someone to pay for a booking we failed to record.
+    let ins = await fetch(`${URL_}/rest/v1/bookings`, { method: 'POST', headers: svc, body: JSON.stringify(rows) });
+
+    if (!ins.ok) {
+      const detail = await ins.text().catch(() => '');
+      // Degrade rather than block if the vehicle_reg migration hasn't been
+      // applied yet: retry once without the column. A booking that records
+      // everything except the plate beats a checkout that refuses to run.
+      if (/vehicle_reg/.test(detail)) {
+        console.error('bookings insert: vehicle_reg column missing — apply 20260728_booking_vehicle_reg.sql. Retrying without it.');
+        const fallback = rows.map(({ vehicle_reg, ...rest }) => rest);
+        ins = await fetch(`${URL_}/rest/v1/bookings`, { method: 'POST', headers: svc, body: JSON.stringify(fallback) });
+      }
+      if (!ins.ok) {
+        console.error('bookings insert failed', ins.status, detail.slice(0, 400));
+        return res.status(502).json({ error: 'We couldn’t hold that booking just now — nothing has been charged. Please try again in a moment.' });
+      }
+    }
 
     return res.status(200).json({ url: session.url });
   } catch (e) {
