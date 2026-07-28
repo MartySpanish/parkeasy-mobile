@@ -287,10 +287,20 @@ export default async function handler(req, res) {
         premium.reward     = members.filter(r => rank(r.code) === 1).length;
         premium.promo      = members.filter(r => rank(r.code) === 2).length;
         // Rough MRR from paying members only. A long entitlement implies an
-        // annual plan (£20/yr) — spread over 12 months; short implies monthly.
+        // annual plan spread over 12 months; a short one implies monthly.
+        // Prices rose on 28 Jul 2026 (annual £20→£29, monthly £2.99→£3.99) and
+        // everyone who subscribed before that is deliberately grandfathered on
+        // the old price, so bill each member at whatever was current when they
+        // joined. Using one price for everyone would overstate the old cohort
+        // and understate every new one.
+        const PRICE_V2_FROM = Date.parse('2026-07-28T00:00:00Z');
         premium.mrrPence = members.filter(r => rank(r.code) === 3).reduce((sum, r) => {
-          const daysLeft = (Date.parse(r.expires_at) - Date.parse(r.redeemed_at || r.expires_at)) / DAY;
-          return sum + (daysLeft > 200 ? Math.round(2000 / 12) : 299);
+          const joined   = Date.parse(r.redeemed_at || r.expires_at);
+          const daysLeft = (Date.parse(r.expires_at) - joined) / DAY;
+          const isAnnual = daysLeft > 200;
+          const v2       = joined >= PRICE_V2_FROM;
+          if (isAnnual) return sum + Math.round((v2 ? 2900 : 2000) / 12);
+          return sum + (v2 ? 399 : 299);
         }, 0);
         premium.conversionPct = users.length ? Math.round((members.length / users.length) * 1000) / 10 : 0;
         premium.latest = members.slice(0, 8).map(r => ({

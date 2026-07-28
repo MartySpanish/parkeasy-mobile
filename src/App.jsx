@@ -82,8 +82,15 @@ const BELFAST_CENTER = [54.5973, -5.9301];
 const notifyAdmin = (name, email) => notify('signup', { name, email });
 
 // ── Stripe links ──────────────────────────────────────────────────────────────
-const STRIPE_MONTHLY = 'https://buy.stripe.com/00w4gscgJ6QoahjcTU0kE01';
-const STRIPE_ANNUAL  = 'https://buy.stripe.com/5kQ6oA1C5eiQ0GJg660kE00';
+// v2 pricing (28 Jul 2026): monthly £3.99, annual £29. These MUST stay in step
+// with the figures rendered in PricingModal — advertising one price and
+// charging another is the exact drip-pricing failure s.230 exists to stop.
+// The eight existing subscribers are on the OLD price objects and stay there;
+// those prices are still active in Stripe and nobody is being migrated.
+const STRIPE_MONTHLY = 'https://buy.stripe.com/7sY14ga8Bb6E7573jk0kE03';  // price_1Ty9GQ… £3.99/mo
+const STRIPE_ANNUAL  = 'https://buy.stripe.com/5kQ8wIdkNdeM4WZg660kE02';  // price_1Ty9GP… £29/yr
+const PREMIUM_MONTHLY_GBP = '£3.99';
+const PREMIUM_ANNUAL_GBP  = '£29';
 
 // ── Free / VIP Premium access ───────────────────────────────────────────────
 // Accounts that sign in with one of these emails are always Premium, on any
@@ -1026,20 +1033,24 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
               <strong>Already paid?</strong> Don&apos;t buy again — sign in with the email you paid with and your Premium is applied automatically.
             </p>
           </div>
+          {/* Annual leads. It is the better-structured product on both sides:
+              3.2% fee drag against 8.7% on monthly, and a year of access rather
+              than a renewal decision every month. Prices here MUST match the
+              Stripe links above. */}
           <div className="grid grid-cols-2 gap-3">
-            <a href={STRIPE_MONTHLY} target="_blank" rel="noreferrer"
-              className="block rounded-2xl border-2 border-[#5BE7DA] p-4 text-center hover:bg-[#2ED3C6]/10 active:scale-[0.98] transition-all">
-              <p className="text-[10px] text-[#5BE7DA] font-bold uppercase tracking-widest mb-1">Monthly</p>
-              <p className="text-3xl font-extrabold text-[#EAF1F8]">£2.99</p>
-              <p className="text-xs text-[#6b7d96] mb-3">per month</p>
+            <a href={STRIPE_ANNUAL} target="_blank" rel="noreferrer"
+              className="block rounded-2xl border-2 border-[#5BE7DA] p-4 text-center hover:bg-[#2ED3C6]/10 active:scale-[0.98] transition-all relative">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#FFC24B] text-[#3a2600] text-[9px] font-black px-3 py-1 rounded-full whitespace-nowrap shadow">BEST VALUE</span>
+              <p className="text-[10px] text-[#5BE7DA] font-bold uppercase tracking-widest mb-1 mt-1">Annual</p>
+              <p className="text-3xl font-extrabold text-[#EAF1F8]">{PREMIUM_ANNUAL_GBP}</p>
+              <p className="text-xs text-[#6b7d96] mb-3">per year · £2.42 a month</p>
               <span className="block w-full bg-[#5BE7DA] text-[#06231f] py-2 rounded-xl text-xs font-bold">Subscribe</span>
             </a>
-            <a href={STRIPE_ANNUAL} target="_blank" rel="noreferrer"
-              className="block rounded-2xl border-2 border-[#0e1a2c] p-4 text-center hover:bg-white/5 active:scale-[0.98] transition-all relative">
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-[#FFD27A] text-[9px] font-black px-3 py-1 rounded-full whitespace-nowrap shadow">BEST VALUE</span>
-              <p className="text-[10px] text-[#0e1a2c] font-bold uppercase tracking-widest mb-1 mt-1">Annual</p>
-              <p className="text-3xl font-extrabold text-[#EAF1F8]">£20</p>
-              <p className="text-xs text-[#6b7d96] mb-3">per year</p>
+            <a href={STRIPE_MONTHLY} target="_blank" rel="noreferrer"
+              className="block rounded-2xl border-2 border-[#0e1a2c] p-4 text-center hover:bg-white/5 active:scale-[0.98] transition-all">
+              <p className="text-[10px] text-[#8da2bd] font-bold uppercase tracking-widest mb-1 mt-1">Monthly</p>
+              <p className="text-3xl font-extrabold text-[#EAF1F8]">{PREMIUM_MONTHLY_GBP}</p>
+              <p className="text-xs text-[#6b7d96] mb-3">per month</p>
               <span className="block w-full bg-[#0e1a2c] text-white py-2 rounded-xl text-xs font-bold">Subscribe</span>
             </a>
           </div>
@@ -1106,7 +1117,7 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
         </div>
         {!isPremium && (
           <button onClick={onUpgrade} className="w-full bg-yellow-400 text-[#FFD27A] py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
-            ★ Upgrade to Premium — £2.99/mo
+            ★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr
           </button>
         )}
         {onAdmin && (
@@ -4787,7 +4798,7 @@ const AdminOverlay = ({ onClose }) => {
                     )}
                   </div>
                   <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] leading-relaxed mt-2">
-                    Every entitlement is now account-linked — Stripe purchases, promo codes and hidden-gem rewards. MRR is an estimate: long entitlements are treated as annual (£20 ÷ 12), short ones as £2.99 monthly.
+                    Every entitlement is now account-linked — Stripe purchases, promo codes and hidden-gem rewards. MRR is an estimate: long entitlements count as annual (÷ 12), short ones as monthly, each priced at whatever was current when that member joined. Members from before 28 Jul 2026 are grandfathered at £20 / £2.99; new ones are £29 / £3.99.
                   </p>
                   <GrantPremium/>
                 </div>
