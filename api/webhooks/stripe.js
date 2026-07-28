@@ -46,6 +46,19 @@ async function syncHostAccount(stripe, svc, URL_, accountId) {
 // the existing login sync surfaces Premium on every device. Duration: monthly
 // price (< £10) → 35 days; anything bigger (annual/lifetime) → 366 days.
 // Renewals arrive as invoice.paid and extend the same entitlement.
+// End a Stripe-subscription entitlement. Deliberately touches ONLY the
+// STRIPE-SUB row: a promo or hidden-gem reward is a separate grant and must
+// survive someone cancelling their paid subscription.
+async function revokePremiumByEmail(svc, URL_, email) {
+  if (!email) return;
+  const now = new Date().toISOString();
+  const r = await fetch(
+    `${URL_}/rest/v1/promo_redemptions?user_email=eq.${encodeURIComponent(email)}&code=eq.STRIPE-SUB`,
+    { method: 'PATCH', headers: svc, body: JSON.stringify({ expires_at: now }) },
+  );
+  if (!r.ok) throw new Error(`revoke failed: ${r.status}`);
+}
+
 async function grantPremiumByEmail(svc, URL_, email, days) {
   if (!email) return;
   let userId = null;
@@ -57,7 +70,25 @@ async function grantPremiumByEmail(svc, URL_, email, days) {
     userId = batch.find(u => (u.email || '').toLowerCase() === email)?.id || null;
     if (batch.length < 200) break;
   }
-  if (!userId) { console.error('premium grant: no account for', email); return; }
+  // No account yet. Previously this returned and the entitlement was lost: the
+  // payer got nothing, and at least one person then paid a second time three
+  // minutes later. Record it against the email instead so it is waiting to be
+  // claimed the moment they sign up. Requires promo_redemptions.user_id to be
+  // nullable — see 20260728_entitlements_without_account.sql.
+  if (!userId) {
+    console.warn('premium grant: no account yet for', email, '— storing unclaimed entitlement');
+    const r = await fetch(`${URL_}/rest/v1/promo_redemptions?on_conflict=user_email,code`, {
+      method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({
+        user_id: null, user_email: email, code: 'STRIPE-SUB',
+        expires_at: new Date(Date.now() + days * 86400000).toISOString(),
+      }),
+    });
+    // Throw so the handler returns 500 and Stripe retries. A 200 here would
+    // mark the event delivered and we would never hear about it again.
+    if (!r.ok) throw new Error(`unclaimed entitlement write failed: ${r.status} ${await r.text().catch(()=>'')}`);
+    return;
+  }
   // Never shorten an existing entitlement. A new annual subscription fires
   // BOTH checkout.session.completed (366d) and invoice.paid for its first
   // invoice — without this, the renewal path would cut an annual to 35 days.
@@ -241,6 +272,22 @@ export default async function handler(req, res) {
         // treated as a month.
         const renewalDays = (inv.amount_paid || 0) < 1000 ? 35 : 366;
         if (email) await grantPremiumByEmail(svc, URL_, email, renewalDays).catch(e => console.error('renewal grant', e));
+        break;
+      }
+      case 'customer.subscription.deleted': {
+        // The subscription has actually ended (for a cancel-at-period-end,
+        // Stripe sends this AT the period end, not when they clicked cancel).
+        // Without this, expires_at was written once at purchase and never
+        // revoked: cancel your subscription and you keep Premium forever.
+        const sub = event.data.object;
+        let email = (sub.customer_email || '').trim().toLowerCase();
+        if (!email && sub.customer) {
+          try {
+            const cust = await stripe.customers.retrieve(sub.customer);
+            email = (cust?.email || '').trim().toLowerCase();
+          } catch (e) { console.error('subscription.deleted: customer lookup', e.message); }
+        }
+        if (email) await revokePremiumByEmail(svc, URL_, email).catch(e => console.error('revoke', e));
         break;
       }
       case 'payout.paid':
