@@ -1408,12 +1408,17 @@ const SessionModal = ({ session, now, onClose, onEnd }) => {
 };
 
 // Compact sticky "currently parked" bar shown across the app while a session runs.
+// Rendered INSIDE the sticky header, deliberately. It used to be a sibling with
+// its own `sticky top-0 z-40`, which meant that the moment the list scrolled it
+// pinned to the same coordinate as the header (sticky top-0 z-50) and was
+// painted underneath it. The timer kept running and kept saving — the driver
+// just couldn't see it, and reasonably concluded it had stopped.
 const ParkBar = ({ session, now, onOpen, onEnd }) => {
   if (!session) return null;
   const elapsed = Math.max(0, now - session.startedAt);
   const cost = session.rate ? (elapsed / 3600000) * session.rate : null;
   return (
-    <div className="sticky z-40 px-3 py-2 flex items-center gap-2" style={{ top:0, background:'linear-gradient(90deg,#0e6a5f,#0c5248)', borderBottom:'1px solid var(--hairline)' }}>
+    <div className="px-3 py-2 flex items-center gap-2" style={{ background:'linear-gradient(90deg,#0e6a5f,#0c5248)', borderTop:'1px solid var(--hairline)' }}>
       <button onClick={onOpen} className="flex-1 flex items-center gap-2 text-left min-w-0">
         <span className="w-2 h-2 rounded-full bg-[#6BEFB9] flex-shrink-0" style={{boxShadow:'0 0 8px #34E0A0'}}/>
         <span className="text-xs font-bold text-white truncate">Parked at {session.name}</span>
@@ -5503,10 +5508,25 @@ export default function App() {
 
 
   // Parking session timer — tick every second while a session is active.
+  // Elapsed time is always derived from session.startedAt, never accumulated,
+  // so a throttled or suspended interval can't lose time: a phone that sat
+  // locked for an hour still shows the right total.
+  // The visibility listener refreshes the instant the driver comes back, since
+  // browsers freeze timers in background tabs and the bar would otherwise show
+  // a stale value for a beat — exactly when they're checking how long they've
+  // been parked.
   useEffect(() => {
     if (!parkSession) return;
-    const id = setInterval(() => setNowTs(Date.now()), 1000);
-    return () => clearInterval(id);
+    const tick = () => setNowTs(Date.now());
+    const id = setInterval(tick, 1000);
+    const onVisible = () => { if (!document.hidden) tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', tick);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', tick);
+    };
   }, [parkSession]);
 
   const startSession = (spot) => {
@@ -5656,10 +5676,12 @@ export default function App() {
             )}
           </div>
         </div>
-      </header>
 
-      {/* Currently-parked timer bar */}
-      <ParkBar session={parkSession} now={nowTs} onOpen={()=>setShowSession(true)} onEnd={endSession}/>
+        {/* Currently-parked timer bar — inside the header so it stays pinned and
+            visible while the list scrolls. As a sibling below the header it was
+            hidden behind it the moment the page moved. */}
+        <ParkBar session={parkSession} now={nowTs} onOpen={()=>setShowSession(true)} onEnd={endSession}/>
+      </header>
 
       {/* ── Content ── */}
       <main className="flex-1 overflow-auto pb-24">
