@@ -20,8 +20,15 @@ const TEMPLATES = {
     rows: [['Name', d.name], ['Email', d.email]] }),
   listing:  (d) => ({ subject: `🏠 New space listed: ${d.title || 'untitled'}`,
     rows: [['Title', d.title], ['Address', d.address], ['Type', d.spaceType], ['Price', d.price], ['Listed by', d.email]] }),
-  enquiry:  (d) => ({ subject: `💬 Enquiry about: ${d.title || 'a space'}`,
-    rows: [['Space', d.title], ['Address', d.address], ['Owner contact', d.ownerEmail]] }),
+  // Was a click-ping: it fired when someone tapped a mailto: link, so it
+  // carried the SPACE but never the person or what they said — an "enquiry"
+  // with no enquiry in it. Now the app collects the message first, so this is
+  // an actual lead. reply_to is set to their address further down, so replying
+  // goes straight to them.
+  enquiry:  (d) => ({ subject: `💬 Enquiry about: ${d.title || 'a space'}${d.name ? ` — from ${d.name}` : ''}`,
+    rows: [['From', d.name], ['Their email', d.email], ['Their phone', d.phone],
+      ['Message', d.message],
+      ['Space', d.title], ['Address', d.address], ['Owner contact', d.ownerEmail]] }),
   business: (d) => ({ subject: `🏪 New business listing enquiry: ${d.name || ''}`,
     rows: [['Business', d.name], ['Email', d.email], ['Message', d.message]] }),
   spot:     (d) => ({ subject: `🅿️ New spot submitted: ${d.name || ''}`,
