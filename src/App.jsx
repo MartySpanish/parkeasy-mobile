@@ -3130,6 +3130,23 @@ const EnquirySheet = ({ listing, onClose }) => {
   );
 };
 
+// available_days is stored as ISO weekday numbers (Mon=1 … Sun=7) and enforced
+// by the checkout API. These two turn it into something a person can read.
+const DAY_NAMES = { 1:'Mon', 2:'Tue', 3:'Wed', 4:'Thu', 5:'Fri', 6:'Sat', 7:'Sun' };
+const fmtDays = (days) => {
+  if (!Array.isArray(days) || !days.length || days.length === 7) return '';
+  const d = [...new Set(days.map(Number).filter(n => n >= 1 && n <= 7))].sort((a,b)=>a-b);
+  if (!d.length) return '';
+  // Collapse a run into "Mon–Sat"; anything gappy is listed out.
+  const contiguous = d.every((n,i) => i === 0 || n === d[i-1] + 1);
+  return contiguous && d.length > 2
+    ? `${DAY_NAMES[d[0]]}–${DAY_NAMES[d[d.length-1]]}`
+    : d.map(n => DAY_NAMES[n]).join(', ');
+};
+const hhmm = (t) => String(t || '').slice(0,5);
+// ISO weekday for a yyyy-mm-dd string, without dragging a timezone into it.
+const isoWeekday = (ymd) => { const n = new Date(`${ymd}T12:00:00`).getDay(); return n === 0 ? 7 : n; };
+
 const BookingSheet = ({ listing, onClose }) => {
   // Day-priced sites (a school car park at £15 for 8am-5pm) have no hourly
   // rate. The driver picks a DATE and how many days, and the gates decide the
@@ -3188,6 +3205,14 @@ const BookingSheet = ({ listing, onClose }) => {
   const belowMin = !dayPriced && perWeekCost > 0 && perWeekCost < MIN_BOOKING_GBP;
   const hoursForMin = belowMin ? Math.ceil(MIN_BOOKING_GBP / rate) : 0;
 
+  // The API already refuses a day the site never agreed to. Checking it here too
+  // means the driver is told while they're still on the date picker, instead of
+  // filling in a reg and a card and being bounced at the last step.
+  const openDays = Array.isArray(listing.available_days) && listing.available_days.length
+    ? listing.available_days.map(Number) : null;
+  const closedDay = !!(openDays && date && !openDays.includes(isoWeekday(date)));
+  const openDaysLabel = fmtDays(listing.available_days);
+
   const pay = async () => {
     setBusy(true); setErr('');
     try {
@@ -3216,8 +3241,15 @@ const BookingSheet = ({ listing, onClose }) => {
           <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center flex-shrink-0"><X size={15} className="text-[#aebfd4]"/></button>
         </div>
 
-        <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5">Date</label>
+        <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5">
+          Date{openDaysLabel && <span className="ml-1.5 font-semibold normal-case tracking-normal text-[#8da2bd]">· open {openDaysLabel}</span>}
+        </label>
         <input type="date" min={today} value={date} onChange={e=>setDate(e.target.value)} className={field}/>
+        {closedDay && (
+          <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
+            This space isn&apos;t open on {DAY_NAMES[isoWeekday(date)]}s — it&apos;s available {openDaysLabel}. Pick another date.
+          </p>
+        )}
         {dayPriced ? (
           <>
             <div className="mt-3 rounded-xl bg-[#2ED3C6]/8 border border-[#2ED3C6]/20 px-3 py-2.5">
@@ -3313,14 +3345,15 @@ const BookingSheet = ({ listing, onClose }) => {
                 alert(`Booked with your ${credit.passName} — ${r.creditsRemaining} credit${r.creditsRemaining!==1?'s':''} left.`);
                 onClose();
               } catch (e) { setErr(e.message || 'Could not redeem'); setBusy(false); }
-            }} disabled={busy}
+            }} disabled={busy || closedDay}
             className="mt-4 w-full font-display font-bold py-3 rounded-2xl text-sm text-[#06231f] disabled:opacity-50" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
-            {busy ? 'Booking…' : `Use pass credit (${credit.remaining} left) — free`}
+            {busy ? 'Booking…' : closedDay ? 'Closed on that date' : `Use pass credit (${credit.remaining} left) — free`}
           </button>
         )}
-        <button onClick={pay} disabled={busy || rate<=0 || belowMin || !regValid}
+        <button onClick={pay} disabled={busy || rate<=0 || belowMin || !regValid || closedDay}
           className={`${credit ? 'mt-2' : 'mt-4'} w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50`}>
           {busy ? 'Opening secure payment…'
+            : closedDay ? 'Closed on that date — pick another'
             : belowMin ? `Add ${hoursForMin - hours} more hour${hoursForMin - hours !== 1 ? 's' : ''} to book`
             : !regValid ? 'Enter your vehicle registration'
             : `Pay £${total.toFixed(2)} with card`}
@@ -5161,8 +5194,18 @@ const AdminOverlay = ({ onClose }) => {
                     {d.pending.map(l=>(
                       <div key={l.id} className="glass rounded-2xl p-4">
                         <p className="font-display font-bold text-[15px] text-[#EAF1F8]">{l.title}</p>
-                        <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-0.5">{l.org_name} · {l.org_type} · reg: {l.org_registration}</p>
-                        <p className="text-[12px] text-[rgba(234,241,248,0.55)]">{l.address} · {l.spaces} spaces · £{l.price_per_hour}/hr · {l.availability}</p>
+                        <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-0.5">{l.org_name} · {l.org_type}{l.org_registration ? ` · reg: ${l.org_registration}` : ''}</p>
+                        {/* Approving publishes the terms below, so show the ones
+                            that are actually in the signed agreement — a site on
+                            a day rate showed "£/hr" here, i.e. no price at all. */}
+                        <p className="text-[12px] text-[rgba(234,241,248,0.55)]">{l.address} · {l.spaces} spaces · {
+                          Number(l.price_per_hour) > 0 ? `£${Number(l.price_per_hour).toFixed(2)}/hr`
+                          : Number(l.price_per_day) > 0 ? `£${Number(l.price_per_day).toFixed(2)}/day`
+                          : Number(l.price_per_month) > 0 ? `£${Number(l.price_per_month).toFixed(2)}/month`
+                          : 'NO PRICE'}</p>
+                        <p className="text-[12px] text-[rgba(234,241,248,0.55)]">{fmtDays(l.available_days) || l.availability || 'no days set'}{
+                          l.gate_opens_at ? ` · gates ${hhmm(l.gate_opens_at)}–${hhmm(l.gate_closes_at)}` : ''}{
+                          l.overnight_fee_pence > 0 ? ` · £${(l.overnight_fee_pence/100).toFixed(2)} left-in fee to host` : ''}</p>
                         <p className="text-[12px] text-[rgba(234,241,248,0.55)]">Access: {l.access_contact_name} ({l.access_contact_phone}) — {l.access_method}</p>
                         <p className="text-[12px] text-[rgba(234,241,248,0.55)]">Host: {l.contact_email} · {l.contact_phone}</p>
                         {(l.photos?.length > 0) && (
@@ -5226,7 +5269,7 @@ const AdminOverlay = ({ onClose }) => {
                         <p className="text-[11px] text-[rgba(234,241,248,0.5)] truncate">{l.address} · {new Date(l.created_at).toLocaleDateString('en-GB')}</p>
                         {l.owner_email && (
                           <p className="text-[11px] text-[rgba(234,241,248,0.45)] truncate">
-                            {l.owner_email} · {l.price_per_hour ? `£${Number(l.price_per_hour).toFixed(2)}/hr` : 'no price'} · {l.photos ?? 0} photo{(l.photos ?? 0)!==1?'s':''}
+                            {l.owner_email} · {l.price_per_hour ? `£${Number(l.price_per_hour).toFixed(2)}/hr` : l.price_per_day ? `£${Number(l.price_per_day).toFixed(2)}/day` : 'no price'} · {l.photos ?? 0} photo{(l.photos ?? 0)!==1?'s':''}
                             {l.status==='draft' && !l.photos && <span className="text-[#FFD27A]"> · needs photos</span>}
                           </p>
                         )}
