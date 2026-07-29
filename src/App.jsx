@@ -3045,8 +3045,14 @@ const driverServiceFee = (bookingGbp) =>
 // Applies ONLY to bookable rental listings. Community spots are informational —
 // the driver pays the council or operator directly and ParkEasy takes nothing,
 // so there is no fee to fold in and no total for us to state.
-const allInFrom = (pricePerHour) => {
+const allInFrom = (pricePerHour, pricePerDay) => {
   const rate = Number(pricePerHour) || 0;
+  const day  = Number(pricePerDay) || 0;
+  // Day-priced site (e.g. a school car park at £15 for 8am–5pm): the smallest
+  // purchase is one day, so that IS the all-in total. No minimum to reach.
+  if (rate <= 0 && day > 0) {
+    return { days: 1, rate: day, dayPriced: true, total: day + driverServiceFee(day) };
+  }
   if (rate <= 0) return null;
   const hours = Math.max(1, Math.ceil(MIN_BOOKING_GBP / rate));
   const booking = rate * hours;
@@ -3125,7 +3131,12 @@ const EnquirySheet = ({ listing, onClose }) => {
 };
 
 const BookingSheet = ({ listing, onClose }) => {
-  const baseRate = Number(listing.price_per_hour) || 0;
+  // Day-priced sites (a school car park at £15 for 8am-5pm) have no hourly
+  // rate. The driver picks a DATE and how many days, and the gates decide the
+  // window — asking them to choose a start time would be meaningless when the
+  // site opens at 8 and locks at 5 regardless.
+  const dayPriced = !(Number(listing.price_per_hour) > 0) && Number(listing.price_per_day) > 0;
+  const baseRate = dayPriced ? Number(listing.price_per_day) : (Number(listing.price_per_hour) || 0);
   const today = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(today);
   const [override, setOverride] = useState(null);   // event price for the picked date
@@ -3174,7 +3185,7 @@ const BookingSheet = ({ listing, onClose }) => {
   // The minimum applies per week, matching the server, so a repeat booking
   // can't multiply its way past a slot that's too small to be worth charging.
   const perWeekCost = rate * hours;
-  const belowMin = perWeekCost > 0 && perWeekCost < MIN_BOOKING_GBP;
+  const belowMin = !dayPriced && perWeekCost > 0 && perWeekCost < MIN_BOOKING_GBP;
   const hoursForMin = belowMin ? Math.ceil(MIN_BOOKING_GBP / rate) : 0;
 
   const pay = async () => {
@@ -3185,7 +3196,8 @@ const BookingSheet = ({ listing, onClose }) => {
         const { data } = await supabase.auth.getSession();
         token = data?.session?.access_token || null;
       }
-      const startsAt = date && time ? new Date(`${date}T${time}`).toISOString() : null;
+      const startTime = dayPriced ? String(listing.gate_opens_at || '08:00').slice(0,5) : time;
+      const startsAt = date && startTime ? new Date(`${date}T${startTime}`).toISOString() : null;
       ls.set('pe_vehicle_reg', regClean);
       const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks, vehicleReg: regClean });
       window.location.href = url;   // full-page redirect to Stripe Checkout
@@ -3206,14 +3218,33 @@ const BookingSheet = ({ listing, onClose }) => {
 
         <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5">Date</label>
         <input type="date" min={today} value={date} onChange={e=>setDate(e.target.value)} className={field}/>
-        <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Start time</label>
-        <input type="time" value={time} onChange={e=>setTime(e.target.value)} className={field}/>
-        <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Duration</label>
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={()=>setHours(h=>Math.max(1,h-1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">−</button>
-          <div className="flex-1 text-center"><span className="font-display font-extrabold text-2xl text-[#EAF1F8]">{hours}</span><span className="text-xs text-[#8da2bd]"> hour{hours!==1?'s':''}</span></div>
-          <button type="button" onClick={()=>setHours(h=>Math.min(24,h+1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">+</button>
-        </div>
+        {dayPriced ? (
+          <>
+            <div className="mt-3 rounded-xl bg-[#2ED3C6]/8 border border-[#2ED3C6]/20 px-3 py-2.5">
+              <p className="text-[11.5px] text-[#cdd9e8] leading-snug">
+                Access is <strong className="text-[#5BE7DA]">{String(listing.gate_opens_at || '08:00').slice(0,5)}–{String(listing.gate_closes_at || '17:00').slice(0,5)}</strong> on the day you book. The gates are locked outside those hours.
+                {listing.overnight_fee_pence > 0 && <> Leaving a car in after {String(listing.gate_closes_at || '17:00').slice(0,5)} costs an extra £{(listing.overnight_fee_pence/100).toFixed(2)}, which goes to the site.</>}
+              </p>
+            </div>
+            <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">How many days</label>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={()=>setHours(h=>Math.max(1,h-1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">−</button>
+              <div className="flex-1 text-center"><span className="font-display font-extrabold text-2xl text-[#EAF1F8]">{hours}</span><span className="text-xs text-[#8da2bd]"> day{hours!==1?'s':''}</span></div>
+              <button type="button" onClick={()=>setHours(h=>Math.min(14,h+1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">+</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Start time</label>
+            <input type="time" value={time} onChange={e=>setTime(e.target.value)} className={field}/>
+            <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Duration</label>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={()=>setHours(h=>Math.max(1,h-1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">−</button>
+              <div className="flex-1 text-center"><span className="font-display font-extrabold text-2xl text-[#EAF1F8]">{hours}</span><span className="text-xs text-[#8da2bd]"> hour{hours!==1?'s':''}</span></div>
+              <button type="button" onClick={()=>setHours(h=>Math.min(24,h+1))} className="w-10 h-10 bg-white/8 rounded-xl text-[#EAF1F8] font-bold text-lg">+</button>
+            </div>
+          </>
+        )}
 
         {/* The host needs this to match a car to a paid booking on the day —
             without it a marshal in a car park has no way to tell who has paid. */}
@@ -3248,7 +3279,7 @@ const BookingSheet = ({ listing, onClose }) => {
           </p>
         )}
         <div className="mt-4 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5 space-y-1.5 text-[13px]">
-          <div className="flex justify-between text-[#cdd9e8]"><span>Parking ({hours}h × £{rate.toFixed(2)}{weeks>1?` × ${weeks} wks`:''})</span><span>£{bookingCost.toFixed(2)}</span></div>
+          <div className="flex justify-between text-[#cdd9e8]"><span>Parking ({hours}{dayPriced?` day${hours!==1?'s':''}`:'h'} × £{rate.toFixed(2)}{weeks>1?` × ${weeks} wks`:''})</span><span>£{bookingCost.toFixed(2)}</span></div>
           <div className="flex justify-between text-[#cdd9e8]"><span>Driver service fee</span><span>£{serviceFee.toFixed(2)}</span></div>
           <div className="flex justify-between font-bold text-[#EAF1F8] pt-1.5 border-t border-white/10"><span>Total</span><span className="text-[#6BEFB9]">£{total.toFixed(2)}</span></div>
         </div>
@@ -3415,7 +3446,11 @@ const ListingCard = ({ listing }) => {
   const [enquiring, setEnquiring] = useState(false);
   const [partner, setPartner] = useState(null);
   const [pass, setPass] = useState(null);
-  const canBook = Number(listing.price_per_hour) > 0;
+  // A site can be priced by the hour OR by the day. Belfast Royal Academy is
+  // £15/day for a fixed 8am-5pm window and has no hourly rate at all — before
+  // this it simply could not be booked.
+  const dayPriced = !(Number(listing.price_per_hour) > 0) && Number(listing.price_per_day) > 0;
+  const canBook = Number(listing.price_per_hour) > 0 || dayPriced;
   useEffect(() => {
     let active = true;
     findPartnerForListing(listing.lat, listing.lng).then(p => { if (active) setPartner(p); });
@@ -3458,11 +3493,11 @@ const ListingCard = ({ listing }) => {
             checkout, which is exactly the drip-pricing pattern the Act bans. */}
         <div className="flex items-baseline gap-2 mb-1 flex-wrap">
           {(() => {
-            const ai = allInFrom(listing.price_per_hour);
+            const ai = allInFrom(listing.price_per_hour, listing.price_per_day);
             return ai ? (
               <>
                 <span className="text-sm font-extrabold text-[#6BEFB9]">from £{ai.total.toFixed(2)}</span>
-                <span className="text-[11px] text-[#6b7d96]">all-in for {ai.hours}h · inc. booking fee</span>
+                <span className="text-[11px] text-[#6b7d96]">{ai.dayPriced ? 'all-in for the day' : `all-in for ${ai.hours}h`} · inc. booking fee</span>
               </>
             ) : null;
           })()}
@@ -3494,7 +3529,7 @@ const ListingCard = ({ listing }) => {
         {canBook && (
           <button onClick={()=>setBooking(true)}
             className="block w-full btn-teal text-[#06231f] text-[13px] font-bold py-3 min-h-[44px] rounded-xl text-center mb-2">
-            Reserve &amp; pay · from £{(allInFrom(listing.price_per_hour)?.total ?? 0).toFixed(2)}
+            Reserve &amp; pay · from £{(allInFrom(listing.price_per_hour, listing.price_per_day)?.total ?? 0).toFixed(2)}
           </button>
         )}
         {pass && canBook && (

@@ -90,8 +90,19 @@ export default async function handler(req, res) {
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
     if (listing.status !== 'active') return res.status(400).json({ error: 'This listing is not currently bookable' });
 
+    // Day-priced sites. Belfast Royal Academy is £15 per vehicle per day for a
+    // fixed 8am–5pm window — there is no hourly rate and there shouldn't be:
+    // letting someone take a 64-space school car park for two hours at £3.33
+    // would undercut the rate the Academy actually agreed. So when a listing is
+    // day-priced, durationHours is read as a number of DAYS and the slot is the
+    // gate window rather than an arbitrary span.
+    const dayPriced = (!listing.price_per_hour || Number(listing.price_per_hour) <= 0)
+                      && Number(listing.price_per_day) > 0;
     let pricePerHour = Number(listing.price_per_hour);
-    if (!pricePerHour || pricePerHour <= 0) return res.status(400).json({ error: 'This listing has no hourly price set' });
+    let pricePerDay  = Number(listing.price_per_day);
+    if (!dayPriced && (!pricePerHour || pricePerHour <= 0)) {
+      return res.status(400).json({ error: 'This listing has no price set' });
+    }
 
     // Event pricing: a per-date override replaces the base hourly price.
     if (startsAt) {
@@ -99,7 +110,10 @@ export default async function handler(req, res) {
         const dateStr = String(startsAt).slice(0, 10);
         const ovr = await fetch(`${URL_}/rest/v1/listing_price_overrides?listing_id=eq.${listing.id}&override_date=eq.${dateStr}&select=price_pence`, { headers: svc });
         const o = ovr.ok ? (await ovr.json())?.[0] : null;
-        if (o?.price_pence > 0) pricePerHour = o.price_pence / 100;
+        if (o?.price_pence > 0) {
+          if (dayPriced) pricePerDay = o.price_pence / 100;
+          else pricePerHour = o.price_pence / 100;
+        }
       } catch { /* fall back to base price */ }
     }
 
@@ -119,11 +133,50 @@ export default async function handler(req, res) {
     const PENDING_TTL_MS = 30 * 60000;
     const now = Date.now();
     const WEEK_MS = 7 * 86400000;
+    // On a day-priced site the slot is the gate window, not an arbitrary span:
+    // durationHours carries the number of DAYS, and each day runs from
+    // gate_opens_at to gate_closes_at. A driver books "Tuesday", not "9am–6pm".
+    const days = dayPriced ? Math.max(1, Math.min(14, Math.round(durationHours))) : 0;
+    const spanMs = dayPriced
+      ? (() => {
+          const [oh, om] = String(listing.gate_opens_at  || '08:00').split(':').map(Number);
+          const [ch, cm] = String(listing.gate_closes_at || '17:00').split(':').map(Number);
+          const mins = ((ch * 60 + (cm || 0)) - (oh * 60 + (om || 0)));
+          // A same-day window; if the times are odd, fall back to a full day.
+          return (mins > 0 ? mins : 9 * 60) * 60000;
+        })()
+      : durationHours * 3600000;
+
+    // Days the site has actually agreed to. Belfast Royal Academy is Monday to
+    // Friday plus Saturday 8 August — taking money for a Sunday, when the gates
+    // are locked and nobody is expecting anyone, is the worst possible first
+    // impression with a host and leaves a driver stranded. The column existed
+    // but nothing checked it, so it is enforced here.
+    if (Array.isArray(listing.available_days) && listing.available_days.length) {
+      const allowed = new Set(listing.available_days.map(Number));
+      for (let i = 0; i < repeatWeeks; i++) {
+        const d = new Date(startMs + i * WEEK_MS);
+        const local = new Date(d.toLocaleString('en-GB', { timeZone: 'Europe/London' }));
+        // JS: Sunday=0. ISO: Monday=1 … Sunday=7.
+        const iso = local.getDay() === 0 ? 7 : local.getDay();
+        const spans = dayPriced ? days : 1;
+        for (let k = 0; k < spans; k++) {
+          const isoK = ((iso - 1 + k) % 7) + 1;
+          if (!allowed.has(isoK)) {
+            const names = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+            return res.status(400).json({
+              error: `This car park isn’t open on ${names[isoK - 1]}. Please pick a different date.`,
+            });
+          }
+        }
+      }
+    }
+
     // Every occurrence must be free, or we'd take money for a slot we can't honour.
     const occurrences = [];
     for (let i = 0; i < repeatWeeks; i++) {
       const s0 = new Date(startMs + i * WEEK_MS).toISOString();
-      const e0 = new Date(startMs + i * WEEK_MS + durationHours * 3600000).toISOString();
+      const e0 = new Date(startMs + i * WEEK_MS + (dayPriced ? spanMs + (days - 1) * 86400000 : spanMs)).toISOString();
       const or = await fetch(`${URL_}/rest/v1/bookings?listing_id=eq.${listing.id}&status=in.(pending,paid)&starts_at=lt.${encodeURIComponent(e0)}&ends_at=gt.${encodeURIComponent(s0)}&select=status,created_at`, { headers: svc });
       const overlaps = or.ok ? await or.json() : [];
       const held = overlaps.filter(b => b.status === 'paid' || (now - Date.parse(b.created_at) < PENDING_TTL_MS)).length;
@@ -138,13 +191,17 @@ export default async function handler(req, res) {
     }
     const endsAtISO = occurrences[0].ends_at;
 
-    const perWeekPence = Math.round(pricePerHour * durationHours * 100);
+    const perWeekPence = dayPriced
+      ? Math.round(pricePerDay * days * 100)
+      : Math.round(pricePerHour * durationHours * 100);
     const bookingPricePence = perWeekPence * repeatWeeks;
 
     // Below the minimum the fixed part of the card fee makes the booking not
     // worth running. Checked against the FIRST week, not the series total, so
     // a repeat booking can't sneak a sub-minimum slot through by multiplying up.
-    if (perWeekPence < MIN_BOOKING_PENCE) {
+    // A day-priced site is above the minimum by definition, and telling someone
+    // to "book more hours" on a fixed-window day rate would be nonsense.
+    if (!dayPriced && perWeekPence < MIN_BOOKING_PENCE) {
       const needHours = Math.ceil(MIN_BOOKING_PENCE / Math.max(1, Math.round(pricePerHour * 100)));
       return res.status(400).json({
         error: `Minimum booking is £${(MIN_BOOKING_PENCE / 100).toFixed(2)}. At £${pricePerHour.toFixed(2)}/hr that's ${needHours} hour${needHours !== 1 ? 's' : ''} — please book a bit longer.`,
