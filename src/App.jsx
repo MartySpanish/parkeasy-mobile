@@ -4653,7 +4653,6 @@ const PayoutSetup = ({ user }) => {
     return () => { active = false; };
   }, [user?.id]);
 
-  if (!user) return null;
   const active = acct?.transfers_active && acct?.onboarding_status === 'active';
   const started = acct && !active;
 
@@ -4668,6 +4667,19 @@ const PayoutSetup = ({ user }) => {
     } catch (e) { setErr(e.message || 'Could not start payout setup'); setBusy(false); }
   };
 
+  // Someone who arrived on parkeasy.uk/?setup=payouts came here to do exactly
+  // this, so do it rather than making them hunt for the button — including when
+  // they had to create an account first and land here afterwards. The flag is
+  // cleared BEFORE the redirect: Stripe returns to ?payouts=..., and a flag left
+  // set would bounce them straight back out again.
+  useEffect(() => {
+    if (acct === undefined || !user?.id || active) return;
+    if (!ls.get('pe_payout_intent', false)) return;
+    ls.set('pe_payout_intent', false);
+    go();
+  }, [acct, user?.id, active]);
+
+  if (!user) return null;
   if (acct === undefined) return null;
 
   return (
@@ -4794,6 +4806,18 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
         </div>
       </div>
 
+      {/* Someone following an emailed parkeasy.uk/?setup=payouts link who isn't
+          signed in yet. Without this they land on a page of other people's
+          driveways with no idea why, and the intent silently waits. */}
+      {!user && ls.get('pe_payout_intent', false) && (
+        <div className="rounded-2xl border border-[#2ED3C6]/30 bg-[#2ED3C6]/8 p-4 mb-5">
+          <p className="font-display font-bold text-[14px] text-[#EAF1F8]">One step first — create your account</p>
+          <p className="text-[12px] text-[rgba(234,241,248,0.6)] mt-1 leading-relaxed">
+            Sign in (or sign up) using the email address we sent your link to — that&apos;s what connects you to your space.
+            We&apos;ll take you straight into payout setup afterwards.
+          </p>
+        </div>
+      )}
       <PayoutSetup user={user}/>
       <HostEarnings user={user}/>
       <EventPricingPanel user={user}/>
@@ -5960,6 +5984,22 @@ export default function App() {
       ls.set('pe_premium_until', until);
       setIsPremium(true);
       setRewardUntil(until);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // Durable payout-setup link: parkeasy.uk/?setup=payouts
+    //
+    // A Stripe Account Link cannot be emailed — it is single-use and expires in
+    // minutes, so it would be dead before the recipient opened the message. This
+    // is the pasteable stand-in: a plain parkeasy.uk URL that lasts forever and
+    // asks the server for a fresh Stripe link at the moment it's clicked.
+    //
+    // Signed in  → straight to Stripe.
+    // Signed out → land on Spaces with the intent remembered, so it fires as
+    //              soon as they've made their account. Without that, they sign
+    //              in and are dumped on a screen with no idea why they came.
+    if (p.get('setup') === 'payouts') {
+      ls.set('pe_payout_intent', true);
+      setTab('spaces');
       window.history.replaceState({}, '', window.location.pathname);
     }
     // Stripe Connect payout-onboarding return (host set up their payout account).
