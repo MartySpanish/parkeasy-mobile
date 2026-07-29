@@ -1,0 +1,21 @@
+-- Bookable partner experiences (tours) on Stripe Connect destination charges.
+-- APPLIED to production project bbgqregyogtjzaustbng on 28 Jul 2026.
+--
+-- Same money plumbing as parking: the driver pays ParkEasy, Stripe routes the
+-- operator's share to their connected account, ParkEasy's commission is the
+-- application fee. Nobody invoices anybody and nobody is trusted to report
+-- their own numbers.
+--
+-- Its own tables rather than bending rental_listings: a tour is priced by group
+-- size, needs a pickup time and place, and has no availability windows or
+-- overlap rules. Forcing it into a parking listing makes both harder to reason
+-- about. See the applied migration for full DDL — experiences,
+-- experience_tiers, experience_bookings, plus the experiences_public view.
+--
+-- Money: commission_rate is stored PER ROW (default 0.10) so each deal is a
+-- fact in the database rather than a constant someone has to remember. Unlike
+-- parking there is no driver service fee — the driver pays the operator's
+-- listed price exactly, and our cut comes off the operator's side.
+--
+-- Privacy: experience_bookings has RLS on and NO policies, and the public view
+-- omits owner_email and stripe_account_id.

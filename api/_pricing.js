@@ -33,6 +33,33 @@ export const DRIVER_FEE_MAX_PENCE = 500;
 // this the fixed part of the card fee makes the transaction not worth running.
 export const MIN_BOOKING_PENCE = 400;     // £4.00
 
+// ── Partner experiences (tours) ──────────────────────────────────────────────
+// A different deal from parking and priced as such: 10% of the tour, no driver
+// service fee on top. The operator sets the price, the driver pays exactly
+// that, and our cut comes out of the operator's side — which is what makes it
+// an easy yes for someone already selling at a fixed rate.
+//
+// The rate lives per row on experiences.commission_rate; this is only the
+// default for a new one.
+export const EXPERIENCE_COMMISSION = 0.10;
+
+/**
+ * Split for an experience booking, in pence.
+ *   driver pays      = the tier price, nothing added
+ *   ParkEasy takes   = commission_rate of it
+ *   operator gets    = the rest, paid straight to their Connect account
+ */
+export function experienceBreakdown(pricePence, commissionRate = EXPERIENCE_COMMISSION) {
+  const total = Math.max(0, Math.round(Number(pricePence) || 0));
+  const rate = Math.min(0.30, Math.max(0, Number(commissionRate) || 0));
+  const commission = Math.round(total * rate);
+  return {
+    totalPence: total,                        // what the driver is charged
+    commissionPence: commission,              // ParkEasy (Stripe application fee)
+    operatorReceivesPence: total - commission,
+  };
+}
+
 /**
  * Driver service fee for a booking, in whole pence.
  * Percentage of the booking price, clamped to [floor, cap].
