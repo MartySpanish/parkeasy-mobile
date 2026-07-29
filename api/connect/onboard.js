@@ -36,8 +36,15 @@ export default async function handler(req, res) {
   if (!KEY) return res.status(500).json({ error: 'Stripe not configured (STRIPE_SECRET_KEY)' });
   // Live keys are refused unless STRIPE_LIVE_ENABLED=true is explicitly set —
   // going live is a deliberate switch, never an accident.
+  //
+  // The host on the other end of this is a school bursar, not an engineer. The
+  // old text ("Live Stripe key detected but STRIPE_LIVE_ENABLED is not set")
+  // would have been shown, verbatim, to the first organization we ever signed.
+  // Say something they can act on, and put the real cause where we'll see it.
   if (!KEY.startsWith('sk_test_') && process.env.STRIPE_LIVE_ENABLED !== 'true') {
-    return res.status(403).json({ error: 'Live Stripe key detected but STRIPE_LIVE_ENABLED is not set. Refusing to run.' });
+    console.error('connect/onboard BLOCKED: live STRIPE_SECRET_KEY but STRIPE_LIVE_ENABLED is not "true". '
+      + 'Set STRIPE_LIVE_ENABLED=true in the Vercel project to enable live payout onboarding.');
+    return res.status(403).json({ error: 'Payout setup isn’t switched on yet at our end. We’ve been alerted — give us a shout at parkeasyuk@gmail.com and we’ll sort it straight away.' });
   }
   if (!URL_ || !ANON || !SERVICE) return res.status(500).json({ error: 'Supabase not configured (SUPABASE_SERVICE_ROLE_KEY required)' });
 

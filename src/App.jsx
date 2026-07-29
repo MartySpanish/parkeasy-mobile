@@ -15,7 +15,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { paymentError } from './errors';
 
@@ -3146,6 +3146,25 @@ const fmtDays = (days) => {
 const hhmm = (t) => String(t || '').slice(0,5);
 // ISO weekday for a yyyy-mm-dd string, without dragging a timezone into it.
 const isoWeekday = (ymd) => { const n = new Date(`${ymd}T12:00:00`).getDay(); return n === 0 ? 7 : n; };
+const addDays = (ymd, n) => { const d = new Date(`${ymd}T12:00:00`); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]; };
+// Whether a listing can be booked on a given yyyy-mm-dd. Same order as the
+// checkout API: blocked wins, then the term, then extra_dates rescue a weekday
+// outside the weekly pattern.
+const dateIsOpen = (l, ymd) => {
+  if ((l.blocked_dates || []).map(String).includes(ymd)) return false;
+  if (l.available_from  && ymd < l.available_from)  return false;
+  if (l.available_until && ymd > l.available_until) return false;
+  const days = Array.isArray(l.available_days) && l.available_days.length ? l.available_days.map(Number) : null;
+  if (days && !days.includes(isoWeekday(ymd)) && !(l.extra_dates || []).map(String).includes(ymd)) return false;
+  return true;
+};
+// Opening the sheet on a date the site is shut just to show a warning is a poor
+// welcome, so start on the first date it's actually open (looking a year ahead,
+// which is further than any real gap).
+const firstOpenDate = (l, from) => {
+  for (let i = 0; i < 366; i++) { const d = addDays(from, i); if (dateIsOpen(l, d)) return d; }
+  return from;
+};
 
 const BookingSheet = ({ listing, onClose }) => {
   // Day-priced sites (a school car park at £15 for 8am-5pm) have no hourly
@@ -3155,7 +3174,7 @@ const BookingSheet = ({ listing, onClose }) => {
   const dayPriced = !(Number(listing.price_per_hour) > 0) && Number(listing.price_per_day) > 0;
   const baseRate = dayPriced ? Number(listing.price_per_day) : (Number(listing.price_per_hour) || 0);
   const today = new Date().toISOString().split('T')[0];
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(() => firstOpenDate(listing, today));
   const [override, setOverride] = useState(null);   // event price for the picked date
   const [credit, setCredit] = useState(null);       // {purchaseId, remaining, passName} if the driver holds credits
   useEffect(() => {
@@ -3205,13 +3224,48 @@ const BookingSheet = ({ listing, onClose }) => {
   const belowMin = !dayPriced && perWeekCost > 0 && perWeekCost < MIN_BOOKING_GBP;
   const hoursForMin = belowMin ? Math.ceil(MIN_BOOKING_GBP / rate) : 0;
 
-  // The API already refuses a day the site never agreed to. Checking it here too
+  // The API already refuses a date the site never agreed to. Mirroring it here
   // means the driver is told while they're still on the date picker, instead of
   // filling in a reg and a card and being bounced at the last step.
-  const openDays = Array.isArray(listing.available_days) && listing.available_days.length
-    ? listing.available_days.map(Number) : null;
-  const closedDay = !!(openDays && date && !openDays.includes(isoWeekday(date)));
-  const openDaysLabel = fmtDays(listing.available_days);
+  // Same order as the server: blocked wins, then the term, then extra dates
+  // rescue a weekday that isn't in the weekly pattern.
+  const closedReason = (() => {
+    if (!date || dateIsOpen(listing, date)) return '';
+    const pretty = (d) => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+    if ((listing.blocked_dates || []).map(String).includes(date))
+      return `This space is closed on ${pretty(date)}. Pick another date.`;
+    if (listing.available_from && date < listing.available_from)
+      return `This space isn’t taking bookings until ${pretty(listing.available_from)}.`;
+    if (listing.available_until && date > listing.available_until)
+      return `This space isn’t taking bookings after ${pretty(listing.available_until)}.`;
+    const label = fmtDays(listing.available_days);
+    return `This space isn’t open on ${DAY_NAMES[isoWeekday(date)]}s${label ? ` — it’s available ${label}` : ''}. Pick another date.`;
+  })();
+  // A 3-day booking, or a weekly repeat, has to clear every date it covers —
+  // not just the one on the picker. The server checks all of them, so a driver
+  // who only sees the first date checked would get bounced at the card form.
+  const spanReason = (() => {
+    if (!date || closedReason) return '';
+    const spans = dayPriced ? hours : 1;
+    for (let w = 0; w < weeks; w++) {
+      for (let k = 0; k < spans; k++) {
+        if (w === 0 && k === 0) continue;
+        const d = addDays(date, w * 7 + k);
+        if (!dateIsOpen(listing, d)) {
+          const pretty = new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+          return `That booking covers ${pretty}, when this space is closed. Shorten it or pick another start date.`;
+        }
+      }
+    }
+    return '';
+  })();
+  const closedDay = !!(closedReason || spanReason);
+  // What the date field advertises: the weekly pattern, plus any one-off dates
+  // the host has added on top of it.
+  const openDaysLabel = [
+    fmtDays(listing.available_days),
+    ...(listing.extra_dates || []).map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })),
+  ].filter(Boolean).join(' + ');
 
   const pay = async () => {
     setBusy(true); setErr('');
@@ -3244,10 +3298,13 @@ const BookingSheet = ({ listing, onClose }) => {
         <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5">
           Date{openDaysLabel && <span className="ml-1.5 font-semibold normal-case tracking-normal text-[#8da2bd]">· open {openDaysLabel}</span>}
         </label>
-        <input type="date" min={today} value={date} onChange={e=>setDate(e.target.value)} className={field}/>
+        <input type="date"
+          min={listing.available_from && listing.available_from > today ? listing.available_from : today}
+          max={listing.available_until || undefined}
+          value={date} onChange={e=>setDate(e.target.value)} className={field}/>
         {closedDay && (
           <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
-            This space isn&apos;t open on {DAY_NAMES[isoWeekday(date)]}s — it&apos;s available {openDaysLabel}. Pick another date.
+            {closedReason || spanReason}
           </p>
         )}
         {dayPriced ? (
@@ -3353,6 +3410,7 @@ const BookingSheet = ({ listing, onClose }) => {
         <button onClick={pay} disabled={busy || rate<=0 || belowMin || !regValid || closedDay}
           className={`${credit ? 'mt-2' : 'mt-4'} w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50`}>
           {busy ? 'Opening secure payment…'
+            : spanReason ? 'Covers a date this space is closed'
             : closedDay ? 'Closed on that date — pick another'
             : belowMin ? `Add ${hoursForMin - hours} more hour${hoursForMin - hours !== 1 ? 's' : ''} to book`
             : !regValid ? 'Enter your vehicle registration'
@@ -5836,6 +5894,16 @@ export default function App() {
     // active promo entitlement from the server so Premium follows them anywhere.
     const syncPromo = async (token) => {
       if (!token) return;
+      // Pick up any space we listed for this host before they had an account —
+      // an organization listing is built from their signed agreement, so the
+      // first time they sign in is the first chance to link it to them.
+      claimListings(token).then(claimed => {
+        if (claimed.length) {
+          setPromoToast({ ok: true, msg: claimed.length === 1
+            ? `Your space “${claimed[0].title}” is now linked to this account.`
+            : `${claimed.length} of your spaces are now linked to this account.` });
+        }
+      });
       const pending = ls.get('pe_pending_promo', null);
       if (pending) {
         ls.set('pe_pending_promo', null);
