@@ -132,19 +132,52 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     if (!b) return;
     let listing = null;
     if (b.listing_id) {
-      const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${b.listing_id}&select=title,address,contact_email,instructions`, { headers: svc });
+      const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${b.listing_id}&select=title,address,contact_email,instructions,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,overnight_fee_pence`, { headers: svc });
       listing = (await lr.json())?.[0] || null;
     }
     const gbp = (p) => `£${(p / 100).toFixed(2)}`;
-    const when = b.starts_at ? new Date(b.starts_at).toLocaleString('en-GB', { timeZone: 'Europe/London' }) : 'see app';
-    const title = listing?.title || 'a space';
+    // Titles, addresses, arrival instructions and offer copy are free text a
+    // host typed. They were being interpolated straight into the HTML of an
+    // email we send to a driver — one stray "<" mangles the message, and worse
+    // is possible. notify.js has escaped its rows from the start; this file
+    // never did.
+    const esc = (s) => String(s ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+    // Arrival instructions are the one field where a host's own line breaks
+    // carry meaning ("park left or right / not the courtyard"), so keep them.
+    const escMultiline = (s) => esc(s).replace(/\n/g, '<br>');
+
+    // duration_hours holds DAYS on a day-priced site (see create-session), so a
+    // 5-day booking at Belfast Royal Academy was about to be confirmed to the
+    // driver as "5h". Read the unit off the listing, the same test checkout uses.
+    const dayPriced = !(Number(listing?.price_per_hour) > 0) && Number(listing?.price_per_day) > 0;
+    const n = Number(b.duration_hours) || 1;
+    const lengthText = dayPriced ? `${n} day${n !== 1 ? 's' : ''}` : `${n}h`;
+    const when = b.starts_at
+      ? (dayPriced
+          // The gates define the window, so a start time is noise — give the
+          // date and the hours they can actually get in and out.
+          ? `${new Date(b.starts_at).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'long', day: 'numeric', month: 'long' })}`
+            + (listing?.gate_opens_at ? `, ${String(listing.gate_opens_at).slice(0,5)}–${String(listing.gate_closes_at || '').slice(0,5)}` : '')
+          : new Date(b.starts_at).toLocaleString('en-GB', { timeZone: 'Europe/London' }))
+      : 'see app';
+    const title = esc(listing?.title || 'a space');
     const ref = String(b.id || '').slice(0, 8).toUpperCase();
+    // A locked gate and a fee the driver didn't expect is the complaint this
+    // whole listing type generates, so it goes in the confirmation, not just
+    // in the booking sheet they saw once.
+    const gateWarning = (dayPriced && listing?.gate_closes_at)
+      ? `<p style="font-family:system-ui;margin:10px 0;padding:10px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;color:#92400e">
+           <strong>Gates lock at ${String(listing.gate_closes_at).slice(0,5)}.</strong> ${Number(listing.overnight_fee_pence) > 0
+             ? `A vehicle left in after that is locked in overnight and there's a ${gbp(listing.overnight_fee_pence)} charge, which goes to the site.`
+             : `A vehicle left in after that is locked in until the site reopens.`}
+         </p>`
+      : '';
     // "Your booking" (what you need to turn up) is kept separate from the
     // receipt (what you paid). The registration belongs in the first: a driver
     // checks it before setting off, and it is not a payment detail.
     const bookingRows = (extra) => `<table style="border-collapse:collapse"><tr><td style="padding:4px 10px;color:#64748b">Space</td><td style="padding:4px 10px"><strong>${title}</strong></td></tr>`
-      + `<tr><td style="padding:4px 10px;color:#64748b">Address</td><td style="padding:4px 10px">${listing?.address || ''}</td></tr>`
-      + `<tr><td style="padding:4px 10px;color:#64748b">When</td><td style="padding:4px 10px">${when} · ${b.duration_hours}h</td></tr>`
+      + `<tr><td style="padding:4px 10px;color:#64748b">Address</td><td style="padding:4px 10px">${esc(listing?.address || '')}</td></tr>`
+      + `<tr><td style="padding:4px 10px;color:#64748b">When</td><td style="padding:4px 10px">${when} · ${lengthText}</td></tr>`
       + `<tr><td style="padding:4px 10px;color:#64748b">Vehicle</td><td style="padding:4px 10px"><strong style="letter-spacing:.08em">${b.vehicle_reg || '—'}</strong></td></tr>`
       + `<tr><td style="padding:4px 10px;color:#64748b">Reference</td><td style="padding:4px 10px">${ref}</td></tr>${extra || ''}</table>`;
     const receiptRows = () => `<h3 style="font-family:system-ui;margin:18px 0 4px;font-size:15px">Receipt</h3>`
@@ -158,7 +191,7 @@ async function sendBookingEmails(svc, URL_, sessionId) {
       const today = new Date().toISOString().slice(0, 10);
       const ofr = await fetch(`${URL_}/rest/v1/local_offers?listing_id=eq.${b.listing_id}&active=is.true&or=(start_date.is.null,start_date.lte.${today})&or=(end_date.is.null,end_date.gte.${today})&select=business_name,description,offer_code&limit=1`, { headers: svc });
       const offer = ofr.ok ? (await ofr.json())?.[0] : null;
-      if (offer) offerHtml = `<div style="font-family:system-ui;margin-top:14px;padding:12px 14px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa"><strong>📍 While you're there:</strong> ${offer.description} — ${offer.business_name}${offer.offer_code ? ` · code <strong>${offer.offer_code}</strong>` : ''}</div>`;
+      if (offer) offerHtml = `<div style="font-family:system-ui;margin-top:14px;padding:12px 14px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa"><strong>📍 While you're there:</strong> ${esc(offer.description)} — ${esc(offer.business_name)}${offer.offer_code ? ` · code <strong>${esc(offer.offer_code)}</strong>` : ''}</div>`;
     } catch { /* no offers table yet */ }
     const send = (to, subject, html) => fetch('https://api.resend.com/emails', {
       method: 'POST', headers: { Authorization: `Bearer ${KEYR}`, 'Content-Type': 'application/json' },
@@ -168,10 +201,10 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     // Driver's post-payment anxiety is "will I find the spot" — arrival
     // instructions go FIRST, receipt second.
     const findIt = listing?.instructions
-      ? `<div style="font-family:system-ui;margin:10px 0;padding:12px 14px;border-left:4px solid #2ED3C6;background:#f0fdfa;border-radius:8px"><strong>📍 How to find your space</strong><br>${listing.instructions}</div>`
+      ? `<div style="font-family:system-ui;margin:10px 0;padding:12px 14px;border-left:4px solid #2ED3C6;background:#f0fdfa;border-radius:8px"><strong>📍 How to find your space</strong><br>${escMultiline(listing.instructions)}</div>`
       : '';
     if (b.driver_email) jobs.push(send(b.driver_email, `✅ Parking booked — ${title}`,
-      `<h2 style="font-family:system-ui">Booking confirmed</h2>${findIt}`
+      `<h2 style="font-family:system-ui">Booking confirmed</h2>${findIt}${gateWarning}`
       + `<h3 style="font-family:system-ui;margin:18px 0 4px;font-size:15px">Your booking</h3>${bookingRows('')}`
       + `${receiptRows()}${offerHtml}`
       + `<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (the driver service fee is non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
