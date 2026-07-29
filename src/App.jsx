@@ -3052,6 +3052,78 @@ const allInFrom = (pricePerHour) => {
   const booking = rate * hours;
   return { hours, rate, total: booking + driverServiceFee(booking) };
 };
+// Capture the enquiry ourselves instead of firing a mailto: and hoping.
+// A lead we can read and reply to beats a notification that someone tapped a
+// button — which is all the old flow ever produced.
+const EnquirySheet = ({ listing, onClose }) => {
+  const [name, setName]       = useState(() => ls.get('pe_user', {})?.name || '');
+  const [email, setEmail]     = useState(() => ls.get('pe_user', {})?.email || '');
+  const [phone, setPhone]     = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy]       = useState(false);
+  const [sent, setSent]       = useState(false);
+  const [err, setErr]         = useState('');
+
+  const valid = name.trim() && /\S+@\S+\.\S+/.test(email) && message.trim().length >= 10;
+
+  const send = async () => {
+    setBusy(true); setErr('');
+    const ok = await notify('enquiry', {
+      title: listing.title, address: listing.address, ownerEmail: listing.contact_email,
+      name: name.trim(), email: email.trim(), phone: phone.trim(), message: message.trim(),
+    });
+    if (ok) setSent(true);
+    else setErr('Couldn’t send that just now. Try again in a moment.');
+    setBusy(false);
+  };
+
+  const field = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3.5 py-3 min-h-[44px] text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
+  return (
+    <div className="fixed inset-0 z-[215] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="bg-[#0d1626] rounded-3xl w-full max-w-sm p-5 shadow-2xl border border-white/10 max-h-[92vh] overflow-y-auto">
+        {sent ? (
+          <div className="text-center py-4">
+            <div className="w-14 h-14 rounded-full bg-[#34E0A0]/15 flex items-center justify-center mx-auto mb-3"><Check size={26} className="text-[#6BEFB9]"/></div>
+            <h3 className="font-display font-bold text-[#EAF1F8] text-lg">Message sent</h3>
+            <p className="text-[13px] text-[#8da2bd] mt-1.5 leading-relaxed">We’ve passed it to the owner along with your details. They’ll usually come back within a day.</p>
+            <button onClick={onClose} className="w-full mt-4 btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm">Done</button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="font-display font-bold text-[#EAF1F8] text-lg leading-tight">Ask about this space</h3>
+                <p className="text-[12px] text-[#8da2bd] mt-0.5 truncate">{listing.title}</p>
+              </div>
+              <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center flex-shrink-0"><X size={15} className="text-[#aebfd4]"/></button>
+            </div>
+
+            <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5">Your name</label>
+            <input className={field} value={name} onChange={e=>setName(e.target.value)} autoComplete="name"/>
+            <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Your email</label>
+            <input className={field} type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" placeholder="so they can reply"/>
+            <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Phone <span className="normal-case font-medium text-[#6b7d96]">(optional)</span></label>
+            <input className={field} type="tel" value={phone} onChange={e=>setPhone(e.target.value)} autoComplete="tel"/>
+            <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5 mt-3">Your question</label>
+            <textarea className={field} rows={4} value={message} onChange={e=>setMessage(e.target.value)}
+              placeholder="e.g. Is it free on Saturday mornings? How tight is the entrance for a van?"/>
+
+            {err && <p className="text-[12px] text-red-300 mt-2">{err}</p>}
+
+            <button onClick={send} disabled={busy || !valid}
+              className="w-full mt-4 btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50">
+              {busy ? 'Sending…' : !valid ? 'Fill in name, email and question' : 'Send message'}
+            </button>
+            <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">
+              Your details go to the owner of this space and to ParkEasy, so we can help if you don’t hear back.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const BookingSheet = ({ listing, onClose }) => {
   const baseRate = Number(listing.price_per_hour) || 0;
   const today = new Date().toISOString().split('T')[0];
@@ -3340,6 +3412,7 @@ const TrustRow = ({ listing }) => {
 const ListingCard = ({ listing }) => {
   const typeInfo = RENTAL_SPACE_TYPES.find(t => t.id === listing.space_type) || { emoji:'🅿️', label:'Space' };
   const [booking, setBooking] = useState(false);
+  const [enquiring, setEnquiring] = useState(false);
   const [partner, setPartner] = useState(null);
   const [pass, setPass] = useState(null);
   const canBook = Number(listing.price_per_hour) > 0;
@@ -3430,17 +3503,22 @@ const ListingCard = ({ listing }) => {
             🎟 {pass.name} — {pass.num_credits} bookings for £{(pass.price_pence/100).toFixed(2)}
           </button>
         )}
-        <a href={`mailto:${listing.contact_email}?subject=Parking enquiry: ${encodeURIComponent(listing.title)}`}
-          onClick={()=>notify('enquiry', { title: listing.title, address: listing.address, ownerEmail: listing.contact_email })}
-          className={`block w-full text-xs font-bold py-2.5 rounded-xl text-center transition ${canBook ? 'bg-white/8 text-[#cdd9e8] hover:bg-white/12' : 'bg-[#5BE7DA] text-[#06231f] hover:bg-[#34E0A0]'}`}>
-          Contact Owner
-        </a>
+        {/* Was a mailto: link. Two problems with that. It handed the enquiry to
+            the driver's own mail app, so ParkEasy only ever saw "someone tapped
+            the button" — no name, no message, nothing to follow up. And on a
+            phone with no mail account configured it silently does nothing, so
+            the lead just evaporated. Now we take the message ourselves. */}
+        <button onClick={()=>setEnquiring(true)}
+          className={`block w-full text-xs font-bold py-2.5 min-h-[44px] rounded-xl text-center transition ${canBook ? 'bg-white/8 text-[#cdd9e8] hover:bg-white/12' : 'bg-[#5BE7DA] text-[#06231f] hover:bg-[#34E0A0]'}`}>
+          {canBook ? 'Ask the owner a question' : 'Contact owner'}
+        </button>
         <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">
           {canBook ? 'You park at your own risk — see our Terms.' : 'Arranged directly with the owner — you park at your own risk. See our Terms.'}
         </p>
         {partner && <PartnerCard partner={partner} listingId={listing.id}/>}
       </div>
       {booking && <BookingSheet listing={listing} onClose={()=>setBooking(false)}/>}
+      {enquiring && <EnquirySheet listing={listing} onClose={()=>setEnquiring(false)}/>}
     </div>
   );
 };
