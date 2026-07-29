@@ -15,7 +15,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { paymentError } from './errors';
 
@@ -5894,6 +5894,16 @@ export default function App() {
     // active promo entitlement from the server so Premium follows them anywhere.
     const syncPromo = async (token) => {
       if (!token) return;
+      // Pick up any space we listed for this host before they had an account —
+      // an organization listing is built from their signed agreement, so the
+      // first time they sign in is the first chance to link it to them.
+      claimListings(token).then(claimed => {
+        if (claimed.length) {
+          setPromoToast({ ok: true, msg: claimed.length === 1
+            ? `Your space “${claimed[0].title}” is now linked to this account.`
+            : `${claimed.length} of your spaces are now linked to this account.` });
+        }
+      });
       const pending = ls.get('pe_pending_promo', null);
       if (pending) {
         ls.set('pe_pending_promo', null);

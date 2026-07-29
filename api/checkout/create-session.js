@@ -41,7 +41,9 @@ export default async function handler(req, res) {
 
   if (!KEY) return res.status(500).json({ error: 'Stripe not configured (STRIPE_SECRET_KEY)' });
   if (!KEY.startsWith('sk_test_') && process.env.STRIPE_LIVE_ENABLED !== 'true') {
-    return res.status(403).json({ error: 'Live Stripe key detected but STRIPE_LIVE_ENABLED is not set. Refusing to run.' });
+    console.error('checkout BLOCKED: live STRIPE_SECRET_KEY but STRIPE_LIVE_ENABLED is not "true". '
+      + 'Set STRIPE_LIVE_ENABLED=true in the Vercel project to take live bookings.');
+    return res.status(403).json({ error: 'Card payments aren’t switched on just yet. Nothing has been charged — please try again shortly.' });
   }
   if (!URL_ || !SERVICE) return res.status(500).json({ error: 'Supabase not configured' });
 

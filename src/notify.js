@@ -50,6 +50,23 @@ export async function startPayoutOnboarding(token) {
   return d.url;
 }
 
+// Attach any listing ParkEasy built on this host's behalf to their account.
+// Organization listings are created from a signed agreement before the host has
+// an account, so they carry an owner_email and no owner_id — and until that is
+// fixed the host can't see their own space and payouts have nowhere to go.
+// Silent by design: for the overwhelming majority of sign-ins there is nothing
+// to claim, and a failure here must never block getting into the app.
+export async function claimListings(token) {
+  try {
+    const r = await apiFetch('/api/listings/claim', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const d = await r.json().catch(() => ({}));
+    return r.ok && Array.isArray(d.claimed) ? d.claimed : [];
+  } catch { return []; }
+}
+
 // Create a Stripe Checkout Session for a booking and return the hosted payment
 // URL. Price/fees are computed server-side from the listing — the client only
 // says which listing and for how long. Token is optional (guest checkout ok).

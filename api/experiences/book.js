@@ -35,7 +35,8 @@ export default async function handler(req, res) {
   const APP_URL = process.env.APP_URL || 'https://parkeasy.uk';
   if (!KEY) return res.status(500).json({ error: 'Stripe not configured' });
   if (!KEY.startsWith('sk_test_') && process.env.STRIPE_LIVE_ENABLED !== 'true') {
-    return res.status(403).json({ error: 'Live Stripe key detected but STRIPE_LIVE_ENABLED is not set. Refusing to run.' });
+    console.error('experiences/book BLOCKED: live STRIPE_SECRET_KEY but STRIPE_LIVE_ENABLED is not "true".');
+    return res.status(403).json({ error: 'Card payments aren’t switched on just yet. Nothing has been charged — please try again shortly.' });
   }
   if (!URL_ || !SERVICE) return res.status(500).json({ error: 'Supabase not configured' });
 
