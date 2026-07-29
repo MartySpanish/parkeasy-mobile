@@ -147,26 +147,50 @@ export default async function handler(req, res) {
         })()
       : durationHours * 3600000;
 
-    // Days the site has actually agreed to. Belfast Royal Academy is Monday to
-    // Friday plus Saturday 8 August — taking money for a Sunday, when the gates
-    // are locked and nobody is expecting anyone, is the worst possible first
-    // impression with a host and leaves a driver stranded. The column existed
-    // but nothing checked it, so it is enforced here.
-    if (Array.isArray(listing.available_days) && listing.available_days.length) {
-      const allowed = new Set(listing.available_days.map(Number));
+    // ── Dates the site has actually agreed to ────────────────────────────────
+    // Four rules, because a signed licence is not a weekly pattern. Belfast
+    // Royal Academy: term from 2 August, Monday to Friday, plus Saturday 8
+    // August ONLY, and the Academy may block out any date. As a plain weekday
+    // list that reads "every Saturday forever", which would have us selling a
+    // locked car park on 15 August in breach of clause 3.
+    //
+    // Order matters: blocked_dates wins over everything, then extra_dates
+    // rescues a weekday that isn't in the weekly pattern.
+    {
+      const allowed = Array.isArray(listing.available_days) && listing.available_days.length
+        ? new Set(listing.available_days.map(Number)) : null;
+      const extra   = new Set((listing.extra_dates   || []).map(String));
+      const blocked = new Set((listing.blocked_dates || []).map(String));
+      const from    = listing.available_from  || null;
+      const until   = listing.available_until || null;
+      const names = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+      // yyyy-mm-dd as the date reads in Belfast, not in UTC.
+      const ymd = (ms) => new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date(ms));
+
+      const spans = dayPriced ? days : 1;
       for (let i = 0; i < repeatWeeks; i++) {
-        const d = new Date(startMs + i * WEEK_MS);
-        const local = new Date(d.toLocaleString('en-GB', { timeZone: 'Europe/London' }));
-        // JS: Sunday=0. ISO: Monday=1 … Sunday=7.
-        const iso = local.getDay() === 0 ? 7 : local.getDay();
-        const spans = dayPriced ? days : 1;
         for (let k = 0; k < spans; k++) {
-          const isoK = ((iso - 1 + k) % 7) + 1;
-          if (!allowed.has(isoK)) {
-            const names = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-            return res.status(400).json({
-              error: `This car park isn’t open on ${names[isoK - 1]}. Please pick a different date.`,
-            });
+          const ms = startMs + i * WEEK_MS + k * 86400000;
+          const day = ymd(ms);
+          const local = new Date(new Date(ms).toLocaleString('en-GB', { timeZone: 'Europe/London' }));
+          const iso = local.getDay() === 0 ? 7 : local.getDay();   // JS Sun=0 → ISO Sun=7
+          const pretty = new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+
+          if (blocked.has(day)) {
+            return res.status(400).json({ error: `This car park is closed on ${pretty}. Please pick a different date.` });
+          }
+          if (from && day < from) {
+            const fromPretty = new Date(`${from}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+            return res.status(400).json({ error: `This car park isn’t taking bookings until ${fromPretty}.` });
+          }
+          if (until && day > until) {
+            const untilPretty = new Date(`${until}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+            return res.status(400).json({ error: `This car park isn’t taking bookings after ${untilPretty}.` });
+          }
+          if (allowed && !allowed.has(iso) && !extra.has(day)) {
+            return res.status(400).json({ error: `This car park isn’t open on ${names[iso - 1]} ${pretty}. Please pick a different date.` });
           }
         }
       }
