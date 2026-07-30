@@ -2021,6 +2021,8 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   const [focusSpot,   setFocusSpot]   = useState(null);
   const [geo,         setGeo]         = useState(null);   // {lat,lng,label} of a searched location
   const [geoBusy,     setGeoBusy]     = useState(false);
+  const [locErr,      setLocErr]      = useState('');   // why "locate me" failed, in words
+  const [locPromptOff, setLocPromptOff] = useState(false); // dismissed for this visit
   const [geoMiss,     setGeoMiss]     = useState(false);
   const [sugs,        setSugs]        = useState([]);     // address autocomplete suggestions
   const inputRef = useRef(null);
@@ -2228,15 +2230,35 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); setSugs([]); };
 
   // "Locate me" — find the nearest spots to the user's current position.
+  //
+  // The failure path used to be a single setGeoBusy(false): deny the permission
+  // prompt, or be somewhere with no fix, and the spinner just stopped. Nothing
+  // said why, so the only signal was that tapping the button did nothing. On the
+  // Nearby tab, where location IS the feature, that reads as a broken app.
   const locateMe = () => {
-    if (!navigator.geolocation) return;
+    setLocErr('');
+    if (!navigator.geolocation) {
+      setLocErr('This device can’t share its location. Search an address or postcode instead.');
+      return;
+    }
     setGeoBusy(true);
     navigator.geolocation.getCurrentPosition(
-      ({coords}) => { setGeoBusy(false); setFocusSpot(null); setGeo({ lat:coords.latitude, lng:coords.longitude, label:'your location' }); },
-      () => setGeoBusy(false),
+      ({coords}) => { setGeoBusy(false); setLocErr(''); setFocusSpot(null); setGeo({ lat:coords.latitude, lng:coords.longitude, label:'your location' }); },
+      (err) => {
+        setGeoBusy(false);
+        setLocErr(
+          err?.code === 1 ? 'Location is blocked for ParkEasy. Turn it on in your browser or phone settings, then tap again — or just search an address.'
+          : err?.code === 3 ? 'Couldn’t get a fix in time. Try again, or search an address.'
+          : 'Couldn’t find your location just now. Try again, or search an address.'
+        );
+      },
       { enableHighAccuracy:true, timeout:10000, maximumAge:60000 }
     );
   };
+
+  // Show the location prompt on Nearby until they've actually got a fix (or a
+  // searched address, which serves the same purpose), or waved it away.
+  const showLocPrompt = mode === 'map' && !geo && !locPromptOff && !locErr;
 
   const freeCount = citySpots.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
 
@@ -2461,16 +2483,54 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   return (
     <div className="pt-2">
       {searchBlock}
+      <div className="px-4 pt-2.5">
+      {/* Nearby without a location is just the town list with a map on top —
+          the tab can't do the one thing its name promises until someone taps
+          the crosshair, and nothing ever said so. Ask, and make the ask the
+          button, so it works for anyone who never spots the little circle. */}
+      {showLocPrompt && (
+        <div className="mb-3 rounded-2xl px-4 py-3.5" style={{background:'linear-gradient(135deg, rgba(46,211,198,0.14), rgba(91,231,218,0.07))', border:'1px solid rgba(91,231,218,0.32)'}}>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center teal-grad">
+              <Crosshair size={18} className="text-[#06231f]"/>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-display font-bold text-[14px] text-[#EAF1F8]">Turn on location for what&rsquo;s actually nearest</p>
+              <p className="text-[12px] text-[#cdd9e8] mt-0.5 leading-relaxed">
+                Right now you&rsquo;re seeing {cityName}. Share your location and we&rsquo;ll sort every spot by how far you really are — walking times and all.
+              </p>
+            </div>
+            <button aria-label="Dismiss" onClick={()=>setLocPromptOff(true)}
+              className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0"><X size={12} className="text-[rgba(234,241,248,0.6)]"/></button>
+          </div>
+          <button onClick={locateMe} disabled={geoBusy}
+            className="mt-3 w-full py-2.5 rounded-xl font-display font-bold text-[13px] text-[#06231f] btn-teal active:scale-[0.99] transition disabled:opacity-60">
+            {geoBusy ? 'Finding you…' : 'Turn on location'}
+          </button>
+        </div>
+      )}
+      {locErr && (
+        <div className="mb-3 rounded-2xl px-4 py-3 text-[12.5px] leading-relaxed text-[#FFD27A]" style={{background:'rgba(255,194,75,0.10)', border:'1px solid rgba(255,194,75,0.30)'}}>
+          {locErr}
+        </div>
+      )}
+      </div>
       <div ref={mapRef} className="relative mt-2.5">
-        <ParkingMap spots={mapSpots} center={mapCenter} zoom={mapZoom} height={380} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo} flat/>
+        {/* Shorter while the prompt is up, or the "Turn on location" button
+            lands under the tab bar and the one thing we're asking for is the
+            one thing off screen. */}
+        <ParkingMap spots={mapSpots} center={mapCenter} zoom={mapZoom} height={showLocPrompt ? 250 : 380} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo} flat/>
+        {/* Ring the button while it's the thing to press, so the prompt below
+            has something to point at. */}
         <button onClick={locateMe} aria-label="Find parking near me"
-          className="absolute right-4 bottom-10 z-[5] w-12 h-12 rounded-full flex items-center justify-center text-[#5BE7DA] shadow-lg active:scale-95 transition"
+          className={`absolute right-4 bottom-10 z-[5] w-12 h-12 rounded-full flex items-center justify-center text-[#5BE7DA] shadow-lg active:scale-95 transition ${showLocPrompt ? 'ring-4 ring-[#2ED3C6]/40' : ''}`}
           style={{background:'var(--float)',border:'1px solid var(--hairline)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}}>
-          <Crosshair size={20}/>
+          {geoBusy ? <span className="w-5 h-5 border-2 border-[#5BE7DA]/30 border-t-[#5BE7DA] rounded-full animate-spin"/> : <Crosshair size={20}/>}
         </button>
       </div>
       <div className="relative z-[6] -mt-7 rounded-t-[28px] px-4 pt-3 pb-6" style={{background:'var(--sheet)',border:'1px solid var(--hairline)',borderBottom:'none',boxShadow:'var(--sheet-shadow)'}}>
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
+
         <div className="flex items-baseline justify-between mb-2 px-1">
           <h2 className="font-display font-bold text-[17px] text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label}` : 'Nearby parking'}</h2>
           <span className="text-[12.5px] font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0 pl-2">{filtered.length} spot{filtered.length!==1?'s':''}{geo?'':` · ${cityName} first`}{hiddenCount>0?` · ${hiddenCount} ✨`:''}</span>
