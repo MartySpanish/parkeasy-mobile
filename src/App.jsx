@@ -1512,10 +1512,32 @@ const ParkBar = ({ session, now, onOpen, onEnd }) => {
 // ── Fleadh Cheoil 2026 event parking (source: Belfast City Council, 16 Jun 2026)
 const FLEADH = {
   on: Date.now() < new Date('2026-08-13T00:00:00').getTime(),
-  zone: [ // indicative pedestrianised zone — north of City Hall incl. Smithfield & Cathedral Quarter
-    [54.6045,-5.9370],[54.6055,-5.9305],[54.6050,-5.9255],[54.6015,-5.9235],
-    [54.5975,-5.9245],[54.5978,-5.9310],[54.5990,-5.9360],
+  // The closed zone, traced round the streets the Council actually named:
+  // "from the front of Belfast City Hall back to Frederick Street / Great
+  // Patrick Street, altered slightly to reach Dunbar Link", reaching west to
+  // "the King Street / Gresham Street area".
+  //
+  // The corner coordinates are ours, placed from those street names — the
+  // Council publishes a map, not a coordinate list. So this is the right
+  // SHAPE round the right STREETS, and it is labelled indicative everywhere it
+  // appears, with the official map one tap away. Naming the streets is the
+  // point: "an indicative red blob" tells a driver nothing they can act on,
+  // whereas "don't cross Dunbar Link" is a decision they can make at a
+  // junction.
+  zoneStreets: [
+    { name: 'Donegall Square',      lat: 54.5960, lng: -5.9300, label: true  },  // City Hall — south edge
+    { name: 'Donegall Square West', lat: 54.5964, lng: -5.9318, label: false },
+    { name: 'King Street',          lat: 54.5983, lng: -5.9347, label: true  },  // west edge
+    { name: 'Gresham Street',       lat: 54.6008, lng: -5.9335, label: true  },
+    { name: 'Frederick Street',     lat: 54.6046, lng: -5.9280, label: true  },  // north edge
+    { name: 'Great Patrick Street', lat: 54.6052, lng: -5.9232, label: true  },
+    { name: 'Dunbar Link',          lat: 54.6030, lng: -5.9205, label: true  },  // north-east edge
+    { name: 'Victoria Street',      lat: 54.5995, lng: -5.9245, label: true  },  // east edge
+    { name: 'Donegall Square East', lat: 54.5962, lng: -5.9285, label: false },
   ],
+  // Closed all day Sun 2 Aug, then again from Fri 7 Aug to the morning of Mon
+  // 10 Aug, phased around the big City Hall events rather than closed solid.
+  phased: 'Donegall Square East & West and adjoining streets',
   pr: [
     { name:'Park & Ride — Eikon Exhibition Centre', note:'Close to the M1 · £10/day · free shuttle to Grand Central / Laganside', lat:54.4867, lng:-6.1094 },
     { name:"Park & Ride — Giant's Park", note:'Close to the M2 · £10/day · free shuttle to Grand Central / Laganside', lat:54.6360, lng:-5.9180 },
@@ -1535,23 +1557,43 @@ const EventBanner = ({ onOpen }) => !FLEADH.on ? null : (
     <span className="text-xl">🎻</span>
     <span className="flex-1 min-w-0">
       <span className="block font-display font-bold text-[13.5px] text-[#EAF1F8]">Fleadh Cheoil · 2–9 Aug</span>
-      <span className="block text-[11.5px] text-[#cdd9e8] mt-0.5">City centre roads closed — see event parking</span>
+      <span className="block text-[11.5px] text-[#cdd9e8] mt-0.5">City Hall to Cathedral Quarter closed — see which streets</span>
     </span>
     <ChevronRight size={16} className="text-[#C9A7FF] flex-shrink-0"/>
   </button>
 );
+
+// Street name printed on the map at a boundary corner. Red-on-dark with a hard
+// outline so it stays readable over the zone fill and the map tiles beneath.
+const streetPin = (label) => L.divIcon({
+  className: '',
+  // transform:translate(-50%,-50%) centres the pill on the corner whatever the
+  // name's length, so a long one ("Great Patrick Street") sits over the
+  // boundary instead of running off the edge of the map.
+  html: `<div style="position:absolute;left:0;top:0;transform:translate(-50%,-50%);padding:3px 6px;border-radius:6px;font:800 9.5px/1.15 Manrope,system-ui,sans-serif;color:#FFD9D9;background:rgba(90,12,12,0.94);border:1px solid rgba(255,122,122,0.75);box-shadow:0 4px 12px rgba(0,0,0,0.5);white-space:nowrap">${label}</div>`,
+  iconSize: [0, 0], iconAnchor: [0, 0],
+});
 
 const prPin = () => L.divIcon({ className:'', html:`<div style="padding:4px 9px;border-radius:999px;font:700 12px/1 Manrope,system-ui,sans-serif;color:#06231f;background:linear-gradient(135deg,#54E6D8,#2ED3C6);border:1px solid rgba(255,255,255,0.5);box-shadow:0 6px 16px rgba(0,0,0,0.45);white-space:nowrap">P+R</div>`, iconSize:[40,22], iconAnchor:[20,11] });
 const campPin = (label) => L.divIcon({ className:'', html:`<div style="padding:4px 9px;border-radius:999px;font:700 11px/1 Manrope,system-ui,sans-serif;color:#C9A7FF;background:rgba(16,24,40,0.92);border:1px solid rgba(201,167,255,0.5);box-shadow:0 6px 16px rgba(0,0,0,0.45);white-space:nowrap">⛺ ${label}</div>`, iconSize:[70,22], iconAnchor:[35,11] });
 
 const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot }) => {
   const walkIns = FLEADH.walkIns.map(id => ALL_SPOTS.find(s => s.id === id)).filter(Boolean);
+  const zonePositions = FLEADH.zoneStreets.map(s => [s.lat, s.lng]);
   return (
     <div className="fixed inset-0 z-[65] flex flex-col overflow-auto" style={{background:'var(--bg-solid)'}}>
-      <div className="relative h-56 flex-shrink-0">
-        <MapContainer center={[54.606,-5.928]} zoom={12} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} dragging={false} attributionControl={false}>
+      {/* Taller, and you can drag and zoom it. This map is the whole point of
+          the screen — a 224px non-interactive thumbnail of a red blob is not
+          something a driver can plan a route against. */}
+      <div className="relative h-80 flex-shrink-0">
+        {/* zoomControl off: it renders top-left, exactly under the close button.
+            Drag and pinch still work, which is what a phone uses anyway. */}
+        <MapContainer center={[54.6008,-5.9272]} zoom={14} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
           <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
-          <Polygon positions={FLEADH.zone} pathOptions={{color:'#FF7A7A',weight:2,dashArray:'6 6',fillColor:'#FF5C5C',fillOpacity:0.16}}/>
+          <Polygon positions={zonePositions} pathOptions={{color:'#FF5C5C',weight:3,fillColor:'#FF5C5C',fillOpacity:0.30}}/>
+          {FLEADH.zoneStreets.filter(s=>s.label).map((s,i)=>(
+            <Marker key={'st'+i} position={[s.lat,s.lng]} icon={streetPin(s.name)}/>
+          ))}
           {FLEADH.pr.slice(1).map((p,i)=>(<Marker key={i} position={[p.lat,p.lng]} icon={prPin()}/>))}
           {FLEADH.camps.map((c,i)=>(<Marker key={'c'+i} position={[c.lat,c.lng]} icon={campPin(c.name)}/>))}
         </MapContainer>
@@ -1562,14 +1604,46 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
         <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">Event parking</p>
         <h2 className="font-display font-extrabold text-2xl text-[#EAF1F8] mt-1">Fleadh Cheoil 2026</h2>
         <div className="flex items-center gap-1.5 mt-1.5 text-[13px] text-[#8da2bd]"><Clock size={14}/>Sun 2 – Sun 9 Aug · ~800,000 visitors expected</div>
-        <span className="inline-block mt-3 text-[11px] font-extrabold px-2.5 py-1 rounded-full" style={{color:'#FF8A8A', border:'1px solid rgba(255,122,122,0.4)', background:'rgba(255,92,92,0.12)'}}>Roads closed 6am 2 Aug → 5am 10 Aug</span>
+        {/* Council says 5am Sun 2 Aug → 7am Mon 10 Aug; press reported 6am → 5am.
+            Where two sources disagree take the WIDER window: telling someone the
+            roads reopen at 5am Monday when they reopen at 7am strands them, and
+            being an hour early costs them nothing. */}
+        <span className="inline-block mt-3 text-[11px] font-extrabold px-2.5 py-1 rounded-full" style={{color:'#FF8A8A', border:'1px solid rgba(255,122,122,0.4)', background:'rgba(255,92,92,0.12)'}}>Roads closed 5am Sun 2 Aug → 7am Mon 10 Aug</span>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3.5 text-[11.5px] font-semibold text-[#cdd9e8]">
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{background:'rgba(255,92,92,0.7)'}}/>Pedestrianised zone (indicative)</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{background:'rgba(255,92,92,0.7)'}}/>Closed to traffic</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{background:'#34E0A0'}}/>Park &amp; Ride</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{background:'rgba(201,167,255,0.9)'}}/>Campsites</span>
         </div>
-        <div className="mt-3.5 text-[13.5px] leading-relaxed text-[#cdd9e8] bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5">
-          <strong className="text-[#EAF1F8]">Don&rsquo;t drive into the city centre.</strong> The centre — including Smithfield and the Cathedral Quarter — is pedestrianised for the week. Most city-centre car parks stay open, but expect diversions and heavy traffic. Deliveries only 4–8am. The red zone is indicative — check the official map at belfastcity.gov.uk/fleadh.
+
+        {/* The streets, written out. Half the people who need this are already
+            driving and cannot study a map — "don't cross Dunbar Link" is a
+            decision you can make at a junction; a red shape is not. */}
+        <div className="mt-3.5 rounded-2xl px-4 py-3.5" style={{background:'rgba(255,92,92,0.10)', border:'1px solid rgba(255,122,122,0.35)'}}>
+          <p className="font-display font-bold text-[14px] text-[#FF8A8A]">Don&rsquo;t drive past these streets</p>
+          <p className="text-[12px] text-[#cdd9e8] mt-1 leading-relaxed">
+            The closed zone runs from the front of the City Hall up to the Cathedral Quarter. Its edges are:
+          </p>
+          <ul className="mt-2.5 space-y-1.5">
+            {[
+              ['South', 'Donegall Square — the City Hall side'],
+              ['West',  'King Street and Gresham Street'],
+              ['North', 'Frederick Street and Great Patrick Street'],
+              ['East',  'Dunbar Link, down Victoria Street'],
+            ].map(([side, streets]) => (
+              <li key={side} className="flex gap-2.5 text-[13px] leading-snug">
+                <span className="font-display font-bold text-[11px] text-[#FF8A8A] uppercase tracking-wider w-11 flex-shrink-0 pt-0.5">{side}</span>
+                <span className="text-[#EAF1F8] font-semibold">{streets}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[12px] text-[#cdd9e8] mt-3 leading-relaxed">
+            Everything inside that boundary is closed to traffic. <strong className="text-[#EAF1F8]">{FLEADH.phased}</strong> also close all day Sun 2 Aug and again from Fri 7 Aug to the morning of Mon 10 Aug, phased around the big City Hall events.
+          </p>
+        </div>
+
+        <div className="mt-3 text-[13.5px] leading-relaxed text-[#cdd9e8] bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5">
+          <strong className="text-[#EAF1F8]">Don&rsquo;t drive into the city centre.</strong> Most city-centre car parks stay open, but expect diversions and heavy traffic. Residents inside the zone get vehicle passes; businesses get an early-morning delivery window. We&rsquo;ve drawn the boundary from the streets the Council named — it&rsquo;s a guide, not the legal order, so check the official map before you travel.
+          <a href="https://www.belfastcity.gov.uk/things-to-do/fleadh-belfast-2026/traffic-transport-and-travel-rearrangements" target="_blank" rel="noreferrer" className="block mt-2 font-bold text-[#5BE7DA] underline">Official road closure map &amp; street list →</a>
         </div>
         <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5">Official Park &amp; Ride · £10/day</h3>
         {FLEADH.pr.map((p,i)=>(
