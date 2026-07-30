@@ -989,6 +989,19 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
   const [code,        setCode]        = useState('');
   const [codeError,   setCodeError]   = useState(false);
 
+  // This modal had exactly one way out — an X in its top-right corner — and on
+  // a phone that corner was off the top of the screen. The panel is ~813px
+  // tall, the container pins it to the bottom (items-end), and nothing capped
+  // its height or let it scroll, so on any viewport shorter than about 845px
+  // the header overflowed upwards and took the close button to a negative y.
+  // Tapping the backdrop did nothing and Escape did nothing, so the only exit
+  // left was closing the tab. On the paywall, of all screens.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const submitCode = () => {
     const ok = onRedeem?.(code);
     if (ok) { onClose(); } else { setCodeError(true); }
@@ -1000,8 +1013,8 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
     ? ls.get('pe_premium_until', 0) : null;
 
   if (isPremium) return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-      <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
         <div className="w-16 h-16 bg-[#FFC24B]/15 rounded-full flex items-center justify-center mx-auto">
           <Star size={32} className="text-yellow-500" fill="#eab308"/>
         </div>
@@ -1016,10 +1029,13 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
   );
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4">
-      <div className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-        <div style={{ background: 'linear-gradient(135deg,#0e1a2c 0%,#2d4a6e 100%)' }} className="p-6 text-center relative">
-          <button aria-label="Close" onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition"><X size={16}/></button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm shadow-2xl max-h-[92vh] overflow-y-auto overscroll-contain">
+        {/* sticky, so the way out stays reachable however far down the page is
+            scrolled — and padded for the notch, since installed to the home
+            screen this header sits under the iOS status bar. */}
+        <div style={{ background: 'linear-gradient(135deg,#0e1a2c 0%,#2d4a6e 100%)', paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }} className="px-6 pb-6 text-center relative sticky top-0 z-10">
+          <button aria-label="Close" onClick={onClose} className="absolute top-3 right-4 w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition" style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}><X size={16}/></button>
           <div className="w-14 h-14 bg-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
             <Star size={28} fill="currentColor" className="text-[#FFD27A]"/>
           </div>
