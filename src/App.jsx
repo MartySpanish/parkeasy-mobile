@@ -1936,7 +1936,7 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   );
 };
 
-const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onCityDetected, onEvent }) => {
+const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onCityDetected, onEvent }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -1999,7 +1999,9 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       return spots.slice(0, 25);
     }
 
-    let spots = citySpots;
+    // Every spot in the network, not just the selected town's — the count under
+    // the map is the number a driver judges our coverage by.
+    let spots = networkSpots?.length ? networkSpots : citySpots;
 
     if (query.trim()) {
       const lq = query.toLowerCase().trim();
@@ -2028,7 +2030,15 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       spots = spots.filter(s => s.ev?.available);
     }
 
+    // Listing the whole network must not push the driver's own town down the
+    // page, so the selected town always sorts first and the chosen sort applies
+    // inside each tier. Belfast still reads as a Belfast list; the rest of
+    // Northern Ireland is underneath it rather than absent.
+    const inCity = new Set(citySpots.map(s => s.id));
+    const tier = (s) => (inCity.has(s.id) ? 0 : 1);
     return [...spots].sort((a, b) => {
+      const t = tier(a) - tier(b);
+      if (t) return t;
       if (sortBy === 'cheap') return priceVal(a) - priceVal(b);
       if (sortBy === 'spaces') return ((b.available??b.spaces)||0) - ((a.available??a.spaces)||0);
       if (sortBy === 'popular') return b.votes - a.votes;
@@ -2043,11 +2053,22 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       if (sortBy === 'alpha') return a.name.localeCompare(b.name);
       return 0;
     });
-  }, [geo, citySpots, query, badgeFilter, sortBy, evOnly, userLoc]);
+  }, [geo, citySpots, networkSpots, query, badgeFilter, sortBy, evOnly, userLoc]);
 
   // Everyone sees every spot — no caps. Gated ones (founder-curated gems + EV
   // picks) render as area-only teaser cards / approximate pins for free users.
-  const visibleSpots = filtered;
+  //
+  // Rendering all ~740 cards at once is what a national list costs, so the page
+  // grows in blocks instead. The COUNT is always the real total; only how many
+  // cards are painted is paged, which is why there's a "Show more" rather than
+  // a silently truncated list.
+  const PAGE = 40;
+  const [shown, setShown] = useState(PAGE);
+  useEffect(() => { setShown(PAGE); }, [geo, query, badgeFilter, sortBy, evOnly, cityName]);
+  const visibleSpots = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
+  // The map gets the near ones only — 700 markers on a map centred on one town
+  // is cost with no benefit, and city-first ordering means these are the local ones.
+  const mapSpots = useMemo(() => filtered.slice(0, 120), [filtered]);
   const gatedSpots   = isPremium ? [] : filtered.filter(isGated);
   const gatedGems    = gatedSpots.filter(s => !s.ev?.available).length;
   const gatedEv      = gatedSpots.filter(s => s.ev?.available).length;
@@ -2304,7 +2325,12 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                 className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><X size={12} className="text-[rgba(234,241,248,0.6)]"/></button>
               <p className="font-display font-extrabold text-[16px] text-[#EAF1F8] leading-tight pr-7">✨ Did you know ParkEasy has Premium?</p>
               <p className="text-[12.5px] text-[#cdd9e8] leading-relaxed mt-1.5">
-                Unlock <strong className="text-[#C9A7FF]">{hiddenCount > 0 ? `${hiddenCount} hidden gem${hiddenCount!==1?'s':''} in ${cityName}` : 'every hidden gem'}</strong> — the free spots locals keep to themselves — plus every EV charger pick across the map. One parking ticket costs more than a month of Premium.
+                {/* This used to read "N hidden gems in Belfast" off a
+                    city-scoped count. The list is the whole network now, so N
+                    counts gems AND EV picks across every town — claiming they
+                    were all gems, all in one city, would be two lies in five
+                    words. Say what each number actually is. */}
+                Unlock <strong className="text-[#C9A7FF]">{gatedGems > 0 ? `${gatedGems} hidden gem${gatedGems!==1?'s':''}` : 'every hidden gem'}</strong> — the free spots locals keep to themselves — {gatedEv > 0 ? <>plus <strong className="text-[#C9A7FF]">{gatedEv} EV charger pick{gatedEv!==1?'s':''}</strong> across Northern Ireland.</> : 'plus every EV charger pick across the map.'} One parking ticket costs more than a month of Premium.
               </p>
               <button onClick={onUpgrade} className="mt-3 inline-flex items-center gap-1.5 font-display font-bold text-[12.5px] text-[#06231f] px-4 py-2.5 rounded-xl" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
                 See what you're missing<ChevronRight size={14}/>
@@ -2313,10 +2339,10 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           </div>
         )}
         <div className="px-4 pt-3">
-          <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo}/>
+          <ParkingMap spots={mapSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo}/>
         </div>
         <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
-          <p className="text-[12.5px] text-[rgba(234,241,248,0.5)] font-semibold"><strong className="text-[#EAF1F8]">{filtered.length}</strong> spot{filtered.length!==1?'s':''}{geo?` near ${geo.label.split(',')[0]}`:''}{hiddenCount>0?` · ${hiddenCount} ✨ Premium`:''}</p>
+          <p className="text-[12.5px] text-[rgba(234,241,248,0.5)] font-semibold"><strong className="text-[#EAF1F8]">{filtered.length}</strong> spot{filtered.length!==1?'s':''}{geo?` near ${geo.label.split(',')[0]}`:` · ${cityName} first`}{hiddenCount>0?` · ${hiddenCount} ✨ Premium`:''}</p>
           <div className="relative">
             <button onClick={()=>setShowSort(v=>!v)} className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-full border border-white/12 bg-white/[0.05] text-[#cdd9e8] font-semibold hover:border-white/25 transition">
               <Filter size={12}/>{sortLabel}
@@ -2343,6 +2369,12 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                   {i===2 && cityPartner && <PartnerCard partner={cityPartner} listingId={null} eyebrow={`Featured · ${cityName}`} onOpenSpot={onOpenSpot}/>}
                 </React.Fragment>
               ))}
+              {filtered.length > shown && (
+                <button onClick={()=>setShown(n => n + PAGE)}
+                  className="w-full py-3.5 rounded-2xl text-[13px] font-bold text-[#5BE7DA] bg-white/[0.05] border border-white/12 active:scale-[0.99] transition">
+                  Show more — {filtered.length - shown} more spot{filtered.length - shown !== 1 ? 's' : ''} across Northern Ireland
+                </button>
+              )}
               {premiumTeaser}
             </>
           )}
@@ -2356,7 +2388,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     <div className="pt-2">
       {searchBlock}
       <div ref={mapRef} className="relative mt-2.5">
-        <ParkingMap spots={visibleSpots} center={mapCenter} zoom={mapZoom} height={380} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo} flat/>
+        <ParkingMap spots={mapSpots} center={mapCenter} zoom={mapZoom} height={380} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo} flat/>
         <button onClick={locateMe} aria-label="Find parking near me"
           className="absolute right-4 bottom-10 z-[5] w-12 h-12 rounded-full flex items-center justify-center text-[#5BE7DA] shadow-lg active:scale-95 transition"
           style={{background:'var(--float)',border:'1px solid var(--hairline)',backdropFilter:'blur(14px)',WebkitBackdropFilter:'blur(14px)'}}>
@@ -2367,7 +2399,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
         <div className="flex items-baseline justify-between mb-2 px-1">
           <h2 className="font-display font-bold text-[17px] text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label}` : 'Nearby parking'}</h2>
-          <span className="text-[12.5px] font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0 pl-2">{filtered.length} spot{filtered.length!==1?'s':''}{hiddenCount>0?` · ${hiddenCount} ✨`:''}</span>
+          <span className="text-[12.5px] font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0 pl-2">{filtered.length} spot{filtered.length!==1?'s':''}{geo?'':` · ${cityName} first`}{hiddenCount>0?` · ${hiddenCount} ✨`:''}</span>
         </div>
         {filtered.length === 0 ? emptyState : (
           <>
@@ -2376,6 +2408,12 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                 <RowItem key={s.id} spot={s} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
               ))}
             </div>
+            {filtered.length > shown && (
+              <button onClick={()=>setShown(n => n + PAGE)}
+                className="w-full mt-2 py-3 rounded-2xl text-[13px] font-bold text-[#5BE7DA] bg-white/[0.05] border border-white/12 active:scale-[0.99] transition">
+                Show more — {filtered.length - shown} more nearby
+              </button>
+            )}
             <div className="pt-3">{premiumTeaser}</div>
           </>
         )}
@@ -5911,6 +5949,24 @@ export default function App() {
   // Everything addressable by id (used by Saved, which can hold community spots too).
   const allSpots    = useMemo(() => [...userSpots, ...Object.values(CITY_SPOTS).flat()], [userSpots]);
 
+  // The whole network — every town, same enrichment citySpots gets. Search runs
+  // off this rather than one town's slice. The coverage IS the product, and
+  // scoping the list to the selected city meant Belfast advertised "107 spots"
+  // while the app actually held 741, and 32 hidden gems out of 88.
+  const networkSpots = useMemo(() => {
+    const approvedKeys = new Set(approvedSpots.map(s => `${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`));
+    const all = [
+      ...userSpots.filter(s => !approvedKeys.has(`${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`)),
+      ...approvedSpots,
+      ...rentalSpots,
+      ...ALL_SPOTS,
+    ];
+    return all.map(s => {
+      const n = occupancy[String(s.id)] || 0;
+      return n ? { ...s, inUse: n } : s;
+    });
+  }, [userSpots, approvedSpots, rentalSpots, occupancy]);
+
   const changeCity = (id) => {
     setCity(id);
     ls.set('pe_city', id);
@@ -6334,8 +6390,8 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
-        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
+        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
