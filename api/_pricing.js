@@ -90,28 +90,39 @@ export function driverServiceFeePence(bookingPricePence, env = {}, opts = {}) {
  * opts.eventDay      — true when the date carries a host price override, which
  *                      is what an event day IS in this product. Raises the
  *                      driver fee to 20%; the host's 85% is untouched.
- * opts.surchargePence— a fee the HOST receives IN FULL, e.g. Belfast Royal
- *                      Academy's £10 for a car left in after the gates are
- *                      locked. Deliberately outside the commission base: we
- *                      collect it and pass every penny on, exactly as signed.
- *                      Taking 15% of it would breach the agreement.
+ * opts.surchargePence— the overnight lock-in fee, e.g. £10 at Belfast Royal
+ *                      Academy or £20 at Davitt's for a car left in after the
+ *                      gates lock.
+ * opts.surchargeCommissionRate
+ *                    — share of that surcharge ParkEasy keeps. Read PER LISTING
+ *                      from rental_listings.overnight_fee_commission_rate, never
+ *                      assumed, because it is a term of a signed agreement:
+ *                      BRA's clause 5 says the fee is paid to the Academy "in
+ *                      full", so their rate is 0 and taking 15% would breach it.
+ *                      Newer agreements are written at 15%. Defaults to 0 when
+ *                      not supplied — the safe direction, since underclaiming
+ *                      our own commission costs us money whereas overclaiming
+ *                      breaks a contract.
  */
 export function priceBreakdown(bookingPricePence, env = {}, opts = {}) {
   const booking = Math.max(0, Math.round(Number(bookingPricePence) || 0));
   const surcharge = Math.max(0, Math.round(Number(opts.surchargePence) || 0));
   const serviceFee = driverServiceFeePence(booking, env, opts);
   const commission = Math.round(booking * HOST_COMMISSION);
+  const surchargeRate = Math.min(0.30, Math.max(0, Number(opts.surchargeCommissionRate) || 0));
+  const surchargeCommission = Math.round(surcharge * surchargeRate);
   return {
     bookingPence: booking,
     surchargePence: surcharge,
     serviceFeePence: serviceFee,
     commissionPence: commission,
+    surchargeCommissionPence: surchargeCommission,
     eventDay: !!opts.eventDay,
-    // What ParkEasy keeps. The surcharge is absent on purpose — it is the
-    // host's money in full.
-    applicationFeePence: commission + serviceFee,
-    // 85% of the space price, PLUS the whole surcharge.
-    hostReceivesPence: (booking - commission) + surcharge,
+    // What ParkEasy keeps: commission on the space, the whole driver fee, and
+    // our share of the surcharge if this listing's agreement allows one.
+    applicationFeePence: commission + serviceFee + surchargeCommission,
+    // 85% of the space price, plus the surcharge less our share of it.
+    hostReceivesPence: (booking - commission) + (surcharge - surchargeCommission),
     totalPence: booking + serviceFee + surcharge,
   };
 }
