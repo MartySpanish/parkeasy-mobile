@@ -245,8 +245,9 @@ export default async function handler(req, res) {
     } catch { /* not an event day if we can't tell */ }
 
     // Overnight lock-in: a car left in after the gates close. Charged once per
-    // series and paid to the host IN FULL — priceBreakdown keeps it outside the
-    // commission base, because the signed agreement says every penny is theirs.
+    // series. How much of it we keep is a term of THIS listing's agreement, so
+    // it is read from the row — Belfast Royal Academy's clause 5 says the fee is
+    // paid to the Academy in full (rate 0), newer agreements are written at 15%.
     let surchargePence = 0;
     let overnight = false;
     if (listing.overnight_fee_pence > 0 && listing.gate_closes_at) {
@@ -262,7 +263,10 @@ export default async function handler(req, res) {
     }
 
     // One driver service fee per booking series, not per week.
-    const money = priceBreakdown(bookingPricePence, process.env, { eventDay, surchargePence });
+    const money = priceBreakdown(bookingPricePence, process.env, {
+      eventDay, surchargePence,
+      surchargeCommissionRate: listing.overnight_fee_commission_rate,
+    });
     const SERVICE_FEE_PENCE = money.serviceFeePence;
     const applicationFeePence = money.applicationFeePence;
     const totalPence = money.totalPence;
