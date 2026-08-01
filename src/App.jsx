@@ -2061,7 +2061,7 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
 // meet one occasionally rather than three in a row.
 const PARTNER_SLOTS = [2, 9, 17];
 
-const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onCityDetected, onEvent }) => {
+const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -2536,7 +2536,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                       or third partner simply doesn't render on a short list. */}
                   {PARTNER_SLOTS.includes(i) && cityPartners[PARTNER_SLOTS.indexOf(i)] && (
                     <PartnerCard partner={cityPartners[PARTNER_SLOTS.indexOf(i)]} listingId={null}
-                      eyebrow={`Featured · ${cityName}`} onOpenSpot={onOpenSpot}/>
+                      eyebrow={`Featured · ${cityName}`} onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
                   )}
                 </React.Fragment>
               ))}
@@ -3697,7 +3697,129 @@ const nearestSpotsTo = (lat, lng, max = 3, radiusM = 700) =>
     .sort((a, b) => a.d - b.d)
     .slice(0, max);
 
-const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSpot }) => {
+// A business pin, visually distinct from the parking pins around it so the two
+// never read as the same thing.
+const bizPin = (label) => L.divIcon({
+  className: '',
+  html: `<div style="position:absolute;left:0;top:0;transform:translate(-50%,-100%);text-align:center">
+      <div style="padding:5px 10px;border-radius:999px;font:800 12px/1 Manrope,system-ui,sans-serif;color:#3a2600;background:linear-gradient(135deg,#FFD27A,#eab308);border:1px solid rgba(255,255,255,0.6);box-shadow:0 6px 16px rgba(0,0,0,0.5);white-space:nowrap">${label}</div>
+      <div style="width:2px;height:8px;margin:0 auto;background:#eab308"></div>
+    </div>`,
+  iconSize: [0, 0], iconAnchor: [0, 0],
+});
+
+// Full-screen business page: photos you can swipe, the whole description, and a
+// map of the parking around it. The card can only ever show a teaser — this is
+// where "where do I actually put the car for this place" gets answered.
+const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
+  const nearby = useMemo(
+    () => nearestSpotsTo(partner.lat, partner.lng, 8, Math.max(900, partner.radius_m || 900)),
+    [partner.lat, partner.lng, partner.radius_m],
+  );
+  const photos = partner.photo_urls?.length ? partner.photo_urls : (partner.photo_url ? [partner.photo_url] : []);
+  useEffect(() => {
+    trackPartnerEvent(partner.id, null, 'click');
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [partner.id, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col overflow-auto" style={{background:'var(--bg-solid)'}}>
+      {photos.length > 0 && (
+        <div className="relative flex-shrink-0">
+          <div className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory">
+            {photos.map((u,i)=>(
+              <img key={i} src={u} alt={`${partner.name} ${i+1}`} loading={i?'lazy':'eager'}
+                className="h-60 w-full flex-shrink-0 object-cover snap-start"/>
+            ))}
+          </div>
+          {photos.length > 1 && (
+            <p className="absolute bottom-2 right-3 text-[10px] font-bold px-2 py-1 rounded-full bg-black/60 text-white">
+              swipe · {photos.length} photos
+            </p>
+          )}
+        </div>
+      )}
+      <button onClick={onClose} aria-label="Close" style={{top:'calc(env(safe-area-inset-top) + 10px)'}}
+        className="fixed left-3 z-[600] w-11 h-11 rounded-full bg-black/60 border border-white/25 flex items-center justify-center text-white backdrop-blur active:scale-90 transition"><X size={20}/></button>
+
+      <div className="relative -mt-6 rounded-t-[28px] px-5 pt-3 pb-10 flex-1"
+        style={{background:'var(--sheet)', border:'1px solid var(--hairline)', borderBottom:'none', maxWidth:680, width:'100%', margin:'-24px auto 0'}}>
+        <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
+        <div className="flex items-center gap-2">
+          {partner.logo_url && <img src={partner.logo_url} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0"/>}
+          <p className="font-display text-[11px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">Featured local business</p>
+        </div>
+        <h2 className="font-display font-extrabold text-2xl text-[#EAF1F8] mt-1 leading-tight">{partner.name}</h2>
+        {partner.name_irish && <p className="text-[12px] font-semibold tracking-[0.12em] text-[#5BE7DA] mt-0.5">{partner.name_irish}</p>}
+        <p className="text-[13.5px] text-[#cdd9e8] leading-relaxed mt-2.5">{partner.tagline}</p>
+        {/* The card has never had room for this. */}
+        {partner.description && (
+          <p className="text-[13.5px] text-[#aebfd4] leading-relaxed mt-2.5 whitespace-pre-line">{partner.description}</p>
+        )}
+        {partner.address && (
+          <p className="text-[12.5px] text-[#8da2bd] mt-3 flex items-start gap-1.5">
+            <MapPin size={14} className="mt-0.5 flex-shrink-0 text-[#5BE7DA]"/>
+            <span>{partner.address}{partner.postcode ? `, ${partner.postcode}` : ''}</span>
+          </p>
+        )}
+        {partner.contact_phone && (
+          <a href={`tel:${String(partner.contact_phone).replace(/\s+/g,'')}`}
+            className="text-[12.5px] text-[#5BE7DA] font-semibold mt-1.5 inline-block">📞 {partner.contact_phone}</a>
+        )}
+
+        <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2">Parking around {partner.name}</h3>
+        <div className="rounded-2xl overflow-hidden border border-white/10" style={{height:230}}>
+          <MapContainer center={[partner.lat, partner.lng]} zoom={16} style={{width:'100%',height:'100%'}}
+            scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
+            <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+            {/* Above the parking pins: the business is the anchor of this map,
+                and a spot pin sitting on top of its name is confusing. */}
+            <Marker position={[partner.lat, partner.lng]} icon={bizPin(partner.name)} zIndexOffset={1000}/>
+            {nearby.map(({ s }) => (
+              <Marker key={s.id} position={[s.lat, s.lng]} icon={pricePin(s, false)}
+                eventHandlers={{ click: () => onOpenSpot?.(s) }}/>
+            ))}
+          </MapContainer>
+        </div>
+
+        {nearby.length === 0 ? (
+          <p className="text-[13px] text-[#8da2bd] mt-3">No spots logged right beside this one yet — search the street name to see what&rsquo;s nearby.</p>
+        ) : (
+          <div className="mt-2.5 divide-y divide-white/5">
+            {nearby.map(({ s, d }) => (
+              <button key={s.id} onClick={()=>onOpenSpot?.(s)} className="w-full text-left py-2.5 flex items-center justify-between gap-3 active:opacity-70">
+                <span className="min-w-0">
+                  <span className="block text-[13.5px] font-semibold text-[#EAF1F8] truncate">{s.name}</span>
+                  <span className="block text-[11.5px] text-[rgba(234,241,248,0.5)] truncate">{s.restriction || s.near}</span>
+                </span>
+                <span className="flex-shrink-0 text-right">
+                  <span className="block text-[12px] font-bold text-[#5BE7DA]">{Math.max(1, Math.round(d / 80))} min walk</span>
+                  <span className="block text-[11px] text-[rgba(234,241,248,0.5)]">{s.price ? String(s.price).split('/')[0] : 'Free'}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {partner.link_url && (
+          <a href={partner.link_url} target="_blank" rel="noopener noreferrer nofollow"
+            onClick={()=>trackPartnerEvent(partner.id, null, 'click')}
+            className="mt-5 w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[15px] text-[#06231f] btn-teal active:scale-95 transition">
+            Visit {partner.name}<span aria-hidden>↗</span>
+          </a>
+        )}
+        <button onClick={onClose}
+          className="mt-3 w-full py-3.5 rounded-2xl font-display font-bold text-[15px] text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSpot, onOpenPartner }) => {
   const ref = useRef(null);
   const seen = useRef(false);
   useEffect(() => {
@@ -3723,7 +3845,10 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
         // One photo → full-width banner. Several → swipeable strip.
         const photos = (partner.photo_urls?.length ? partner.photo_urls : (partner.photo_url ? [partner.photo_url] : []));
         if (!photos.length) return null;
-        if (photos.length === 1) return <img src={photos[0]} alt={partner.name} className="w-full h-32 object-cover" loading="lazy"/>;
+        if (photos.length === 1) return (
+          <img src={photos[0]} alt={partner.name} onClick={()=>onOpenPartner?.(partner)}
+            className={`w-full h-32 object-cover${onOpenPartner ? ' cursor-pointer' : ''}`} loading="lazy"/>
+        );
         return (
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar snap-x snap-mandatory">
             {photos.map((u, i) => (
@@ -3744,6 +3869,15 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
         {partner.name_irish && <p className="text-[11px] font-semibold tracking-[0.12em] text-[#5BE7DA] mt-0.5">{partner.name_irish}</p>}
         <p className="text-[13px] text-[#cdd9e8] leading-relaxed mt-2">{partner.tagline}</p>
         {partner.address && <p className="text-[12px] text-[#6b7d96] mt-1.5">{partner.address}</p>}
+        {/* The card is a teaser. Tapping it opens the business page — photos,
+            the full description, and a map of the parking around the door,
+            which is the bit that makes an advert useful to a driver. */}
+        {onOpenPartner && (
+          <button onClick={()=>onOpenPartner(partner)}
+            className="mt-2.5 inline-flex items-center gap-1 text-[12px] font-bold text-[#5BE7DA] active:opacity-70">
+            See photos &amp; parking nearby<ChevronRight size={14}/>
+          </button>
+        )}
         {partner.link_url && (
           <a href={partner.link_url} target="_blank" rel="noopener noreferrer nofollow"
             onClick={()=>trackPartnerEvent(partner.id, listingId, 'click')}
@@ -6003,6 +6137,7 @@ export default function App() {
   const [infoPage,      setInfoPage]      = useState(null);
   const [cookieChoice,  setCookieChoice]  = useState(()=>ls.get('pe_cookie', null));
   const [detailSpot,    setDetailSpot]    = useState(null);
+  const [detailPartner, setDetailPartner] = useState(null);
 
   // Deep links: #s=<id> opens that spot; the hash tracks the open detail sheet.
   // Gated spots can't be opened via a shared link on the free tier — show the
@@ -6484,6 +6619,8 @@ export default function App() {
           </div>
         </div>
       )}
+      {detailPartner && <PartnerDetail partner={detailPartner} onClose={()=>setDetailPartner(null)}
+        onOpenSpot={(sp)=>{ setDetailPartner(null); setDetailSpot(sp); }}/>}
       {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={setDetailSpot}/>}
       {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
@@ -6603,8 +6740,8 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
-        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
+        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
