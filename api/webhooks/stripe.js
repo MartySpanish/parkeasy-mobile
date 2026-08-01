@@ -77,16 +77,52 @@ async function grantPremiumByEmail(svc, URL_, email, days) {
   // nullable — see 20260728_entitlements_without_account.sql.
   if (!userId) {
     console.warn('premium grant: no account yet for', email, '— storing unclaimed entitlement');
-    const r = await fetch(`${URL_}/rest/v1/promo_redemptions?on_conflict=user_email,code`, {
-      method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
-      body: JSON.stringify({
-        user_id: null, user_email: email, code: 'STRIPE-SUB',
-        expires_at: new Date(Date.now() + days * 86400000).toISOString(),
-      }),
+    // NOT a PostgREST upsert. on_conflict can only name plain columns, and the
+    // unique index guarding these rows is
+    //   (lower(user_email), code) WHERE user_id IS NULL
+    // — an expression on a PARTIAL index. Postgres cannot infer that from column
+    // names, so `on_conflict=user_email,code` returned 42P10 ("no unique or
+    // exclusion constraint matching the ON CONFLICT specification") every single
+    // time. The throw below then 500'd, Stripe retried, and it failed again.
+    //
+    // Net effect: anyone who paid for Premium BEFORE creating an account got
+    // nothing, which is the exact case this code path exists to handle. So do
+    // it in two explicit steps against the index we actually have.
+    const candidate = Date.now() + days * 86400000;
+    const q = `${URL_}/rest/v1/promo_redemptions`
+      + `?user_email=eq.${encodeURIComponent(email)}&code=eq.STRIPE-SUB&user_id=is.null`;
+
+    // Never shorten an existing unclaimed grant, same rule as the claimed path:
+    // a new annual subscription fires checkout.session.completed AND invoice.paid.
+    let current = 0;
+    try {
+      const cr = await fetch(`${q}&select=expires_at`, { headers: svc });
+      if (cr.ok) current = Date.parse((await cr.json())?.[0]?.expires_at || 0) || 0;
+    } catch { /* treat as none */ }
+    const expiresAt = new Date(Math.max(candidate, current)).toISOString();
+
+    const patch = await fetch(q, {
+      method: 'PATCH', headers: { ...svc, Prefer: 'return=representation' },
+      body: JSON.stringify({ expires_at: expiresAt }),
     });
-    // Throw so the handler returns 500 and Stripe retries. A 200 here would
-    // mark the event delivered and we would never hear about it again.
-    if (!r.ok) throw new Error(`unclaimed entitlement write failed: ${r.status} ${await r.text().catch(()=>'')}`);
+    if (!patch.ok) throw new Error(`unclaimed entitlement update failed: ${patch.status} ${await patch.text().catch(()=>'')}`);
+    const updated = await patch.json().catch(() => []);
+    if (!updated.length) {
+      const ins = await fetch(`${URL_}/rest/v1/promo_redemptions`, {
+        method: 'POST', headers: svc,
+        body: JSON.stringify({ user_id: null, user_email: email, code: 'STRIPE-SUB', expires_at: expiresAt }),
+      });
+      // 23505 means a concurrent delivery of the same event won the race and the
+      // row now exists — the entitlement is recorded, which is all we needed.
+      if (!ins.ok) {
+        const detail = await ins.text().catch(() => '');
+        if (!detail.includes('23505')) {
+          // Throw so the handler returns 500 and Stripe retries. A 200 here would
+          // mark the event delivered and we would never hear about it again.
+          throw new Error(`unclaimed entitlement write failed: ${ins.status} ${detail}`);
+        }
+      }
+    }
     return;
   }
   // Never shorten an existing entitlement. A new annual subscription fires
