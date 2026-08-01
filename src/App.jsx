@@ -596,7 +596,11 @@ const TASTER_GEM_IDS = new Set(
 
 const BUSINESSES = [
   { id:1,  name:"Tommy's Barber",       area:'Glen Road',         addr:'245 Glen Road, West Belfast BT11',    cat:'Barber',         icon:'✂️',  key:'glen road barber',   lat:54.5935, lng:-6.0012 },
-  { id:2,  name:'Gransha Grill',        area:'Hannahstown',       addr:'Gransha Road, BT17',                  cat:'Restaurant',     icon:'🍽️',  key:'gransha grill',      lat:54.5901, lng:-5.9942 },
+  // Was "Gransha Road, BT17, Hannahstown". Marty confirmed the real address is
+  // 83 Glen Road — the number on the shopfront. Coordinates left alone for now:
+  // they came with the wrong address, so they need checking against Glen Road
+  // rather than quietly re-pointed on a guess.
+  { id:2,  name:'Gransha Grill',        area:'Glen Road',         addr:'83 Glen Road, Belfast BT11',          cat:'Takeaway',       icon:'🍟',  key:'gransha grill',      lat:54.5901, lng:-5.9942 },
   { id:3,  name:'West Belfast Fitness', area:'Falls Road',        addr:'Falls Road, West Belfast BT12',       cat:'Gym',            icon:'💪',  key:'falls road',         lat:54.5965, lng:-5.9720 },
   { id:4,  name:'The Felons Club',      area:'Andersonstown',     addr:'Andersonstown Road, BT11',            cat:'Social Club',    icon:'🍺',  key:'falls road',         lat:54.5870, lng:-5.9870 },
   { id:5,  name:"Roma's Pizza",         area:'Andersonstown',     addr:'Andersonstown Road, BT11',            cat:'Restaurant',     icon:'🍕',  key:'falls road',         lat:54.5875, lng:-5.9875 },
