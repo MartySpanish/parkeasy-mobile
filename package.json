@@ -11,7 +11,8 @@
     "dev": "vite",
     "build": "vite build && node scripts/prerender.mjs",
     "build:cap": "VITE_APP_CAPACITOR=true vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "audit": "node scripts/audit-spots.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
