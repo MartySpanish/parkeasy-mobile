@@ -2053,6 +2053,10 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   );
 };
 
+// Where featured partner cards sit in the results list. Spread out so drivers
+// meet one occasionally rather than three in a row.
+const PARTNER_SLOTS = [2, 9, 17];
+
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onCityDetected, onEvent }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
@@ -2404,14 +2408,16 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // One-time "meet Premium" promo — dismissible, persists per device.
   const [premiumPromoDismissed, setPremiumPromoDismissed] = useState(() => ls.get('pe_prem_promo_dismissed', false));
 
-  // Featured local partner for the current city (e.g. The Red Devil during the
-  // Fleadh window) — shown as one card inside the main list, not a directory.
-  const [cityPartner, setCityPartner] = useState(null);
+  // Featured local partners for the current city (The Red Devil, SBG Maeda,
+  // Gransha Grill) — spaced through the main list, not stacked as a directory.
+  // Was a single partner: whichever was nearest the city centre won and every
+  // other paying business was invisible, which is not something you can sell.
+  const [cityPartners, setCityPartners] = useState([]);
   const [partnerDiag, setPartnerDiag] = useState('');   // shown only with ?debug=1
   useEffect(() => {
     let live = true;
     (async () => {
-      if (!isSupabaseEnabled || !cityCenter) { setPartnerDiag('partners: supabase disabled'); setCityPartner(null); return; }
+      if (!isSupabaseEnabled || !cityCenter) { setPartnerDiag('partners: supabase disabled'); setCityPartners([]); return; }
       try {
         const { data, error } = await supabase.from('partners')
           .select('id, slug, name, name_irish, tagline, logo_url, photo_url, photo_urls, link_url, address, lat, lng, radius_m, priority');
@@ -2422,8 +2428,8 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           .map(p => ({ ...p, d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000) }))
           .filter(p => p.d < 8000)
           .sort((a, b) => b.priority - a.priority || a.d - b.d);
-        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near[0] ? ` → showing "${near[0].name}"` : ''}`);
-        setCityPartner(near[0] || null);
+        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near.length ? ` → showing ${near.slice(0,3).map(p=>p.name).join(', ')}` : ''}`);
+        setCityPartners(near.slice(0, 3));
       } catch (e) { if (live) setPartnerDiag(`partners: FETCH FAILED ${e?.message || e}`); }
     })();
     return () => { live = false; };
@@ -2521,7 +2527,13 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                 <React.Fragment key={s.id}>
                   <ListCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
                   {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
-                  {i===2 && cityPartner && <PartnerCard partner={cityPartner} listingId={null} eyebrow={`Featured · ${cityName}`} onOpenSpot={onOpenSpot}/>}
+                  {/* Spaced out so they read as "while you're here" rather than
+                      a block of adverts. Index maths, not a filter, so a second
+                      or third partner simply doesn't render on a short list. */}
+                  {PARTNER_SLOTS.includes(i) && cityPartners[PARTNER_SLOTS.indexOf(i)] && (
+                    <PartnerCard partner={cityPartners[PARTNER_SLOTS.indexOf(i)]} listingId={null}
+                      eyebrow={`Featured · ${cityName}`} onOpenSpot={onOpenSpot}/>
+                  )}
                 </React.Fragment>
               ))}
               {filtered.length > shown && (
