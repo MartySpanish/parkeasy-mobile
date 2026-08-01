@@ -1551,6 +1551,49 @@ const FLEADH = {
   walkIns: [25, 43, 46, 36], // good spots just outside the closed zone
 };
 
+// ── Featured space (top of Search) ───────────────────────────────────────────
+// A curated slot for a bookable space we want in front of everyone — driven by
+// rental_listings.featured, so which space sits here is a decision in the data
+// rather than an id hardcoded in the client.
+const FeaturedSpace = ({ spot, onOpen }) => {
+  const l = spot.listing || {};
+  const gates = l.gate_opens_at
+    ? `${String(l.gate_opens_at).slice(0,5)}–${String(l.gate_closes_at || '').slice(0,5)}`
+    : null;
+  return (
+    <button onClick={()=>onOpen?.(spot)}
+      className="w-full text-left rounded-2xl overflow-hidden active:scale-[0.99] transition"
+      style={{background:'linear-gradient(135deg, rgba(46,211,198,0.14), rgba(201,167,255,0.10))', border:'1px solid rgba(91,231,218,0.35)'}}>
+      {spot.photo && (
+        <div className="relative h-32">
+          <img src={spot.photo} alt={spot.name} className="w-full h-full object-cover"/>
+          <span className="absolute top-2.5 left-2.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full text-[#06231f] teal-grad">★ Featured</span>
+        </div>
+      )}
+      <div className="p-3.5">
+        {!spot.photo && <span className="inline-block mb-2 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full text-[#06231f] teal-grad">★ Featured</span>}
+        <div className="flex items-start justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block font-display font-bold text-[15px] text-[#EAF1F8] leading-tight">{spot.name}</span>
+            <span className="block text-[12px] text-[rgba(234,241,248,0.6)] mt-0.5 truncate">{spot.near}</span>
+          </span>
+          {spot.price && (
+            <span className="flex-shrink-0 text-right">
+              <span className="block font-display font-extrabold text-[15px] text-[#6BEFB9]">{spot.price.split('/')[0]}</span>
+              <span className="block text-[10px] text-[rgba(234,241,248,0.5)]">all-in</span>
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11.5px] font-semibold text-[#cdd9e8]">
+          <span>{spot.spaces} space{spot.spaces !== 1 ? 's' : ''}</span>
+          {gates && <span>· Gates {gates}</span>}
+          <span>· Book &amp; pay in advance</span>
+        </div>
+      </div>
+    </button>
+  );
+};
+
 const EventBanner = ({ onOpen }) => !FLEADH.on ? null : (
   <button onClick={onOpen} className="w-full flex items-center gap-3 text-left rounded-2xl px-3.5 py-3 mb-3 active:scale-[0.985] transition"
     style={{background:'linear-gradient(135deg, rgba(201,167,255,0.15), rgba(91,231,218,0.10))', border:'1px solid rgba(201,167,255,0.35)'}}>
@@ -2260,6 +2303,13 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // searched address, which serves the same purpose), or waved it away.
   const showLocPrompt = mode === 'map' && !geo && !locPromptOff && !locErr;
 
+  // Curated bookable spaces, pinned above the list. Only ever from listings the
+  // server already returned as active, so this can't surface a draft.
+  const featured = useMemo(
+    () => (networkSpots || []).filter(s => s.rental && s.listing?.featured).slice(0, 2),
+    [networkSpots],
+  );
+
   const freeCount = citySpots.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
 
   // ── Shared search header (pill search → chips → event banner → notices) ──
@@ -2399,6 +2449,15 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           )}
         </div>
         {searchBlock}
+        {/* Above the how-it-works and Premium cards: this is a bookable space
+            with money attached, and it earns the position. Hidden while the
+            driver is actively searching — a featured card sitting on top of
+            their own results is an advert, not a result. */}
+        {featured.length > 0 && !isSearching && (
+          <div className="px-4 pt-3 space-y-2.5">
+            {featured.map(s => <FeaturedSpace key={s.id} spot={s} onOpen={onOpenSpot}/>)}
+          </div>
+        )}
         {onHowItWorks && (
           <div className="px-4 pt-3">
             <button onClick={onHowItWorks} className="w-full flex items-center gap-3 text-left rounded-2xl px-3.5 py-3 active:scale-[0.985] transition"
@@ -5998,7 +6057,7 @@ export default function App() {
     (async () => {
       if (!isSupabaseEnabled) return;
       const { data } = await supabase.from('rental_listings')
-        .select('id,title,address,lat,lng,price_per_hour,spaces,space_type,photos,instructions,is_verified,verified_org_type,average_rating,ratings_count,completed_bookings_count')
+        .select('id,title,address,lat,lng,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,featured,spaces,space_type,photos,instructions,is_verified,verified_org_type,average_rating,ratings_count,completed_bookings_count')
         .eq('status', 'active').limit(200);
       if (!live || !data) return;
       setRentalSpots(data.filter(l => l.lat != null && l.lng != null).map(l => ({
@@ -6018,7 +6077,11 @@ export default function App() {
         // All-in on the map and in search results too — a price chip on a pin
         // is a price shown to a consumer to decide on, so s.230 applies there
         // exactly as it does on the card.
-        price: allInFrom(l.price_per_hour) ? `£${allInFrom(l.price_per_hour).total.toFixed(2)}/all-in` : null,
+        // Day-priced sites pass price_per_day too. Without it allInFrom returned
+        // null and Davitt's — a live, bookable listing — showed no price at all
+        // on the map or in search, which reads as "not for sale".
+        price: allInFrom(l.price_per_hour, l.price_per_day)
+          ? `£${allInFrom(l.price_per_hour, l.price_per_day).total.toFixed(2)}/all-in` : null,
         spaces: l.spaces || 1,
         listing: l,
       })));
