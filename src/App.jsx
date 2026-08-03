@@ -2067,7 +2067,7 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
 
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
-const PARTNER_SLOTS = [2, 9, 17];
+const PARTNER_SLOTS = [2, 9, 17, 25];
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent }) => {
   const [query,       setQuery]       = useState('');
@@ -2432,7 +2432,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       if (!isSupabaseEnabled || !cityCenter) { setPartnerDiag('partners: supabase disabled'); setCityPartners([]); return; }
       try {
         const { data, error } = await supabase.from('partners')
-          .select('id, slug, name, name_irish, tagline, logo_url, photo_url, photo_urls, link_url, address, lat, lng, radius_m, priority');
+          .select('id, slug, name, name_irish, tagline, description, logo_url, photo_url, photo_urls, link_url, links, is_online, address, postcode, contact_phone, lat, lng, radius_m, priority');
         if (!live) return;
         if (error) { setPartnerDiag(`partners: ERROR ${error.message}`); return; }
         if (!data?.length) { setPartnerDiag('partners: 0 rows visible (inactive or out of window?)'); return; }
@@ -2440,8 +2440,8 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           .map(p => ({ ...p, d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000) }))
           .filter(p => p.d < 8000)
           .sort((a, b) => b.priority - a.priority || a.d - b.d);
-        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near.length ? ` → showing ${near.slice(0,3).map(p=>p.name).join(', ')}` : ''}`);
-        setCityPartners(near.slice(0, 3));
+        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near.length ? ` → showing ${near.slice(0,PARTNER_SLOTS.length).map(p=>p.name).join(', ')}` : ''}`);
+        setCityPartners(near.slice(0, PARTNER_SLOTS.length));
       } catch (e) { if (live) setPartnerDiag(`partners: FETCH FAILED ${e?.message || e}`); }
     })();
     return () => { live = false; };
@@ -3777,6 +3777,19 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
             className="text-[12.5px] text-[#5BE7DA] font-semibold mt-1.5 inline-block">📞 {partner.contact_phone}</a>
         )}
 
+        {/* An online business has no premises, so "parking around it" is a
+            question with no answer. Show what it actually wants — the ways to
+            get in touch — instead of a map of a street it has nothing to do
+            with. */}
+        {partner.is_online ? (
+          <div className="mt-5 rounded-2xl px-4 py-3.5" style={{background:'rgba(46,211,198,0.10)', border:'1px solid rgba(91,231,218,0.30)'}}>
+            <p className="font-display font-bold text-[14px] text-[#EAF1F8]">Online — coached from anywhere</p>
+            <p className="text-[12.5px] text-[#cdd9e8] mt-1 leading-relaxed">
+              No gym to drive to. Everything runs remotely, so there&rsquo;s nowhere to park and nothing to find.
+            </p>
+          </div>
+        ) : (
+        <>
         <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2">Parking around {partner.name}</h3>
         <div className="rounded-2xl overflow-hidden border border-white/10" style={{height:230}}>
           <MapContainer center={[partner.lat, partner.lng]} zoom={16} style={{width:'100%',height:'100%'}}
@@ -3811,13 +3824,20 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
           </div>
         )}
 
-        {partner.link_url && (
-          <a href={partner.link_url} target="_blank" rel="noopener noreferrer nofollow"
-            onClick={()=>trackPartnerEvent(partner.id, null, 'click')}
-            className="mt-5 w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[15px] text-[#06231f] btn-teal active:scale-95 transition">
-            Visit {partner.name}<span aria-hidden>↗</span>
-          </a>
+        </>
         )}
+
+        {/* Several businesses have more than one thing they want you to do —
+            book a call, apply, follow. One link_url could only ever carry the
+            first of them. */}
+        {(partner.links?.length ? partner.links : (partner.link_url ? [{ label: `Visit ${partner.name}`, url: partner.link_url }] : [])).map((l, i) => (
+          <a key={i} href={l.url} target="_blank" rel="noopener noreferrer nofollow"
+            onClick={()=>trackPartnerEvent(partner.id, null, 'click')}
+            className={`mt-${i ? '2' : '5'} w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[15px] active:scale-95 transition ${
+              i === 0 ? 'text-[#06231f] btn-teal' : 'text-[#EAF1F8] bg-white/8 border border-white/15'}`}>
+            {l.label}<span aria-hidden>↗</span>
+          </a>
+        ))}
         <button onClick={onClose}
           className="mt-3 w-full py-3.5 rounded-2xl font-display font-bold text-[15px] text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
           Close
@@ -3876,7 +3896,9 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
         <h3 id={`partner-${partner.slug}-name`} className="font-display font-extrabold text-xl text-[#EAF1F8] leading-tight mt-1.5">{partner.name}</h3>
         {partner.name_irish && <p className="text-[11px] font-semibold tracking-[0.12em] text-[#5BE7DA] mt-0.5">{partner.name_irish}</p>}
         <p className="text-[13px] text-[#cdd9e8] leading-relaxed mt-2">{partner.tagline}</p>
-        {partner.address && <p className="text-[12px] text-[#6b7d96] mt-1.5">{partner.address}</p>}
+        {partner.address
+          ? <p className="text-[12px] text-[#6b7d96] mt-1.5">{partner.address}</p>
+          : partner.is_online ? <p className="text-[12px] text-[#6b7d96] mt-1.5">Online · coached from anywhere</p> : null}
         {/* The card is a teaser. Tapping it opens the business page — photos,
             the full description, and a map of the parking around the door,
             which is the bit that makes an advert useful to a driver. */}
@@ -3894,6 +3916,7 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
           </a>
         )}
         {(() => {
+          if (partner.is_online) return null;
           const nearby = nearestSpotsTo(partner.lat, partner.lng, 3, Math.max(700, partner.radius_m || 900));
           if (!nearby.length) return null;
           return (
