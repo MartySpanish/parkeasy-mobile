@@ -1294,6 +1294,16 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   // contextual placement as on bookable listings — community spots are where
   // the traffic is, so the partner is visible while supply is still growing.
   const [partner, setPartner] = useState(null);
+  // A rental spot carries the whole listing row on it. Only offer booking when
+  // the listing actually has a price the checkout will accept — the same test
+  // BookingSheet uses, so the button can't appear on something that would then
+  // be refused.
+  const [booking, setBooking] = useState(false);
+  const bookableListing = (spot.rental && spot.listing
+    && (Number(spot.listing.price_per_hour) > 0 || Number(spot.listing.price_per_day) > 0))
+    ? spot.listing : null;
+  const bookableAllIn = bookableListing
+    ? allInFrom(bookableListing.price_per_hour, bookableListing.price_per_day) : null;
   useEffect(() => {
     let live = true;
     findPartnerForListing(spot.lat, spot.lng).then(p => { if (live) setPartner(p); });
@@ -1402,12 +1412,28 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
           {spot.notes && (
             <p className="text-sm text-[rgba(234,241,248,0.65)] leading-relaxed italic border-l-[3px] border-[#2ED3C6] pl-3 mt-4">{spot.notes}</p>
           )}
-          <div className="flex gap-3 mt-5">
-            <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer" className="flex-1 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[#06231f] btn-teal active:scale-95 transition">
+          {/* A bookable space opened from Search or the featured card lands
+              here, and this sheet only ever knew how to hand out directions —
+              so Davitt's showed "Bookable · £23.00 all-in" and then offered no
+              way to book it. Reserve & pay leads; directions drop to secondary,
+              because you want the space held before you drive to it. */}
+          {bookableListing && (
+            <button onClick={()=>setBooking(true)}
+              className="w-full mt-5 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[15px] text-[#06231f] btn-teal active:scale-95 transition">
+              <Receipt size={18}/>Reserve &amp; pay{bookableAllIn ? ` — £${bookableAllIn.total.toFixed(2)}` : ''}
+            </button>
+          )}
+          <div className={`flex gap-3 ${bookableListing ? 'mt-3' : 'mt-5'}`}>
+            <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer"
+              className={`flex-1 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold active:scale-95 transition ${
+                bookableListing ? 'bg-white/8 border border-white/15 text-[#EAF1F8]' : 'text-[#06231f] btn-teal'}`}>
               <Navigation size={18}/>Get directions
             </a>
             <button onClick={share} className="w-[52px] rounded-2xl bg-white/8 border border-white/15 text-[#EAF1F8] flex items-center justify-center">{shareDone?<Check size={18}/>:<Share2 size={18}/>}</button>
           </div>
+          {booking && bookableListing && (
+            <BookingSheet listing={bookableListing} onClose={()=>setBooking(false)}/>
+          )}
           {onStartTimer && (
             <button onClick={()=>onStartTimer(spot)} className="w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
               <Timer size={17} className="text-[#5BE7DA]"/>Start parking timer
@@ -3555,8 +3581,11 @@ const BookingSheet = ({ listing, onClose }) => {
   };
 
   const field = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3.5 py-3 min-h-[44px] text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
+  // z-700, not 215: SpotDetail's floating close / save / Map buttons sit at
+  // z-600, and this sheet now opens from inside it. At 215 they punched
+  // straight through the modal and sat on top of the price.
   return (
-    <div className="fixed inset-0 z-[215] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={onClose}>
+    <div className="fixed inset-0 z-[700] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} className="bg-[#0d1626] rounded-3xl w-full max-w-sm p-5 shadow-2xl border border-white/10 max-h-[92vh] overflow-y-auto">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
