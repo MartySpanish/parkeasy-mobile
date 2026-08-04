@@ -1576,10 +1576,21 @@ const FLEADH = {
   // Closed all day Sun 2 Aug, then again from Fri 7 Aug to the morning of Mon
   // 10 Aug, phased around the big City Hall events rather than closed solid.
   phased: 'Donegall Square East & West and adjoining streets',
+  // `url` is the operator's own Google Maps link and is used for directions in
+  // preference to anything we derive from lat/lng. Shauna, who runs two of
+  // these, told us on 3 Aug that our generated links were landing people in the
+  // wrong place — so for the sites she manages we now send drivers exactly
+  // where she says, and our coordinates only position the pin on the overview
+  // map. A car park you cannot find is worse than one you never listed.
   pr: [
     { name:'Park & Ride — Eikon Exhibition Centre', note:'Close to the M1 · £10/day · free shuttle to Grand Central / Laganside', lat:54.4867, lng:-6.1094 },
-    { name:"Park & Ride — Giant's Park", note:'Close to the M2 · £10/day · free shuttle to Grand Central / Laganside', lat:54.6360, lng:-5.9180 },
-    { name:'Park & Ride — Belfast Harbour', note:'Near the M3 · £10/day · free shuttle to Grand Central / Laganside', lat:54.6170, lng:-5.9220 },
+    { name:"Park & Ride — Giant's Park", note:'Close to the M2 · £10/day · day parking only · free shuttle to Grand Central / Laganside', lat:54.6360, lng:-5.9180,
+      url:'https://maps.app.goo.gl/11kUg4for4n1DSnN6' },
+    // Renamed from "Belfast Harbour": this is the Cruise Terminal / D1 site and
+    // the operator calls it Airport Road West, which is what the signage and
+    // her booking confirmations will say.
+    { name:'Park & Ride — Airport Road West (Belfast Harbour)', note:'Near the M3 · £10/day · free shuttle to Grand Central / Laganside', lat:54.6170, lng:-5.9220,
+      url:'https://maps.app.goo.gl/ZydE4DEX7eAHVaZQ8' },
   ],
   camps: [
     { name:'Titanic camp', lat:54.6050, lng:-5.9090 },
@@ -1733,7 +1744,7 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
               <p className="font-display font-bold text-[14px] text-[#EAF1F8]">{p.name}</p>
               <p className="text-[12px] text-[#8da2bd] mt-0.5 leading-snug">{p.note}</p>
             </div>
-            <a href={directionsUrl(p.lat,p.lng)} target="_blank" rel="noreferrer" aria-label={`Directions to ${p.name}`}
+            <a href={p.url || directionsUrl(p.lat,p.lng)} target="_blank" rel="noreferrer" aria-label={`Directions to ${p.name}`}
               className="w-10 h-10 rounded-full teal-grad text-[#06231f] flex items-center justify-center flex-shrink-0 active:scale-95 transition"><Navigation size={17}/></a>
           </div>
         ))}
