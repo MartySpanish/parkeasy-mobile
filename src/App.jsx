@@ -18,6 +18,7 @@ import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { paymentError } from './errors';
+import CategoryGrid from './components/home/CategoryGrid';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -2356,6 +2357,24 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // searched address, which serves the same purpose), or waved it away.
   const showLocPrompt = mode === 'map' && !geo && !locPromptOff && !locErr;
 
+  // What each home category actually does. Every branch lands the driver on
+  // real results — a tile that only scrolls you to the same list is decoration.
+  const onCategory = (cat) => {
+    switch (cat.action) {
+      case 'event':   onEvent?.(); break;
+      case 'search':  setQuery(cat.query); doSearch(cat.query); break;
+      case 'filter':  setBadgeFilter(cat.filter); clearSearch(); break;
+      case 'premium':
+        // Premium members already have the gems, so send them to them rather
+        // than to a paywall they have paid.
+        if (isPremium) { setBadgeFilter('free'); setSortBy('free'); clearSearch(); }
+        else onUpgrade?.();
+        break;
+      default: break;
+    }
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Curated bookable spaces, pinned above the list. Only ever from listings the
   // server already returned as active, so this can't surface a draft.
   const featured = useMemo(
@@ -2504,6 +2523,16 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           )}
         </div>
         {searchBlock}
+        {/* Category-led discovery, SpotHero-style. Shown only as the LANDING
+            state: the moment someone searches or filters, they have told us
+            what they want and a grid of other options is in the way.
+            Additive on purpose — it sits above the existing list rather than
+            replacing it, so nothing in the booking path changed. */}
+        {!isSearching && (
+          <div className="pt-3">
+            <CategoryGrid isPremium={isPremium} cityName={cityName} onSelect={onCategory}/>
+          </div>
+        )}
         {/* Above the how-it-works and Premium cards: this is a bookable space
             with money attached, and it earns the position. Hidden while the
             driver is actively searching — a featured card sitting on top of
