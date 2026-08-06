@@ -1670,8 +1670,18 @@ const streetPin = (label) => L.divIcon({
 const prPin = () => L.divIcon({ className:'', html:`<div style="padding:4px 9px;border-radius:999px;font:700 12px/1 Manrope,system-ui,sans-serif;color:#06231f;background:linear-gradient(135deg,#54E6D8,#2ED3C6);border:1px solid rgba(255,255,255,0.5);box-shadow:0 6px 16px rgba(0,0,0,0.45);white-space:nowrap">P+R</div>`, iconSize:[40,22], iconAnchor:[20,11] });
 const campPin = (label) => L.divIcon({ className:'', html:`<div style="padding:4px 9px;border-radius:999px;font:700 11px/1 Manrope,system-ui,sans-serif;color:#C9A7FF;background:rgba(16,24,40,0.92);border:1px solid rgba(201,167,255,0.5);box-shadow:0 6px 16px rgba(0,0,0,0.45);white-space:nowrap">⛺ ${label}</div>`, iconSize:[70,22], iconAnchor:[35,11] });
 
-const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot }) => {
+const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot, bookableSpots = [] }) => {
+  // Bookable spots lead the event page: these are the ones that earn, and a
+  // driver coming to a road-closed city wants a space HELD rather than a tip
+  // about a street that may already be full.
+  //
+  // The free walk-ins stay as a fallback for when nothing bookable is
+  // available. During an event with 800,000 visitors, a page that lists one
+  // sold-out car park and nothing else strands people — and this overlay is
+  // reached from a road-closure warning, so it has to be useful even when we
+  // have nothing to sell.
   const walkIns = FLEADH.walkIns.map(id => ALL_SPOTS.find(s => s.id === id)).filter(Boolean);
+  const bookable = bookableSpots.filter(s => s.rental && s.listing);
   const zonePositions = FLEADH.zoneStreets.map(s => [s.lat, s.lng]);
   return (
     <div className="fixed inset-0 z-[65] flex flex-col overflow-auto" style={{background:'var(--bg-solid)'}}>
@@ -1752,13 +1762,30 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
         <div className="mt-3.5 text-[13px] leading-relaxed text-[#cdd9e8] bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5">
           Pre-booking opens <strong className="text-[#EAF1F8]">Mon 6 July</strong> at fleadhcheoil.ie/travel — strongly advised. Free accessible shuttles run to Grand Central Station and Laganside. Blue badge holders get allocated disabled parking when pre-booking.
         </div>
-        <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2.5">Good walk-in spots (outside the zone)</h3>
-        <div className="space-y-3">
-          {/* Event parking is a safety feature — never locked, even for free users */}
-          {walkIns.map(s=>(
-            <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={true} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
-          ))}
-        </div>
+        {bookable.length > 0 ? (
+          <>
+            <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-1">Book a space for the Fleadh</h3>
+            <p className="text-[12.5px] text-[rgba(234,241,248,0.55)] mb-2.5">
+              Reserved in advance and held for you — outside the closed zone.
+            </p>
+            <div className="space-y-3">
+              {bookable.map(s=>(
+                <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={true} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2.5">Good walk-in spots (outside the zone)</h3>
+            <div className="space-y-3">
+              {/* Fallback only. Event parking is a safety feature — never locked,
+                  even for free users — so this page is never left empty. */}
+              {walkIns.map(s=>(
+                <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={true} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
+              ))}
+            </div>
+          </>
+        )}
         <a href="https://fleadhcheoil.ie/travel" target="_blank" rel="noreferrer"
           className="mt-5 w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[15px] text-[#06231f] btn-teal active:scale-95 transition">
           <Navigation size={17}/>Official travel info
@@ -6795,7 +6822,7 @@ export default function App() {
       )}
       {detailPartner && <PartnerDetail partner={detailPartner} onClose={()=>setDetailPartner(null)}
         onOpenSpot={(sp)=>{ setDetailPartner(null); setDetailSpot(sp); }}/>}
-      {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={setDetailSpot}/>}
+      {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={setDetailSpot} bookableSpots={rentalSpots}/>}
       {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
