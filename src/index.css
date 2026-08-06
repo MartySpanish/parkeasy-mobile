@@ -172,3 +172,23 @@ h1, h2, h3 { letter-spacing: -0.02em; }
 .animate-fade-in-up { animation: fadeInUp 0.35s ease both; }
 
 @keyframes pe-pulse { 0% { transform: scale(.7); opacity: .7 } 70% { transform: scale(2.1); opacity: 0 } 100% { opacity: 0 } }
+
+/* ── Design-system primitives (src/components/ui) ──────────────────────────
+   Keyframes and the shared press/focus behaviour. Kept here rather than
+   inline so every primitive gets identical feedback, and so a user who has
+   asked their OS for less motion actually gets it. */
+@keyframes pe-spin    { to { transform: rotate(360deg); } }
+@keyframes pe-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.pe-pressable { -webkit-tap-highlight-color: transparent; }
+.pe-pressable:active  { transform: scale(0.985); }
+.pe-pressable:hover:not(:disabled)   { filter: brightness(1.06); }
+.pe-pressable:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pe-pressable:active { transform: none; }
+  [style*="pe-shimmer"], [style*="pe-spin"] { animation: none !important; }
+}
