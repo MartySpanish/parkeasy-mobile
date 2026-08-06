@@ -106,7 +106,11 @@ export default function CategoryGrid({ isPremium, onSelect, cityName }) {
           </Text>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: space[3] }}>
+      {/* Column count is CSS, not inline: two on a phone, three from 640px and
+          four from 1024px. Left at two, a tile on a 1180px shell became ~570px
+          tall — the aspect ratio that makes a phone grid feel deliberate makes
+          a desktop grid look broken. */}
+      <div className="pe-cat-grid" style={{ display: 'grid', gap: space[3] }}>
         {CATEGORIES.map(cat => (
           <CategoryCard key={cat.id} cat={cat} isPremium={isPremium} onSelect={onSelect} />
         ))}

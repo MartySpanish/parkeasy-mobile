@@ -192,3 +192,35 @@ h1, h2, h3 { letter-spacing: -0.02em; }
   .pe-pressable:active { transform: none; }
   [style*="pe-shimmer"], [style*="pe-spin"] { animation: none !important; }
 }
+
+/* ── Desktop results layout ────────────────────────────────────────────────
+   Below 1024px this is inert: .pe-results is a plain block, so the mobile
+   layout is exactly what it was. From 1024px the list and map sit side by
+   side and the map sticks while the list scrolls, which is the whole reason
+   to have a big screen. */
+.pe-shell { max-width: 680px; }
+
+@media (min-width: 1024px) {
+  .pe-shell { max-width: 1180px; }
+
+  .pe-results {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: 24px;
+    align-items: start;
+    padding: 0 8px;
+  }
+  /* Map second in the DOM but first on screen: the list is the accessible,
+     keyboard-navigable representation and should come first for screen
+     readers and for anyone browsing without CSS. */
+  .pe-map-col  { order: 2; position: sticky; top: 16px; }
+  .pe-list-col { order: 1; min-width: 0; }
+  .pe-map-col .leaflet-container { height: calc(100vh - 180px) !important; min-height: 460px; }
+}
+
+/* Category tiles: 2 up on a phone, 3 from 640px, 4 from 1024px. The tile keeps
+   its square-ish aspect at every count, so the grid stays uniform instead of
+   stretching into billboards on a monitor. */
+.pe-cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px)  { .pe-cat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .pe-cat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
