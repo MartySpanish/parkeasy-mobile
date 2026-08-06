@@ -15,7 +15,7 @@
 // Stock photos of American parking garages would be worse than no photo at
 // all, and we don't have licensed imagery for six categories.
 import React from 'react';
-import { Calendar, Plane, Hotel, Moon, Sun, Sparkles, ChevronRight } from 'lucide-react';
+import { Calendar, Plane, Hotel, Moon, Sun, Sparkles, Coffee, ShoppingBag, Beer, ChevronRight } from 'lucide-react';
 import { space, type, color, radius, elevation, motion } from '../../theme/tokens';
 import { Text, Overline, Badge } from '../ui';
 
@@ -39,6 +39,25 @@ export const CATEGORIES = [
   {
     id: 'commuting', title: 'Daily & Commuting', blurb: 'Council car parks & park-and-ride',
     Icon: Sun, from: '#FFD27A', to: '#EAB308', action: 'filter', filter: 'freenow',
+  },
+  // Each of these searches a PLACE, not a word. "cafe" and "brunch" return
+  // nothing — there is no café in the business directory and no spot mentions
+  // one — so a tile searching for them would look broken. Searching the areas
+  // where Belfast actually eats and drinks returns real spots, and the blurb
+  // says which area so the tile is honest about where it takes you.
+  {
+    id: 'brunch', title: 'Brunch & Cafés', blurb: 'Ormeau Road and around',
+    Icon: Coffee, from: '#F5B98A', to: '#D97706', action: 'search', query: 'Ormeau',
+  },
+  {
+    id: 'shopping', title: 'Shopping', blurb: 'Victoria Square, CastleCourt, the centres',
+    // 'shopping' geocoded to something and the results read "25 spots near
+    // shopping". A place name reads correctly and lands where the shops are.
+    Icon: ShoppingBag, from: '#7CC4FF', to: '#6366F1', action: 'search', query: 'Victoria Square',
+  },
+  {
+    id: 'nightout', title: 'Pubs & Nights Out', blurb: 'Cathedral Quarter and the centre',
+    Icon: Beer, from: '#FFB4A2', to: '#E11D48', action: 'search', query: 'Cathedral Quarter',
   },
   {
     id: 'premium', title: 'Premium Hotspots', blurb: 'The spots locals keep quiet',
