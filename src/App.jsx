@@ -2103,11 +2103,43 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   );
 };
 
+// What ParkEasy actually is, said plainly and below the fold.
+//
+// The wording is deliberately careful. We do not have live availability — the
+// occupancy figure on a spot is described in the app's own words as a
+// "community estimate" — so this says information can change and tells people
+// to trust the signs over us. A parking app that implies certainty it does not
+// have is how someone gets a ticket.
+const TrustPanel = ({ onAddSpot }) => (
+  <section aria-labelledby="pe-trust-heading"
+    className="mt-6 rounded-2xl px-4 py-4"
+    style={{ background:'var(--surface-solid)', border:'1px solid var(--hairline)' }}>
+    <h2 id="pe-trust-heading" className="font-display font-bold text-[15px] text-[#EAF1F8]">
+      Community-powered, not corporate
+    </h2>
+    <p className="text-[13px] text-[rgba(234,241,248,0.62)] leading-relaxed mt-2">
+      ParkEasy is free and built by drivers in Northern Ireland. Listings cover official
+      council and private car parks, on-street bays, free spots and local recommendations
+      people have shared.
+    </p>
+    <p className="text-[13px] text-[rgba(234,241,248,0.62)] leading-relaxed mt-2">
+      Prices, hours and restrictions change, and we don&rsquo;t have live availability.
+      <strong className="text-[#EAF1F8]"> Always check the signs and local restrictions when you arrive.</strong>
+    </p>
+    {onAddSpot && (
+      <button onClick={onAddSpot}
+        className="mt-3.5 min-h-[44px] w-full rounded-xl text-[13px] font-bold text-[#06231f] btn-teal active:scale-[0.985] transition">
+        Add a parking spot
+      </button>
+    )}
+  </section>
+);
+
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 const PARTNER_SLOTS = [2, 9, 17, 25];
 
-const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent }) => {
+const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onAddSpot }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -2391,7 +2423,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-[rgba(234,241,248,0.5)] pointer-events-none"/>
         <input ref={inputRef} aria-label="Search any address or place" value={query}
           onChange={e=>onQueryChange(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') doSearch(query); }}
-          placeholder={mode==='map' ? 'Where are you headed?' : 'Street, postcode or place'}
+          placeholder={mode==='map' ? 'Where are you headed?' : 'Search a street, postcode, landmark or town'}
           className="w-full pl-11 pr-10 py-3.5 rounded-full border border-white/12 bg-white/[0.055] text-[15px] text-[#EAF1F8] placeholder-[rgba(234,241,248,0.5)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/50 transition"/>
         {geoBusy && <span className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/25 border-t-[#5BE7DA] rounded-full animate-spin"/>}
         {!geoBusy && (query || geo) && (
@@ -2413,6 +2445,31 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           </div>
         )}
       </div>
+      {/* "Use my location" belongs beside the search box, not floating over a
+          map on another tab. It is the fastest route to an answer for someone
+          standing on a street, and it was previously invisible unless you
+          happened to open Nearby. Paired with a search button so desktop has
+          something to click and Enter still works. */}
+      <div className="flex gap-2">
+        <button onClick={locateMe} disabled={geoBusy}
+          aria-label="Use my location to find parking near me"
+          className="flex-1 min-h-[44px] flex items-center justify-center gap-2 rounded-2xl text-[13px] font-bold text-[#06231f] btn-teal active:scale-[0.985] transition disabled:opacity-60">
+          {geoBusy
+            ? <><span className="w-4 h-4 border-2 border-[#06231f]/30 border-t-[#06231f] rounded-full animate-spin"/>Finding you…</>
+            : <><Crosshair size={16}/>Use my location</>}
+        </button>
+        <button onClick={()=>doSearch(query)} disabled={!query.trim() || geoBusy}
+          aria-label="Search parking"
+          className="min-h-[44px] px-4 flex items-center justify-center gap-2 rounded-2xl text-[13px] font-bold bg-white/8 border border-white/15 text-[#EAF1F8] active:scale-[0.985] transition disabled:opacity-40">
+          <Search size={16}/><span className="hidden min-[380px]:inline">Search parking</span>
+        </button>
+      </div>
+      {locErr && (
+        <div role="alert" className="rounded-2xl px-3.5 py-3 text-[12.5px] leading-relaxed text-[#FFD27A]"
+          style={{background:'rgba(255,194,75,0.10)', border:'1px solid rgba(255,194,75,0.30)'}}>
+          {locErr}
+        </div>
+      )}
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4">
         {BADGE_FILTERS.map(f => (
           <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
@@ -2509,10 +2566,17 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     return (
       <div className="pb-6 pt-2">
         <div className="px-4 pb-3">
-          <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">{CITIES.find(c=>c.name===cityName)?.region || 'UK & Ireland'}</p>
-          <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">Find parking</h1>
-          <div className="flex flex-wrap gap-x-3.5 gap-y-1 mt-2">
-            {[[Check,'Free to use'],[Star,'Community-verified'],[Receipt,'Live prices & rules']].map(([Ic,label],i)=>(
+          <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">{CITIES.find(c=>c.name===cityName)?.region || 'Northern Ireland'}</p>
+          <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">Find parking across Northern Ireland</h1>
+          <p className="text-[14px] text-[rgba(234,241,248,0.62)] leading-relaxed mt-2">
+            Compare nearby car parks, street parking, free spots and local parking tips.
+          </p>
+          {/* Was "Live prices & rules". We do not have live prices or live
+              availability — the occupancy figure on a spot says "community
+              estimate" in the app's own words. Claiming otherwise is the kind
+              of thing a driver only discovers at a full car park. */}
+          <div className="flex flex-wrap gap-x-3.5 gap-y-1 mt-2.5">
+            {[[Check,'Free to use'],[Star,'Community-verified'],[Receipt,'Prices & rules from drivers']].map(([Ic,label],i)=>(
               <span key={i} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[rgba(234,241,248,0.6)]">
                 <Ic size={12} className="text-[#5BE7DA]"/>{label}
               </span>
@@ -2577,9 +2641,16 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
             </div>
           </div>
         )}
-        <div className="px-4 pt-3">
+        {/* Two columns from 1024px up, one below. Until now the whole app was
+            a 680px column whatever the screen, so a desktop visitor got a
+            phone laid out on a monitor. Purely a media query — every rule is
+            in .pe-results/.pe-map-col in index.css, so the mobile DOM and
+            styles are byte-identical to before. */}
+        <div className="pe-results">
+        <div className="pe-map-col px-4 pt-3">
           <ParkingMap spots={mapSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo}/>
         </div>
+        <div className="pe-list-col">
         <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
           <p className="text-[12.5px] text-[rgba(234,241,248,0.5)] font-semibold"><strong className="text-[#EAF1F8]">{filtered.length}</strong> spot{filtered.length!==1?'s':''}{geo?` near ${geo.label.split(',')[0]}`:` · ${cityName} first`}{hiddenCount>0?` · ${hiddenCount} ✨ Premium`:''}</p>
           <div className="relative">
@@ -2623,6 +2694,9 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               {premiumTeaser}
             </>
           )}
+          {!isSearching && <TrustPanel onAddSpot={onAddSpot}/>}
+        </div>
+        </div>
         </div>
       </div>
     );
@@ -6709,7 +6783,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col text-[#EAF1F8]" style={{maxWidth:680,margin:'0 auto',background:'var(--app-grad)'}}>
+    <div className="pe-shell min-h-screen flex flex-col text-[#EAF1F8]" style={{margin:'0 auto',background:'var(--app-grad)'}}>
       {/* ── Modals ── */}
       {showAdmin && <AdminOverlay onClose={()=>{ setShowAdmin(false); if (location.hash === '#admin') history.replaceState(null, '', location.pathname + location.search); }}/>}
       {promoToast && (
@@ -6766,7 +6840,7 @@ export default function App() {
             <MapPin size={20} className="text-[#06231f]" strokeWidth={2.6}/>
           </div>
           <div className="relative min-w-0 flex-1">
-            <h1 className="font-display text-white font-extrabold text-[15px] leading-tight tracking-tight whitespace-nowrap">ParkEasy</h1>
+            <p className="font-display text-white font-extrabold text-[15px] leading-tight tracking-tight whitespace-nowrap">ParkEasy</p>
             <p className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium truncate whitespace-nowrap">
               UK &amp; Ireland · {ALL_SPOTS.length} spots
             </p>
@@ -6840,8 +6914,8 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
-        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onAddSpot={()=>setTab('add')}/>}
+        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onAddSpot={()=>setTab('add')}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
@@ -6849,7 +6923,7 @@ export default function App() {
       </main>
 
       {/* ── Bottom Navigation ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10" style={{maxWidth:680,margin:'0 auto',background:'var(--float)',backdropFilter:'saturate(180%) blur(24px)',WebkitBackdropFilter:'saturate(180%) blur(24px)',boxShadow:'var(--nav-shadow)'}}>
+      <nav className="pe-shell fixed bottom-0 left-0 right-0 z-50 border-t border-white/10" style={{margin:'0 auto',background:'var(--float)',backdropFilter:'saturate(180%) blur(24px)',WebkitBackdropFilter:'saturate(180%) blur(24px)',boxShadow:'var(--nav-shadow)'}}>
         <div className="flex" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
           {TABS.map(({id,label,Icon})=>{
             const active = tab===id;
