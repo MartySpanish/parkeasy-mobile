@@ -21,7 +21,10 @@ import { Text, Overline, Badge } from '../ui';
 
 export const CATEGORIES = [
   {
-    id: 'events', title: 'Events & Games', blurb: 'Fleadh, Casement, Windsor, the SSE',
+    // Named venues have to be venues that are OPEN. Casement Park was in this
+    // blurb and is a closed construction site with no fixtures — naming it
+    // promises a driver something the calendar behind the tile cannot show.
+    id: 'events', title: 'Events & Games', blurb: 'Windsor, Ravenhill, the O2 and more',
     Icon: Calendar, from: '#C9A7FF', to: '#8B5CF6', action: 'event',
   },
   {

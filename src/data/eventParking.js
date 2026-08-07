@@ -27,15 +27,24 @@ export const TIER = {
 
 export const TIER_LABEL = {
   1: 'Book & reserve',
-  2: 'Premium hidden gems',
+  2: 'Premium picks',
   3: 'Free & community spots',
   4: 'Other car parks nearby',
 };
 
-/** Which tier a spot belongs to. `isGated` comes from the app. */
+/**
+ * Which tier a spot belongs to. `isGated` comes from the app.
+ *
+ * Tier 2 is "everything behind the paywall", not "everything badged
+ * hidden_gem". The first version tested the badge, which quietly dropped the
+ * gated ⚡ EV picks into the free tier — they showed as locked cards under
+ * "Free & community spots", which reads as a bug and buries the exact thing
+ * the tier exists to sell. isGated already encodes the whole rule, including
+ * the five free taster gems and community submissions that must never lock.
+ */
 export function tierOf(spot, isGated) {
   if (spot.rental && spot.listing) return TIER.BOOKABLE;
-  if (spot.badge === 'hidden_gem' && isGated?.(spot)) return TIER.PREMIUM_GEM;
+  if (isGated?.(spot)) return TIER.PREMIUM_GEM;
   if (THIRD_PARTY.test(spot.name || '')) return TIER.THIRD_PARTY;
   return TIER.COMMUNITY;
 }
@@ -61,7 +70,18 @@ export function parkingForEvent(spots, venue, isGated, radiusM = 1600) {
 
   const groups = [];
   for (const tier of [TIER.BOOKABLE, TIER.PREMIUM_GEM, TIER.COMMUNITY, TIER.THIRD_PARTY]) {
-    const items = near.filter(x => x.tier === tier).sort((a, b) => a.d - b.d);
+    let items = near.filter(x => x.tier === tier).sort((a, b) => a.d - b.d);
+    // Operator car parks are listed by name only, so two records for the same
+    // site collapse into a visible duplicate — "Q-Park Victoria Square" twice,
+    // once as the car park and once as the EV charger inside it. Keep the
+    // nearest of each name; the list is already sorted, so the first wins.
+    if (tier === TIER.THIRD_PARTY) {
+      const seen = new Set();
+      items = items.filter(x => {
+        const k = (x.spot.name || '').toLowerCase();
+        return seen.has(k) ? false : (seen.add(k), true);
+      });
+    }
     if (items.length) {
       groups.push({
         tier,
