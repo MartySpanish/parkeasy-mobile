@@ -19,6 +19,7 @@ import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding,
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { paymentError } from './errors';
 import CategoryGrid from './components/home/CategoryGrid';
+import EventsScreen from './components/events/EventsScreen';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -2166,7 +2167,7 @@ const TrustPanel = ({ onAddSpot }) => (
 // meet one occasionally rather than three in a row.
 const PARTNER_SLOTS = [2, 9, 17, 25];
 
-const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onAddSpot }) => {
+const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -2420,7 +2421,11 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // real results — a tile that only scrolls you to the same list is decoration.
   const onCategory = (cat) => {
     switch (cat.action) {
-      case 'event':   onEvent?.(); break;
+      // The tile opens the full calendar. The banner above it still opens the
+      // Fleadh screen directly — that one is a live road-closure warning, and
+      // burying it one tap deeper inside a list of forty events would be a
+      // safety regression, not a tidy-up.
+      case 'event':   (onEvents || onEvent)?.(); break;
       case 'search':  setQuery(cat.query); doSearch(cat.query); break;
       case 'filter':  setBadgeFilter(cat.filter); clearSearch(); break;
       case 'premium':
@@ -6370,7 +6375,8 @@ export default function App() {
   const [showSession,    setShowSession]    = useState(false);
   const [nowTs,          setNowTs]          = useState(()=>Date.now());
   const [theme,          setTheme]          = useState(()=>ls.get('pe_theme', 'dark'));
-  const [showEvent,      setShowEvent]      = useState(false);
+  const [showEvent,      setShowEvent]      = useState(false);  // the Fleadh road-closure screen
+  const [showEvents,     setShowEvents]     = useState(false);  // the full event calendar
   const [flash,          setFlash]          = useState(null);   // transient top banner {tone,msg}
   const [showAdmin,      setShowAdmin]      = useState(false);
   const [promoToast,     setPromoToast]     = useState(null);   // { ok, msg }
@@ -6823,6 +6829,21 @@ export default function App() {
       {detailPartner && <PartnerDetail partner={detailPartner} onClose={()=>setDetailPartner(null)}
         onOpenSpot={(sp)=>{ setDetailPartner(null); setDetailSpot(sp); }}/>}
       {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={setDetailSpot} bookableSpots={rentalSpots}/>}
+      {/* renderSpot is a render-prop rather than an import so the events screen
+          never has to know about SpotCard, isGated, the paywall or saved state —
+          it asks for "the app's card for this spot" and gets the real one,
+          including the locked variant a free user should see for a gem. */}
+      {showEvents && <EventsScreen
+        onClose={()=>setShowEvents(false)}
+        spots={networkSpots}
+        isGated={isGated}
+        isPremium={isPremium}
+        onOpenFleadh={()=>{ setShowEvents(false); setShowEvent(true); }}
+        onAddSpot={()=>{ setShowEvents(false); setTab('add'); }}
+        renderSpot={(sp)=>(
+          <SpotCard spot={sp} saved={saved.has(sp.id)} onSave={toggleSave} isPremium={isPremium}
+            onUpgrade={()=>{setShowEvents(false);setShowPricing(true);}} onOpen={setDetailSpot}/>
+        )}/>}
       {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
@@ -6941,8 +6962,8 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onAddSpot={()=>setTab('add')}/>}
-        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onAddSpot={()=>setTab('add')}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')}/>}
+        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
