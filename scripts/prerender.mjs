@@ -9,6 +9,16 @@
 // Every link is a plain <a> in the HTML — nothing here depends on JavaScript,
 // which is the whole point of the file.
 import { readFileSync, writeFileSync, readdirSync } from 'fs';
+import { BOOKABLE_SPACES, gbp } from '../src/data/bookableSpaces.js';
+
+// Cheapest price anyone can ACTUALLY pay today. Derived, never typed: the
+// first draft of this line advertised "from £17.25", which is Belfast Royal
+// Academy's rate — and BRA is still pending_approval, so nobody could have
+// booked at that price. Advertising a price that cannot be paid is worse than
+// advertising none.
+const FROM_PRICE = BOOKABLE_SPACES.length
+  ? gbp(Math.min(...BOOKABLE_SPACES.map(s => s.allInPence)))
+  : null;
 
 const distHtml = 'dist/index.html';
 let htmlDoc = readFileSync(distHtml, 'utf8');
@@ -46,13 +56,14 @@ const townNav = [
 
 const seo = `<div id="seo-prerender" style="max-width:760px;margin:0 auto;padding:48px 22px;color:#EAF1F8;font-family:Manrope,system-ui,sans-serif;background:linear-gradient(180deg,#0d1626,#0a111e);min-height:100vh">
 <h1 style="font-family:Sora,sans-serif;font-size:32px;font-weight:800;letter-spacing:-.5px;line-height:1.15">Find parking across Northern Ireland</h1>
-<p style="color:rgba(234,241,248,.72);font-size:16px;line-height:1.6;margin-top:12px">Compare nearby car parks, street parking, free spots and local parking tips. ParkEasy is a free, community-powered parking finder for Belfast, Derry~Londonderry, Lisburn, Newry, Bangor and towns right across Northern Ireland. Search any street, postcode, landmark or town and get the nearest parking sorted by distance, with walk times and prices. No account needed.</p>
+<p style="color:rgba(234,241,248,.72);font-size:16px;line-height:1.6;margin-top:12px">${FROM_PRICE ? `<strong style="color:#EAF1F8">Book and pay for a guaranteed parking space in Belfast from ${FROM_PRICE} a day</strong> &mdash; reserved in advance at school, church and GAA club car parks, and held for you when you arrive.` : '<strong style="color:#EAF1F8">Reserve a parking space in advance across Northern Ireland.</strong>'} ParkEasy also lists thousands of free spots, on-street bays and local parking tips across Belfast, Derry~Londonderry, Lisburn, Newry, Bangor and towns right across Northern Ireland.</p>
+<p style="margin:18px 0 0"><a href="https://parkeasy.uk/?tab=spaces" style="display:inline-block;background:linear-gradient(135deg,#54E6D8,#2ED3C6);color:#06231F;font-weight:800;padding:13px 22px;border-radius:12px;text-decoration:none;font-size:16px">Book a space &rarr;</a></p>
 <h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">How it works</h2>
 <ul style="color:rgba(234,241,248,.72);line-height:1.8;padding-left:20px">
-<li>Search a destination — see the closest parking first</li>
-<li>Free, hidden-gem and official car parks, confirmed by local drivers</li>
-<li>Tap a spot for prices, walk time and directions</li>
-<li>Rent a private driveway, or add a spot you know</li>
+<li><strong style="color:#EAF1F8">Book a space in advance</strong> and it is held for you &mdash; paid by card, no meter, no circling</li>
+<li>Or search any destination for the closest free, hidden-gem and official car parks</li>
+<li>Prices are all-in: what you see is what you pay</li>
+<li>Rent out your own driveway or car park and keep 85% of every booking</li>
 </ul>
 <h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">Parking by town</h2>
 ${townNav}
