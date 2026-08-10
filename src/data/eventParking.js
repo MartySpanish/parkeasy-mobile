@@ -12,8 +12,21 @@
 //
 // Tier 4 is the one that matters commercially: NCP, Q-Park and APCOA earn us
 // exactly nothing, and listing them prominently beside an event is free
-// promotion for a competitor. They stay — a driver at a sold-out venue needs
-// them — but they go last and they are not badged as recommendations.
+// promotion for a competitor.
+//
+// The first version kept them on every event, collapsed, on the argument that
+// a driver at a sold-out venue needs them. Measured against the real data,
+// that argument was hypothetical: across 37 events and 528 spots, 28 events
+// surfaced an operator car park and ZERO of them would have been left with
+// nothing if it were removed — every single one also had a free, community or
+// premium spot inside the same radius. So the safety net was paying for
+// itself 0 times out of 28 and advertising a competitor the other 28.
+//
+// Tier 4 is now a genuine LAST RESORT: it appears only when we have nothing
+// else at all within walking distance. Today that is no events. It is kept
+// rather than deleted because the radius is tunable and new venues get added
+// — the day one of them has only an NCP beside it, sending a driver away with
+// an empty page would be a worse outcome than naming it.
 
 /** Operators whose car parks we take no commission on. */
 const THIRD_PARTY = /\b(NCP|Q-?Park|APCOA|Euro ?Car ?Parks|Smart ?Parking)\b/i;
@@ -76,6 +89,10 @@ export function parkingForEvent(spots, venue, isGated, radiusM = 1600) {
     // once as the car park and once as the EV charger inside it. Keep the
     // nearest of each name; the list is already sorted, so the first wins.
     if (tier === TIER.THIRD_PARTY) {
+      // Last resort only — if anything of ours is in range, the operator car
+      // parks are not shown at all. See the note at the top of the file for
+      // the measurement behind this.
+      if (groups.length) continue;
       const seen = new Set();
       items = items.filter(x => {
         const k = (x.spot.name || '').toLowerCase();

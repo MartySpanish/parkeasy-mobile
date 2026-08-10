@@ -34,10 +34,26 @@ export const BOOKABLE_SPACES = [
     lat: 54.5875, lng: -5.9625,
     photo: 'https://parkeasy.uk/davitts/1-car-park.jpg',
   },
-  // Belfast Royal Academy (£15/day, £17.25 all-in, 64 spaces, Cliftonville
-  // Road BT14 6JL) is deliberately ABSENT: it is still pending_approval, so it
-  // cannot be booked. Add it the moment it goes active — it is the bigger of
-  // the two by some margin.
+  {
+    slug: 'belfast-royal-academy',
+    area: 'belfast',
+    name: 'Belfast Royal Academy — Cliftonville Road',
+    address: 'Belfast Royal Academy, Cliftonville Road, Belfast',
+    postcode: 'BT14 6JL',
+    spaces: 64,
+    pricePence: 1500,                // £15 per vehicle per day, set by the school
+    allInPence: 1725,                // £17.25 — what the driver is charged
+    unit: 'day',
+    hours: '8am–5pm, Mon–Fri',       // clause 3 of the licence; weekends locked
+    lat: 54.6180, lng: -5.9450,
+    photo: 'https://parkeasy.uk/bra/1-front-bays.jpg',
+  },
+  // 5 Manor Close is the third ACTIVE listing and is deliberately ABSENT.
+  // Two reasons, both about it being someone's home rather than an
+  // institution: publishing a private residential address on a static page
+  // built to be indexed by Google is a different act from listing it inside
+  // the app, and it is priced hourly (£3/hr) with no day rate, so it has no
+  // honest all-in day figure to show in this format. In the app, unchanged.
 ];
 
 /** Active bookable spaces for one area page, e.g. 'belfast'. */
