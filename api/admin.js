@@ -11,6 +11,8 @@
 //   ADMIN_EMAILS               – comma-separated master emails
 //   (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are reused from the app.)
 
+import { hostEmails } from './_hostEmails.js';
+
 const DEFAULT_ADMINS = 'martinrooney3@hotmail.com,parkeasyuk@gmail.com';
 
 
@@ -190,9 +192,12 @@ export default async function handler(req, res) {
     });
     if (!up.ok) return res.status(502).json({ error: 'Update failed', detail: await up.text().catch(() => '') });
 
-    // Tell the host by email (approval or rejection with reason)
-    const hostEmail = listing.contact_email || listing.owner_email;
-    if (hostEmail && process.env.RESEND_API_KEY) {
+    // Tell the host by email (approval or rejection with reason).
+    // Both addresses, not a fallback: "your car park is now live and can take
+    // money" is exactly the thing the person who owns the payout account needs
+    // to know, and at a club that is not the same person as the contact.
+    const hostTo = hostEmails(listing);
+    if (hostTo.length && process.env.RESEND_API_KEY) {
       const subj = action === 'approve'
         ? `✅ Your ParkEasy listing is live: ${listing.title}`
         : `Your ParkEasy listing needs changes: ${listing.title}`;
@@ -202,7 +207,7 @@ export default async function handler(req, res) {
       fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>', to: [hostEmail], subject: subj, html }),
+        body: JSON.stringify({ from: process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>', to: hostTo, subject: subj, html }),
       }).catch(() => {});
     }
     return res.status(200).json({ ok: true });
