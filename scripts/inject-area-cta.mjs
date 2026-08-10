@@ -19,7 +19,7 @@
 // missing marker is reported and skipped, because a broken deploy costs more
 // than an un-upgraded page.
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
-import { spacesForArea, gbp } from '../src/data/bookableSpaces.js';
+import { spacesForArea, gbp, EXPIRED_SPACES } from '../src/data/bookableSpaces.js';
 
 const DIR = 'dist/area';
 if (!existsSync(DIR)) {
@@ -28,6 +28,10 @@ if (!existsSync(DIR)) {
 }
 
 const esc = (s) => String(s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+
+// "2026-08-21" → "Friday 21 August". Noon UTC so the day never slips a date.
+const prettyDate = (ymd) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-GB',
+  { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 
 const bookingBlock = (spaces, town) => {
   if (!spaces.length) {
@@ -42,6 +46,7 @@ const bookingBlock = (spaces, town) => {
   const cards = spaces.map(s => `<li style="list-style:none;margin:12px 0;padding:16px;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(255,255,255,.03)">
 <h3 style="font-family:Sora,sans-serif;font-size:17px;margin:0">${esc(s.name)}</h3>
 <p style="color:rgba(234,241,248,.62);margin:6px 0 0;font-size:14px">${esc(s.address)}, ${esc(s.postcode)} · ${s.spaces} spaces · gates ${esc(s.hours)}</p>
+${s.bookableUntil ? `<p style="color:#FFD27A;margin:6px 0 0;font-size:13px;font-weight:700">Bookable up to ${esc(prettyDate(s.bookableUntil))}</p>` : ''}
 <p style="margin:10px 0 0;font-size:20px;font-weight:800;color:#6BEFB9">${gbp(s.allInPence)} <span style="font-size:13px;font-weight:600;color:rgba(234,241,248,.6)">per ${esc(s.unit)}, all-in</span></p>
 <p style="margin:12px 0 0"><a href="https://parkeasy.uk/?spot=${esc(s.slug)}" style="display:inline-block;background:linear-gradient(135deg,#54E6D8,#2ED3C6);color:#06231F;font-weight:800;padding:11px 18px;border-radius:12px;text-decoration:none">Book this space →</a></p>
 </li>`).join('');
@@ -69,6 +74,9 @@ const offerLd = (spaces, town) => {
         price: (s.allInPence / 100).toFixed(2),
         priceCurrency: 'GBP',
         availability: 'https://schema.org/InStock',
+        // A licence with an end date is an offer with an end date. Without
+        // this Google can keep showing the price after the last bookable day.
+        ...(s.bookableUntil ? { priceValidUntil: s.bookableUntil } : {}),
         url: `https://parkeasy.uk/?spot=${s.slug}`,
       },
     },
@@ -103,3 +111,8 @@ for (const file of readdirSync(DIR).filter(f => f.endsWith('.html'))) {
 }
 console.log(`inject-area-cta: ${upgraded} area pages given a booking block`
   + `${skipped ? `, ${skipped} skipped` : ''}`);
+// Never drop inventory quietly — a page that stops advertising a space should
+// say so in the build log, or the first anyone notices is the revenue.
+for (const s of EXPIRED_SPACES)
+  console.warn(`inject-area-cta: ${s.name} is PAST its window (${s.bookableUntil}) `
+    + `— removed from the area pages. Extend it or take the listing down in Supabase.`);
