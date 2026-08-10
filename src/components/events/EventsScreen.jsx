@@ -134,17 +134,19 @@ const EventRow = ({ ev, groups, onOpen }) => {
 
 // ── Detail ───────────────────────────────────────────────────────────────────
 
-const TierSection = ({ group, renderSpot, isPremium }) => {
-  // Tier 4 exists because a driver at a sold-out venue needs an answer, not
-  // because we want the click. Collapsed, plain text, no cards.
-  const [open, setOpen] = useState(false);
+const TierSection = ({ group, renderSpot, isPremium, sole = false }) => {
+  // Tier 4 only reaches this screen when it is the ONLY thing within walking
+  // distance — parkingForEvent drops it entirely otherwise. So it opens
+  // expanded: a page whose single answer is hidden behind a disclosure reads
+  // as a page with no answer. Still plain text, still no cards.
+  const [open, setOpen] = useState(sole);
   if (group.tier === TIER.THIRD_PARTY) {
     return (
       <div className="mt-4">
         <button onClick={() => setOpen(o => !o)}
           className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl text-left bg-white/[0.03] border border-white/10">
           <span className="text-[12.5px] font-bold text-[rgba(234,241,248,0.6)]">
-            {group.label} ({group.items.length})
+            {sole ? 'Nothing of ours here' : group.label} ({group.items.length})
           </span>
           <ChevronDown size={15} className={`text-[#8da2bd] transition ${open ? 'rotate-180' : ''}`} />
         </button>
@@ -265,7 +267,8 @@ const EventDetail = ({ ev, groups, onBack, renderSpot, isPremium, onOpenFleadh, 
       )}
 
       {groups.map(g => (
-        <TierSection key={g.tier} group={g} renderSpot={renderSpot} isPremium={isPremium} />
+        <TierSection key={g.tier} group={g} renderSpot={renderSpot} isPremium={isPremium}
+          sole={groups.length === 1 && g.tier === TIER.THIRD_PARTY} />
       ))}
 
       {/* Where we have nothing to sell beside a venue full of people who want to
