@@ -8,6 +8,7 @@
 //   • invoice.paid                                            → Premium renewal
 // Supabase is a cache; Stripe is the source of truth.
 import Stripe from 'stripe';
+import { hostEmails } from '../_hostEmails.js';
 
 // Stripe needs the raw request body to verify the signature — disable parsing.
 export const config = { api: { bodyParser: false } };
@@ -168,7 +169,7 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     if (!b) return;
     let listing = null;
     if (b.listing_id) {
-      const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${b.listing_id}&select=title,address,contact_email,instructions,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,overnight_fee_pence`, { headers: svc });
+      const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${b.listing_id}&select=title,address,contact_email,owner_email,instructions,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,overnight_fee_pence`, { headers: svc });
       listing = (await lr.json())?.[0] || null;
     }
     const gbp = (p) => `£${(p / 100).toFixed(2)}`;
@@ -260,7 +261,10 @@ async function sendBookingEmails(svc, URL_, sessionId) {
         <a href="${APP}/?tab=spaces" style="background:#2ED3C6;color:#06231f;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:24px;display:inline-block">View all your bookings →</a>
       </p>
       <p style="font-family:system-ui;color:#64748b;font-size:12px">Every booking, with its registration and arrival time, is in the app under <strong>Spaces → Your bookings</strong>. You can also subscribe to your bookings calendar there so they appear alongside everything else in your diary.</p>`;
-    if (listing?.contact_email) jobs.push(send(listing.contact_email, `🅿️ Your space was booked — ${title}${b.vehicle_reg ? ` (${b.vehicle_reg})` : ''}`,
+    // Both the day-to-day contact AND the account that takes the payout — at
+    // a club those are two different people, and the one reconciling the bank
+    // transfer is the one who most needs to see the booking. See _hostEmails.js.
+    for (const to of hostEmails(listing)) jobs.push(send(to, `🅿️ Your space was booked — ${title}${b.vehicle_reg ? ` (${b.vehicle_reg})` : ''}`,
       `<h2 style="font-family:system-ui">You've got a booking</h2>${regBlock}${rows(`<tr><td style="padding:4px 10px;color:#64748b">You receive</td><td style="padding:4px 10px"><strong>${gbp(b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence))}</strong> (after 15% fee), paid out weekly by Stripe.</td></tr>`)}${manageBtn}`));
     if (FOUNDER) jobs.push(send(FOUNDER, `💷 New ParkEasy booking — ${title}`, rows()));
     await Promise.all(jobs);
