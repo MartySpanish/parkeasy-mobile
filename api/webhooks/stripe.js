@@ -9,6 +9,7 @@
 // Supabase is a cache; Stripe is the source of truth.
 import Stripe from 'stripe';
 import { hostEmails } from '../_hostEmails.js';
+import { hostBookingEmail } from '../_emails/hostBooking.js';
 
 // Stripe needs the raw request body to verify the signature — disable parsing.
 export const config = { api: { bodyParser: false } };
@@ -230,10 +231,21 @@ async function sendBookingEmails(svc, URL_, sessionId) {
       const offer = ofr.ok ? (await ofr.json())?.[0] : null;
       if (offer) offerHtml = `<div style="font-family:system-ui;margin-top:14px;padding:12px 14px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa"><strong>📍 While you're there:</strong> ${esc(offer.description)} — ${esc(offer.business_name)}${offer.offer_code ? ` · code <strong>${esc(offer.offer_code)}</strong>` : ''}</div>`;
     } catch { /* no offers table yet */ }
-    const send = (to, subject, html) => fetch('https://api.resend.com/emails', {
-      method: 'POST', headers: { Authorization: `Bearer ${KEYR}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to: [to], subject, html }),
-    }).catch(() => {});
+    // `.catch(() => {})` used to swallow everything here, including a 4xx from
+    // Resend. When the club said they never knew about the 8 August bookings
+    // there was no way to tell from the logs whether the email had gone out at
+    // all — the webhook returned 200 either way. A failed host email is a
+    // driver at a locked gate, so it gets logged loudly enough to find.
+    const send = async (to, subject, html) => {
+      try {
+        const r = await fetch('https://api.resend.com/emails', {
+          method: 'POST', headers: { Authorization: `Bearer ${KEYR}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+        });
+        if (!r.ok) console.error('EMAIL FAILED', r.status, to, subject, await r.text().catch(() => ''));
+        else console.log('email sent', to, subject);
+      } catch (e) { console.error('EMAIL FAILED', to, subject, String(e)); }
+    };
     const jobs = [];
     // Driver's post-payment anxiety is "will I find the spot" — arrival
     // instructions go FIRST, receipt second.
@@ -257,15 +269,17 @@ async function sendBookingEmails(svc, URL_, sessionId) {
            <div style="font-size:12px;color:#64748b;margin-top:4px">Look for this car — it's the one that has paid.</div>
          </div>`
       : `<p style="font-family:system-ui;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px">No registration was given for this booking.</p>`;
-    const manageBtn = `<p style="font-family:system-ui;margin:16px 0">
-        <a href="${APP}/?tab=spaces" style="background:#2ED3C6;color:#06231f;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:24px;display:inline-block">View all your bookings →</a>
-      </p>
-      <p style="font-family:system-ui;color:#64748b;font-size:12px">Every booking, with its registration and arrival time, is in the app under <strong>Spaces → Your bookings</strong>. You can also subscribe to your bookings calendar there so they appear alongside everything else in your diary.</p>`;
     // Both the day-to-day contact AND the account that takes the payout — at
     // a club those are two different people, and the one reconciling the bank
     // transfer is the one who most needs to see the booking. See _hostEmails.js.
-    for (const to of hostEmails(listing)) jobs.push(send(to, `🅿️ Your space was booked — ${title}${b.vehicle_reg ? ` (${b.vehicle_reg})` : ''}`,
-      `<h2 style="font-family:system-ui">You've got a booking</h2>${regBlock}${rows(`<tr><td style="padding:4px 10px;color:#64748b">You receive</td><td style="padding:4px 10px"><strong>${gbp(b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence))}</strong> (after 15% fee), paid out weekly by Stripe.</td></tr>`)}${manageBtn}`));
+    //
+    // The content is built in ../_emails/hostBooking.js, which exists because
+    // this email failed on 8 August: it told the club a booking had happened
+    // and never told anybody to open the gates.
+    const hostMail = hostBookingEmail({
+      listing, booking: b, title, ref, regBlock, detailRows: bookingRows(''), gbp, esc, appUrl: APP,
+    });
+    for (const to of hostEmails(listing)) jobs.push(send(to, hostMail.subject, hostMail.html));
     if (FOUNDER) jobs.push(send(FOUNDER, `💷 New ParkEasy booking — ${title}`, rows()));
     await Promise.all(jobs);
   } catch (e) { console.error('sendBookingEmails', e); }
