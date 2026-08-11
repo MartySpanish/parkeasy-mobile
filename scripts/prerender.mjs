@@ -20,6 +20,21 @@ const FROM_PRICE = BOOKABLE_SPACES.length
   ? gbp(Math.min(...BOOKABLE_SPACES.map(s => s.allInPence)))
   : null;
 
+// The page has to sell whichever product actually exists today.
+//
+// With bookable inventory it leads with booking, because a held space is the
+// strongest thing we offer. With none — which is where we are with Davitt Park
+// and the Academy off sale — leading with "book a guaranteed space" points
+// every ad and QR code at an empty shelf, which converts worse than saying
+// nothing. So it falls back to the product that IS selling: 9 of the 10 people
+// who have ever paid us bought Premium, not a booking.
+//
+// Counts are the app's own, from src/App.jsx + the spot modules:
+//   node -e "…" → TOTAL 741 | hidden gems 88 | EV 207
+// Re-run that if the datasets change. Understate rather than overstate: an
+// inflated number is the one mistake a stranger can catch you out on.
+const NETWORK = { spots: 741, gems: 88, ev: 207 };
+
 const distHtml = 'dist/index.html';
 let htmlDoc = readFileSync(distHtml, 'utf8');
 
@@ -56,12 +71,17 @@ const townNav = [
 
 const seo = `<div id="seo-prerender" style="max-width:760px;margin:0 auto;padding:48px 22px;color:#EAF1F8;font-family:Manrope,system-ui,sans-serif;background:linear-gradient(180deg,#0d1626,#0a111e);min-height:100vh">
 <h1 style="font-family:Sora,sans-serif;font-size:32px;font-weight:800;letter-spacing:-.5px;line-height:1.15">Find parking across Northern Ireland</h1>
-<p style="color:rgba(234,241,248,.72);font-size:16px;line-height:1.6;margin-top:12px">${FROM_PRICE ? `<strong style="color:#EAF1F8">Book and pay for a guaranteed parking space in Belfast from ${FROM_PRICE} a day</strong> &mdash; reserved in advance at school, church and GAA club car parks, and held for you when you arrive.` : '<strong style="color:#EAF1F8">Reserve a parking space in advance across Northern Ireland.</strong>'} ParkEasy also lists thousands of free spots, on-street bays and local parking tips across Belfast, Derry~Londonderry, Lisburn, Newry, Bangor and towns right across Northern Ireland.</p>
-<p style="margin:18px 0 0"><a href="https://parkeasy.uk/?tab=spaces" style="display:inline-block;background:linear-gradient(135deg,#54E6D8,#2ED3C6);color:#06231F;font-weight:800;padding:13px 22px;border-radius:12px;text-decoration:none;font-size:16px">Book a space &rarr;</a></p>
+<p style="color:rgba(234,241,248,.72);font-size:16px;line-height:1.6;margin-top:12px">${FROM_PRICE
+  ? `<strong style="color:#EAF1F8">Book and pay for a guaranteed parking space in Belfast from ${FROM_PRICE} a day</strong> &mdash; reserved in advance at school, church and GAA club car parks, and held for you when you arrive. ParkEasy also lists ${NETWORK.spots} free spots, on-street bays and local parking tips right across Northern Ireland.`
+  : `<strong style="color:#EAF1F8">${NETWORK.spots} parking spots across Northern Ireland &mdash; including ${NETWORK.gems} hidden gems the locals use and ${NETWORK.ev} EV chargers.</strong> Know where you're parking, what it costs and what the restrictions are before you leave the house, in Belfast, Derry~Londonderry, Lisburn, Newry, Bangor and towns right across Northern Ireland.`}</p>
+<p style="margin:18px 0 0">${FROM_PRICE
+  ? '<a href="https://parkeasy.uk/?tab=spaces" style="display:inline-block;background:linear-gradient(135deg,#54E6D8,#2ED3C6);color:#06231F;font-weight:800;padding:13px 22px;border-radius:12px;text-decoration:none;font-size:16px">Book a space &rarr;</a>'
+  : '<a href="https://parkeasy.uk/" style="display:inline-block;background:linear-gradient(135deg,#54E6D8,#2ED3C6);color:#06231F;font-weight:800;padding:13px 22px;border-radius:12px;text-decoration:none;font-size:16px">Find parking near you &rarr;</a>'}</p>
 <h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">How it works</h2>
 <ul style="color:rgba(234,241,248,.72);line-height:1.8;padding-left:20px">
-<li><strong style="color:#EAF1F8">Book a space in advance</strong> and it is held for you &mdash; paid by card, no meter, no circling</li>
-<li>Or search any destination for the closest free, hidden-gem and official car parks</li>
+${FROM_PRICE ? '<li><strong style="color:#EAF1F8">Book a space in advance</strong> and it is held for you &mdash; paid by card, no meter, no circling</li>' : ''}
+<li>Search any destination for the closest free, hidden-gem and official car parks</li>
+<li><strong style="color:#EAF1F8">${NETWORK.gems} hidden gems</strong> &mdash; the free, legal kerbside spots locals use near the places everyone drives to</li>
 <li>Prices are all-in: what you see is what you pay</li>
 <li>Rent out your own driveway or car park and keep 85% of every booking</li>
 </ul>
