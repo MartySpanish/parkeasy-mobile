@@ -114,5 +114,6 @@ console.log(`inject-area-cta: ${upgraded} area pages given a booking block`
 // Never drop inventory quietly — a page that stops advertising a space should
 // say so in the build log, or the first anyone notices is the revenue.
 for (const s of EXPIRED_SPACES)
-  console.warn(`inject-area-cta: ${s.name} is PAST its window (${s.bookableUntil}) `
-    + `— removed from the area pages. Extend it or take the listing down in Supabase.`);
+  console.warn(`inject-area-cta: ${s.name} is OFF SALE `
+    + `(${s.paused ? 'paused' : `past its window, ${s.bookableUntil}`}) `
+    + `— removed from the area pages. Check rental_listings.status matches.`);

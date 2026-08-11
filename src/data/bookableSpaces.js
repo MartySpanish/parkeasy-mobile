@@ -25,6 +25,13 @@
 // itself — with a price — past the last day anyone could book it. That is the
 // precise failure this file's own rule above forbids, and "remember to edit
 // the file" is not a mechanism. The build filters on it instead.
+//
+// paused: a site that is off sale right now but expected back. Both sites went
+// off on 10 August — the events they were signed for are over, and on 8 August
+// two drivers paid for Davitt Park and found the gates locked because the club
+// had thirteen hours' notice on a Friday night. Selling a space nobody has
+// agreed to open is worse than selling nothing. The records stay so bringing
+// either back is deleting one line, not rebuilding the entry.
 
 const ALL_SPACES = [
   {
@@ -40,6 +47,12 @@ const ALL_SPACES = [
     hours: '9am–8.30pm',
     lat: 54.5875, lng: -5.9625,
     photo: 'https://parkeasy.uk/davitts/1-car-park.jpg',
+    // Off sale from 10 Aug. The Fleadh is over, and the 8 August bookings were
+    // sold on thirteen hours' notice to a volunteer-run club that never opened
+    // the gates. Back on when the club confirms who opens up and how much
+    // notice they need. status='hidden' in Supabase is what actually stops the
+    // sale; this stops the page advertising it.
+    paused: true,
   },
   {
     slug: 'belfast-royal-academy',
@@ -61,6 +74,10 @@ const ALL_SPACES = [
     // holidays until the Academy confirms it wants to continue. Extend the
     // date here and in rental_listings.available_until together.
     bookableUntil: '2026-08-21',
+    // Off sale from 10 Aug, ahead of that date. The licence was a Fleadh
+    // arrangement and the Fleadh is finished; the Academy has never taken a
+    // booking, so nothing is lost by stopping now rather than on the 21st.
+    paused: true,
   },
   // 5 Manor Close is the third ACTIVE listing and is deliberately ABSENT.
   // Two reasons, both about it being someone's home rather than an
@@ -75,9 +92,9 @@ const todayYmd = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date());
 
-/** Still sellable on the given day (inclusive of bookableUntil). */
+/** Still sellable on the given day: not paused, and inside its window. */
 export const isSellable = (s, today = todayYmd()) =>
-  !s.bookableUntil || today <= s.bookableUntil;
+  !s.paused && (!s.bookableUntil || today <= s.bookableUntil);
 
 /**
  * Everything we can actually sell as of this build.
@@ -91,7 +108,7 @@ export const isSellable = (s, today = todayYmd()) =>
  */
 export const BOOKABLE_SPACES = ALL_SPACES.filter(s => isSellable(s));
 
-/** Dropped for being past their window — reported at build time, never silent. */
+/** Dropped — paused or past their window. Reported at build time, never silent. */
 export const EXPIRED_SPACES = ALL_SPACES.filter(s => !isSellable(s));
 
 /** Active bookable spaces for one area page, e.g. 'belfast'. */
