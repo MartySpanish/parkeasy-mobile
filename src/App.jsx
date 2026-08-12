@@ -2323,6 +2323,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // existing text filter.
   const doSearch = async (q) => {
     setQuery(q);
+    setTextMode(false);
     setSugs([]);
     inputRef.current?.blur();
     const term = (q || '').trim();
@@ -2344,6 +2345,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // (Google predictions, which only have a placeId, are resolved on tap).
   const onQueryChange = (v) => {
     setQuery(v);
+    if (textMode) setTextMode(false);
     if (geoMiss) setGeoMiss(false);
     clearTimeout(sugTimer.current);
     if (v.trim().length < 3) { setSugs([]); setGeo(null); return; }
@@ -2388,7 +2390,13 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     else setGeoMiss(true);
   };
 
-  const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); setSugs([]); };
+  // True when the query came from a category tile that matches TEXT rather
+  // than a place. It suppresses the "press Enter to search near this" nudge,
+  // which for a word like "leisure" invites exactly the geocode the tile is
+  // built to avoid. Any keystroke in the box clears it — the moment a person
+  // types, they are searching for a place again.
+  const [textMode, setTextMode] = useState(false);
+  const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); setSugs([]); setTextMode(false); };
 
   // "Locate me" — find the nearest spots to the user's current position.
   //
@@ -2431,6 +2439,16 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       // safety regression, not a tidy-up.
       case 'event':   (onEvents || onEvent)?.(); break;
       case 'search':  setQuery(cat.query); doSearch(cat.query); break;
+      // A PURE TEXT match — deliberately never geocoded. "leisure" matches 44
+      // leisure-centre and pool car parks by name, right across Northern
+      // Ireland. Handing that word to a geocoder is how the Shopping tile once
+      // produced "25 spots near shopping": a bare noun resolves to somewhere,
+      // and the list is then the spots near a place nobody asked for. Clearing
+      // geo first is what makes the list fall back to matching on the text.
+      case 'text':
+        setGeo(null); setGeoMiss(false); setSugs([]);
+        setBadgeFilter('all'); setQuery(cat.query); setTextMode(true);
+        break;
       case 'filter':  setBadgeFilter(cat.filter); clearSearch(); break;
       case 'premium':
         // Premium members already have the gems, so send them to them rather
@@ -2516,7 +2534,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         ))}
       </div>
       {onEvent && CITIES.find(c=>c.name===cityName)?.region === 'Northern Ireland' && <EventBanner onOpen={onEvent}/>}
-      {!geo && !geoBusy && query.trim() && (
+      {!geo && !geoBusy && !textMode && query.trim() && (
         <button onClick={()=>doSearch(query)} className="w-full flex items-center gap-2 text-xs font-semibold text-[#5BE7DA] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 px-3.5 py-2.5 rounded-2xl hover:bg-[#2ED3C6]/15 transition">
           <Navigation size={13}/> Find parking near &ldquo;{query.trim()}&rdquo; — press Enter
         </button>
