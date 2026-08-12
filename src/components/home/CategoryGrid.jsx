@@ -15,7 +15,7 @@
 // Stock photos of American parking garages would be worse than no photo at
 // all, and we don't have licensed imagery for six categories.
 import React from 'react';
-import { Calendar, Plane, Hotel, Moon, Sun, Sparkles, Coffee, ShoppingBag, Beer, ChevronRight } from 'lucide-react';
+import { Calendar, Plane, Hotel, Moon, Sun, Sparkles, Coffee, ShoppingBag, Beer, Dumbbell, ChevronRight } from 'lucide-react';
 import { space, type, color, radius, elevation, motion } from '../../theme/tokens';
 import { Text, Overline, Badge } from '../ui';
 
@@ -61,6 +61,19 @@ export const CATEGORIES = [
   {
     id: 'nightout', title: 'Pubs & Nights Out', blurb: 'Cathedral Quarter and the centre',
     Icon: Beer, from: '#FFB4A2', to: '#E11D48', action: 'search', query: 'Cathedral Quarter',
+  },
+  {
+    // The one tile that is a TEXT match rather than a place. "leisure" hits 44
+    // council leisure centres and pools by name — Whiterock, Olympia, Valley,
+    // Foyle Arena, Lagan Valley LeisurePlex and so on — in towns right across
+    // Northern Ireland, not just Belfast. That is a genuinely better answer
+    // than pointing at one street, and unlike the food and drink tiles the
+    // word itself is all over the data, so there is nothing to fake.
+    //
+    // action:'text' and not 'search' on purpose: a bare noun handed to a
+    // geocoder resolves to somewhere, and you get "spots near leisure".
+    id: 'fitness', title: 'Gyms & Wellbeing', blurb: 'Leisure centres and pools, NI-wide',
+    Icon: Dumbbell, from: '#6BEFB9', to: '#059669', action: 'text', query: 'leisure',
   },
   {
     id: 'premium', title: 'Premium Hotspots', blurb: 'The spots locals keep quiet',
