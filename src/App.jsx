@@ -18,7 +18,8 @@ import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { paymentError } from './errors';
-import CategoryGrid from './components/home/CategoryGrid';
+import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
+import { splitPartnersByCategory } from './data/partnerCategories';
 import EventsScreen from './components/events/EventsScreen';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
@@ -2171,6 +2172,7 @@ const TrustPanel = ({ onAddSpot }) => (
 // partner without adding a slot silently drops them off the end.
 const PARTNER_SLOTS = [2, 9, 17, 25, 33];
 
+
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
@@ -2346,6 +2348,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   const onQueryChange = (v) => {
     setQuery(v);
     if (textMode) setTextMode(false);
+    if (activeCat) setActiveCat(null);
     if (geoMiss) setGeoMiss(false);
     clearTimeout(sugTimer.current);
     if (v.trim().length < 3) { setSugs([]); setGeo(null); return; }
@@ -2396,7 +2399,10 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // built to avoid. Any keystroke in the box clears it — the moment a person
   // types, they are searching for a place again.
   const [textMode, setTextMode] = useState(false);
-  const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); setSugs([]); setTextMode(false); };
+  // Which category tile is showing, if any. Drives the partner-first ordering
+  // above; cleared the moment the driver does anything of their own.
+  const [activeCat, setActiveCat] = useState(null);
+  const clearSearch = () => { setQuery(''); setGeo(null); setGeoMiss(false); setSugs([]); setTextMode(false); setActiveCat(null); };
 
   // "Locate me" — find the nearest spots to the user's current position.
   //
@@ -2458,6 +2464,8 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         break;
       default: break;
     }
+    // After the switch: 'filter' calls clearSearch(), which resets this.
+    setActiveCat(cat.action === 'event' ? null : cat.id);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -2614,6 +2622,14 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     return () => { live = false; };
   }, [cityCenter?.[0], cityCenter?.[1]]);
 
+  // Partners split by whether they belong to the category being shown. The
+  // matching ones lead the page; everyone else keeps the normal interleaved
+  // slots, so a category never costs an unrelated partner its placement.
+  const [leadPartners, restPartners] = useMemo(
+    () => splitPartnersByCategory(cityPartners, activeCat), [cityPartners, activeCat]);
+  const activeCatTitle = activeCat ? CATEGORIES.find(c => c.id === activeCat)?.title : null;
+
+
   // ── LIST mode (Search tab): kicker + heading, count + sort, full-width cards ──
   if (mode === 'list') {
     const sortLabel = SORT_OPTIONS.find(s=>s.id===sortBy)?.label || 'Sort';
@@ -2726,15 +2742,25 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         <div className="px-4 pt-2 space-y-3">
           {filtered.length === 0 ? emptyState : (
             <>
+              {/* The partners this category is actually about, before any
+                  result. Tapping "Gyms & Wellbeing" and getting the gyms we
+                  feature is not an interruption — it is the answer. */}
+              {leadPartners.map(p => (
+                <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
+                  eyebrow={`Featured · ${activeCatTitle || cityName}`}
+                  onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
+              ))}
               {visibleSpots.map((s,i)=>(
                 <React.Fragment key={s.id}>
                   <ListCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
                   {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
                   {/* Spaced out so they read as "while you're here" rather than
                       a block of adverts. Index maths, not a filter, so a second
-                      or third partner simply doesn't render on a short list. */}
-                  {PARTNER_SLOTS.includes(i) && cityPartners[PARTNER_SLOTS.indexOf(i)] && (
-                    <PartnerCard partner={cityPartners[PARTNER_SLOTS.indexOf(i)]} listingId={null}
+                      or third partner simply doesn't render on a short list.
+                      restPartners, not cityPartners: anyone already shown at
+                      the top must not appear a second time further down. */}
+                  {PARTNER_SLOTS.includes(i) && restPartners[PARTNER_SLOTS.indexOf(i)] && (
+                    <PartnerCard partner={restPartners[PARTNER_SLOTS.indexOf(i)]} listingId={null}
                       eyebrow={`Featured · ${cityName}`} onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
                   )}
                 </React.Fragment>
