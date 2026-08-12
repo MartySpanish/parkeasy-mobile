@@ -2165,7 +2165,11 @@ const TrustPanel = ({ onAddSpot }) => (
 
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
-const PARTNER_SLOTS = [2, 9, 17, 25];
+// Positions in the results list where a featured partner card appears. One
+// slot per partner we can show — five now that Sandy McDermott S&C is on.
+// Slots and the slice below both derive from this array's length, so adding a
+// partner without adding a slot silently drops them off the end.
+const PARTNER_SLOTS = [2, 9, 17, 25, 33];
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot }) => {
   const [query,       setQuery]       = useState('');
@@ -3963,6 +3967,21 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
               No gym to drive to. Everything runs remotely, so there&rsquo;s nowhere to park and nothing to find.
             </p>
           </div>
+        ) : !partner.address ? (
+          // A third case, between "online" and "we know where it is": a real
+          // premises whose address we have not confirmed yet. lat/lng are NOT
+          // NULL in the table, so a partner always HAS a coordinate — and
+          // drawing a map from a placeholder is how Gransha Grill ended up
+          // pinned 953 metres from its own front door, taking three parking
+          // spots with it. No address, no map. It appears by itself the moment
+          // the address is filled in.
+          <div className="mt-5 rounded-2xl px-4 py-3.5" style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.12)'}}>
+            <p className="font-display font-bold text-[14px] text-[#EAF1F8]">Parking map coming shortly</p>
+            <p className="text-[12.5px] text-[#cdd9e8] mt-1 leading-relaxed">
+              We&rsquo;re confirming the exact address with {partner.name} before we show you where to park —
+              we&rsquo;d rather say nothing than send you to the wrong street.
+            </p>
+          </div>
         ) : (
         <>
         <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2">Parking around {partner.name}</h3>
@@ -4091,7 +4110,10 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
           </a>
         )}
         {(() => {
-          if (partner.is_online) return null;
+          // Same rule as the detail map: no confirmed address, no nearby-spots
+          // list. The coordinate exists because the column is NOT NULL, not
+          // because we know where the place is.
+          if (partner.is_online || !partner.address) return null;
           const nearby = nearestSpotsTo(partner.lat, partner.lng, 3, Math.max(700, partner.radius_m || 900));
           if (!nearby.length) return null;
           return (
