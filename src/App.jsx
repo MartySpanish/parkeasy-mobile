@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   MapPin, Search, Crosshair, Plus, Building2, Navigation,
-  Bookmark, Camera, Check, X, ChevronRight, Share2,
+  Bookmark, Camera, Check, X, ChevronRight, ChevronLeft, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon,
   BarChart3,
@@ -2352,6 +2352,31 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   const hiddenCount  = gatedSpots.length;
 
   const isSearching = !!geo || query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
+
+  // Back to the landing page.
+  //
+  // The category grid is the home screen, and it hides the moment anybody
+  // searches or taps a chip — which was right, but left no way back to it. You
+  // could tap "Free", get 588 results, and the only route home was closing the
+  // app. Installed to the home screen there is no browser chrome to fall back
+  // on, so this has to exist in the UI.
+  //
+  // It clears every one of the four things isSearching tests, or the button
+  // would appear to do nothing in exactly the case someone is stuck in.
+  const backToBrowse = () => {
+    clearSearch();                 // query, geo, geoMiss, suggestions, text mode, category
+    setBadgeFilter('all');
+    setEvOnly(false);
+    setFocusSpot(null);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const BackToBrowse = () => !isSearching ? null : (
+    <button onClick={backToBrowse}
+      className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#5BE7DA] px-3 py-2 -ml-1 rounded-full hover:bg-white/5 active:scale-95 transition">
+      <ChevronLeft size={15}/>Back to browse
+    </button>
+  );
   const mapCenter = geo ? [geo.lat, geo.lng]
     : focusSpot ? [focusSpot.lat, focusSpot.lng]
     : visibleSpots.length ? [visibleSpots[0].lat, visibleSpots[0].lng]
@@ -2579,6 +2604,12 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           </button>
         ))}
       </div>
+      {/* Directly under the chips, not down beside the results. The first
+          version sat next to the "588 spots" header, which put it below the
+          hero, the how-it-works card and the Premium promo — you had to scroll
+          to find your way back, which is the one thing a stuck person will not
+          do. This is the first thing under the control that got them here. */}
+      {isSearching && <BackToBrowse/>}
       {onEvent && CITIES.find(c=>c.name===cityName)?.region === 'Northern Ireland' && <EventBanner onOpen={onEvent}/>}
       {!geo && !geoBusy && !textMode && query.trim() && (
         <button onClick={()=>doSearch(query)} className="w-full flex items-center gap-2 text-xs font-semibold text-[#5BE7DA] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 px-3.5 py-2.5 rounded-2xl hover:bg-[#2ED3C6]/15 transition">
