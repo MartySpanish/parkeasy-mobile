@@ -59,3 +59,10 @@ update partners set priority = -1 where slug = 'marcus-donnelly-fitness';
 -- call, not a tidy-up. Two ways to settle it: extend ends_at if the placement
 -- was renewed, or start honouring the window in the query, which would drop
 -- The Red Devil the moment it ships.
+
+-- ── ADDENDUM, 12 Aug ──────────────────────────────────────────────────────
+-- The Red Devil is back up at Marty's request. ends_at cleared rather than
+-- pushed to an invented date: every other partner runs open-ended, and guessing
+-- a paid term would be worse than having none. Set a real date here if the
+-- placement was renewed to one.
+update partners set ends_at = null, active = true where slug = 'the-red-devil';
