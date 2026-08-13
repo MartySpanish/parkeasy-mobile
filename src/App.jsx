@@ -6,7 +6,7 @@ import {
   MapPin, Search, Crosshair, Plus, Building2, Navigation,
   Bookmark, Camera, Check, X, ChevronRight, ChevronLeft, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
-  Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon,
+  Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon, Sparkles,
   BarChart3,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
@@ -20,6 +20,7 @@ import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './part
 import { paymentError } from './errors';
 import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
 import { splitPartnersByCategory } from './data/partnerCategories';
+import useBackButton from './useBackButton';
 import EventsScreen from './components/events/EventsScreen';
 
 // ── Leaflet icon fix ──────────────────────────────────────────────────────────
@@ -2702,14 +2703,49 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // ── LIST mode (Search tab): kicker + heading, count + sort, full-width cards ──
   if (mode === 'list') {
     const sortLabel = SORT_OPTIONS.find(s=>s.id===sortBy)?.label || 'Sort';
+    // Counted from the live network, never typed in: a hard-coded number is
+    // wrong the first time anybody adds a spot.
+    const gemCount = (networkSpots || []).filter(s => s.badge === 'hidden_gem').length;
+    // Same test the booking button uses, so the promise and the button agree.
+    const hasBookable = (networkSpots || []).some(s => s.rental && s.listing
+      && (Number(s.listing.price_per_hour) > 0 || Number(s.listing.price_per_day) > 0));
     return (
       <div className="pb-6 pt-2">
         <div className="px-4 pb-3">
           <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">{CITIES.find(c=>c.name===cityName)?.region || 'Northern Ireland'}</p>
           <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">Find parking across Northern Ireland</h1>
-          <p className="text-[14px] text-[rgba(234,241,248,0.62)] leading-relaxed mt-2">
-            Compare nearby car parks, street parking, free spots and local parking tips.
-          </p>
+          {/* The generic subtitle — "Compare nearby car parks, street parking,
+              free spots and local parking tips" — is gone. It said the same
+              thing as the strip below it and as the trust row below that:
+              three versions of one idea inside 100 pixels, at the top of the
+              page paid traffic lands on. The specific one earns the space.
+
+              What ParkEasy actually offers, said once, above the fold.
+              The hero said what the app IS; a first-time visitor still had to
+              work out what they could DO here, and with paid traffic arriving
+              that guesswork happens on our money.
+
+              The booking line is CONDITIONAL on inventory really existing.
+              Davitt Park and the Academy are off sale, so on a day when
+              nothing is bookable this quietly drops to three items rather than
+              advertising something that ends at a dead end — the same rule the
+              pre-rendered homepage follows. */}
+          <div className="pe-offer-grid mt-3.5" style={{display:'grid', gap:'8px'}}>
+            {[
+              [Sparkles, `${gemCount} hidden gems`, 'the free spots locals keep quiet'],
+              [Receipt,  'Prices and rules',        'checked before you leave the house'],
+              ...(hasBookable ? [[Key, 'Book a private space', 'reserved, and held when you arrive']] : []),
+              [Building2, 'Rent out your space',    'a driveway or a car park — keep 85%'],
+            ].map(([Ic, title, sub], i) => (
+              <span key={i} className="flex items-start gap-2">
+                <Ic size={14} className="text-[#5BE7DA] flex-shrink-0 mt-[3px]"/>
+                <span className="min-w-0">
+                  <span className="block text-[12.5px] font-bold text-[#EAF1F8] leading-tight">{title}</span>
+                  <span className="block text-[11.5px] text-[rgba(234,241,248,0.5)] leading-snug mt-0.5">{sub}</span>
+                </span>
+              </span>
+            ))}
+          </div>
           {/* Was "Live prices & rules". We do not have live prices or live
               availability — the occupancy figure on a spot says "community
               estimate" in the app's own words. Claiming otherwise is the kind
@@ -6665,6 +6701,28 @@ export default function App() {
       return (n || h) ? { ...s, inUse: n || undefined, onWay: h || undefined } : s;
     });
   }, [userSpots, approvedSpots, rentalSpots, occupancy, heading]);
+
+  // The phone's back button closes what's open instead of quitting the app.
+  // Ordered outermost first: the LAST open one is the topmost on screen, and
+  // that is the one a person means when they press back.
+  //
+  // showWelcome is deliberately absent. It is the first-run gate, there is
+  // nothing behind it to go back TO, and letting back dismiss it would drop
+  // someone into the app having skipped the choice it exists to ask.
+  useBackButton([
+    [showUserMenu,   () => setShowUserMenu(false)],
+    [showCityPicker, () => setShowCityPicker(false)],
+    [showBizModal,   () => setShowBizModal(false)],
+    [showIOSGuide,   () => setShowIOSGuide(false)],
+    [infoPage,       () => setInfoPage(null)],
+    [showAdmin,      () => setShowAdmin(false)],
+    [showEvents,     () => setShowEvents(false)],
+    [showEvent,      () => setShowEvent(false)],
+    [detailPartner,  () => setDetailPartner(null)],
+    [detailSpot,     () => setDetailSpot(null)],
+    [showSession,    () => setShowSession(false)],
+    [showPricing,    () => setShowPricing(false)],
+  ]);
 
   const changeCity = (id) => {
     setCity(id);
