@@ -151,22 +151,28 @@ export function clientKey() {
 
 // Best-effort both ways: a parking timer must never fail because a
 // nice-to-have signal could not be recorded.
-export async function reportOccupancy(spotId, action, city) {
+/**
+ * @param kind 'parked'  — the in-app timer: a driver is there now (4h)
+ *             'heading' — a driver is on their way (30 min)
+ */
+export async function reportOccupancy(spotId, action, city, kind = 'parked') {
   try {
     await apiFetch('/api/occupancy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spotId: String(spotId), key: clientKey(), action, city }),
+      body: JSON.stringify({ spotId: String(spotId), key: clientKey(), action, city, kind }),
     });
   } catch { /* ignore */ }
 }
 
+/** → { counts, heading } — drivers parked, and drivers on their way. */
 export async function fetchOccupancy() {
   try {
     const r = await apiFetch('/api/occupancy');
-    if (!r.ok) return {};
-    return (await r.json())?.counts || {};
-  } catch { return {}; }
+    if (!r.ok) return { counts: {}, heading: {} };
+    const d = await r.json();
+    return { counts: d?.counts || {}, heading: d?.heading || {} };
+  } catch { return { counts: {}, heading: {} }; }
 }
 
 // POST a notification to /api/notify, which emails CONTACT_EMAIL via Resend.

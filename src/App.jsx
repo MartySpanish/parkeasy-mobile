@@ -700,13 +700,24 @@ const TypeBadge = ({ badge }) => {
 // guess, and a wrong one would send someone past a spot that was empty.
 const InUseBadge = ({ spot }) => {
   const n = spot.inUse || 0;
-  if (!n) return null;
   const total = spot.spaces;
-  return (
+  if (n) return (
     <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
       style={{color:'#FFC24B',border:'1px solid rgba(255,194,75,0.35)',background:'rgba(255,194,75,0.10)'}}>
       <span className="w-1.5 h-1.5 rounded-full" style={{background:'#FFC24B',boxShadow:'0 0 6px #FFC24B'}}/>
       {total ? `${n} of ${total} in use` : `${n} driver${n!==1?'s':''} here now`}
+    </span>
+  );
+  // Nobody parked, but somebody is on their way. Shown only when there is no
+  // "here now" badge to contradict — two conflicting live claims on one card
+  // is noise, and the stronger signal is the one to keep.
+  const w = spot.onWay || 0;
+  if (!w) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
+      style={{color:'#C9A7FF',border:'1px solid rgba(201,167,255,0.35)',background:'rgba(201,167,255,0.10)'}}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{background:'#C9A7FF',boxShadow:'0 0 6px #C9A7FF'}}/>
+      {w === 1 ? 'Someone\u2019s on their way' : `${w} on their way`}
     </span>
   );
 };
@@ -1292,7 +1303,7 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
 };
 
 // ── Spot detail sheet ─────────────────────────────────────────────────────────
-const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer }) => {
+const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine }) => {
   // Featured Partner: a local business within its radius of this spot. Same
   // contextual placement as on bookable listings — community spots are where
   // the traffic is, so the partner is visible while supply is still growing.
@@ -1436,6 +1447,33 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
           </div>
           {booking && bookableListing && (
             <BookingSheet listing={bookableListing} onClose={()=>setBooking(false)}/>
+          )}
+          {/* "I'm heading there", for the free spots people race each other to.
+              A hidden gem with two spaces is worthless if three subscribers set
+              off for it at once, and the parking timer only fires once someone
+              has already arrived — too late to help anybody else.
+
+              NOT called booking, and it never will be. Nobody owns a public
+              kerbside space, so ParkEasy cannot hold one and must not imply it.
+              What this honestly says is that another driver is on their way,
+              which is the thing worth knowing before you set off. It clears
+              itself after 30 minutes so a forgotten claim can't send the next
+              driver past an empty space. */}
+          {onHeading && ['free','hidden_gem'].includes(spot.badge) && (
+            <button onClick={()=>onHeading(spot, !headingMine)}
+              className={`w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-sm active:scale-95 transition ${
+                headingMine
+                  ? 'bg-[#C9A7FF]/15 border border-[#C9A7FF]/40 text-[#C9A7FF]'
+                  : 'bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12'}`}>
+              <Navigation size={17} className={headingMine ? '' : 'text-[#C9A7FF]'}/>
+              {headingMine ? 'On your way — tap to cancel' : 'I\u2019m heading there'}
+            </button>
+          )}
+          {onHeading && ['free','hidden_gem'].includes(spot.badge) && (
+            <p className="text-[11px] text-[rgba(234,241,248,0.45)] mt-1.5 text-center leading-relaxed">
+              Lets other drivers know before they set off. It isn&rsquo;t a reservation &mdash;
+              nobody can hold a space on a public street &mdash; and it clears after 30 minutes.
+            </p>
           )}
           {onStartTimer && (
             <button onClick={()=>onStartTimer(spot)} className="w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
@@ -6465,9 +6503,16 @@ export default function App() {
   // Live "in use" counts, keyed by spot id. Refreshed on a slow poll — this is
   // a helpful hint, not something worth a socket or a tight loop.
   const [occupancy, setOccupancy] = useState({});
+  // Drivers who have said they are ON THEIR WAY to a spot, keyed the same way.
+  // Separate from `occupancy` because it expires far faster (30 min vs 4h) and
+  // means something different to the person reading it.
+  const [heading, setHeading] = useState({});
   useEffect(() => {
     let live = true;
-    const load = () => fetchOccupancy().then(c => { if (live) setOccupancy(c); });
+    const load = () => fetchOccupancy().then(d => {
+      if (!live) return;
+      setOccupancy(d.counts || {}); setHeading(d.heading || {});
+    });
     load();
     const id = setInterval(load, 60000);
     const onVisible = () => { if (!document.hidden) load(); };
@@ -6562,10 +6607,11 @@ export default function App() {
       // card, row, pin and sheet — they all already receive the spot.
       return all.map(s => {
         const n = occupancy[String(s.id)] || 0;
-        return n ? { ...s, inUse: n } : s;
+        const h = heading[String(s.id)] || 0;
+        return (n || h) ? { ...s, inUse: n || undefined, onWay: h || undefined } : s;
       });
     },
-    [userSpots, approvedSpots, rentalSpots, currentCity.id, occupancy]
+    [userSpots, approvedSpots, rentalSpots, currentCity.id, occupancy, heading]
   );
   // Everything addressable by id (used by Saved, which can hold community spots too).
   const allSpots    = useMemo(() => [...userSpots, ...Object.values(CITY_SPOTS).flat()], [userSpots]);
@@ -6584,9 +6630,10 @@ export default function App() {
     ];
     return all.map(s => {
       const n = occupancy[String(s.id)] || 0;
-      return n ? { ...s, inUse: n } : s;
+      const h = heading[String(s.id)] || 0;
+      return (n || h) ? { ...s, inUse: n || undefined, onWay: h || undefined } : s;
     });
-  }, [userSpots, approvedSpots, rentalSpots, occupancy]);
+  }, [userSpots, approvedSpots, rentalSpots, occupancy, heading]);
 
   const changeCity = (id) => {
     setCity(id);
@@ -6837,6 +6884,33 @@ export default function App() {
     };
   }, [parkSession]);
 
+  // Spots this device has said it is heading to. Persisted so the toggle
+  // survives a reload, and pruned on load: the server expires a claim after 30
+  // minutes, so a button still saying "on your way" after that would be lying.
+  const [myHeading, setMyHeading] = useState(() => {
+    const raw = ls.get('pe_heading', {}) || {};
+    const cutoff = Date.now() - 30 * 60000;
+    return Object.fromEntries(Object.entries(raw).filter(([, t]) => t > cutoff));
+  });
+  useEffect(() => { ls.set('pe_heading', myHeading); }, [myHeading]);
+
+  const toggleHeading = (spot, on) => {
+    const k = String(spot.id);
+    reportOccupancy(spot.id, on ? 'start' : 'end', currentCity.id, 'heading');
+    // Optimistic, so the badge and the button move on the tap rather than on
+    // the next 60-second poll.
+    setHeading(h => {
+      const n = Math.max(0, (h[k] || 0) + (on ? 1 : -1));
+      const next = { ...h }; if (n) next[k] = n; else delete next[k];
+      return next;
+    });
+    setMyHeading(m => {
+      const next = { ...m };
+      if (on) next[k] = Date.now(); else delete next[k];
+      return next;
+    });
+  };
+
   const startSession = (spot) => {
     const rate = spot.price ? (parseFloat(String(spot.price).match(/([\d.]+)/)?.[1]) || 0) : 0;
     const sess = { spotId: spot.id, name: spot.name, rate, startedAt: Date.now() };
@@ -6846,6 +6920,9 @@ export default function App() {
     // count too, so the badge appears immediately rather than after the poll.
     reportOccupancy(spot.id, 'start', currentCity.id);
     setOccupancy(o => ({ ...o, [String(spot.id)]: (o[String(spot.id)] || 0) + 1 }));
+    // Arriving supersedes being on the way. Without this the same driver would
+    // be counted twice on one spot — once as parked, once as still coming.
+    if (myHeading[String(spot.id)]) toggleHeading(spot, false);
   };
   const endSession = () => {
     if (parkSession?.spotId != null) {
@@ -6910,7 +6987,8 @@ export default function App() {
           <SpotCard spot={sp} saved={saved.has(sp.id)} onSave={toggleSave} isPremium={isPremium}
             onUpgrade={()=>{setShowEvents(false);setShowPricing(true);}} onOpen={setDetailSpot}/>
         )}/>}
-      {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}/>}
+      {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
+        onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
       {flash && (
