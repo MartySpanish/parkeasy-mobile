@@ -47,12 +47,13 @@ const ALL_SPACES = [
     hours: '9am–8.30pm',
     lat: 54.5875, lng: -5.9625,
     photo: 'https://parkeasy.uk/davitts/1-car-park.jpg',
-    // Off sale from 10 Aug. The Fleadh is over, and the 8 August bookings were
-    // sold on thirteen hours' notice to a volunteer-run club that never opened
-    // the gates. Back on when the club confirms who opens up and how much
-    // notice they need. status='hidden' in Supabase is what actually stops the
-    // sale; this stops the page advertising it.
-    paused: true,
+    // Back on sale 13 Aug. It came off after the 8 August bookings were sold on
+    // thirteen hours' notice to a volunteer-run club that never opened the
+    // gates. The email that failed has since been rebuilt to lead with "OPEN
+    // THE GATES" and the date, and it now reaches the treasurer as well as the
+    // secretary — so the specific failure is addressed. The general one is not:
+    // there is still no minimum notice period, so a 9am Saturday slot can still
+    // be sold at quarter to eight the night before.
   },
   {
     slug: 'belfast-royal-academy',
