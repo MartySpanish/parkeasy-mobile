@@ -92,6 +92,34 @@ ${townNav}
 <p style="color:rgba(234,241,248,.5);margin-top:28px;font-size:14px">Loading the live map… If it doesn't appear, enable JavaScript or visit <a href="https://parkeasy.uk/" style="color:#5BE7DA">parkeasy.uk</a>.</p>
 </div>`;
 
+// Organization schema — who ParkEasy is, in a form a crawler can read.
+//
+// FACTUAL ONLY, and short for a reason. There is no `sameAs`: no ParkEasy
+// social profile is recorded anywhere in this codebase, and a schema block is
+// the wrong place to guess at one — a wrong link there is a machine-readable
+// claim about who we are. There is deliberately no Review or AggregateRating
+// either. Nobody has left a genuine review, and inventing rating markup is
+// both a Google manual-action risk and a lie told in a format built to be
+// trusted. Add both the day they are real.
+const orgLd = `<script type="application/ld+json">${JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'ParkEasy',
+  legalName: 'ParkEasy Apps Ltd',
+  url: 'https://parkeasy.uk',
+  logo: 'https://parkeasy.uk/icon-512.png',
+  image: 'https://parkeasy.uk/og-image.png',
+  email: 'parkeasyuk@gmail.com',
+  description: 'ParkEasy connects drivers in Northern Ireland with clubs, '
+    + 'churches, schools and car parks that have spare parking space, and maps '
+    + 'the free and hidden-gem spots locals use.',
+  areaServed: { '@type': 'AdministrativeArea', name: 'Northern Ireland' },
+})}</script>`;
+
+if (htmlDoc.includes('<div id="root"></div>')) {
+  htmlDoc = htmlDoc.replace('</head>', `${orgLd}</head>`);
+}
+
 if (htmlDoc.includes('<div id="root"></div>')) {
   htmlDoc = htmlDoc.replace('<div id="root"></div>', `<div id="root">${seo}</div>`);
   writeFileSync(distHtml, htmlDoc);
