@@ -2694,8 +2694,14 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           .map(p => ({ ...p, d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000) }))
           .filter(p => p.d < 8000)
           .sort((a, b) => b.priority - a.priority || a.d - b.d);
-        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near.length ? ` → showing ${near.slice(0,PARTNER_SLOTS.length).map(p=>p.name).join(', ')}` : ''}`);
-        setCityPartners(near.slice(0, PARTNER_SLOTS.length));
+        // Keep ALL of them, sorted. The slice used to happen here, which meant
+        // the global slot count decided who could lead a category: with six
+        // partners and five slots, the sixth was cut before the fitness split
+        // even ran — so the most relevant business on a fitness page could be
+        // dropped for being sixth overall. Whoever is relevant leads; the cap
+        // now applies only to the interleaved leftovers, where it belongs.
+        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near.length ? ` → ${near.map(p=>p.name).join(', ')}` : ''}`);
+        setCityPartners(near);
       } catch (e) { if (live) setPartnerDiag(`partners: FETCH FAILED ${e?.message || e}`); }
     })();
     return () => { live = false; };
@@ -2704,8 +2710,13 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // Partners split by whether they belong to the category being shown. The
   // matching ones lead the page; everyone else keeps the normal interleaved
   // slots, so a category never costs an unrelated partner its placement.
-  const [leadPartners, restPartners] = useMemo(
-    () => splitPartnersByCategory(cityPartners, activeCat), [cityPartners, activeCat]);
+  const [leadPartners, restPartners] = useMemo(() => {
+    const [lead, rest] = splitPartnersByCategory(cityPartners, activeCat);
+    // Every partner that belongs to this category leads it, however many that
+    // is — being seventh overall says nothing about being the best answer to
+    // "gyms". The leftovers are what the interleaved slots were sized for.
+    return [lead, rest.slice(0, PARTNER_SLOTS.length)];
+  }, [cityPartners, activeCat]);
   const activeCatTitle = activeCat ? CATEGORIES.find(c => c.id === activeCat)?.title : null;
 
 
@@ -2954,6 +2965,18 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         </div>
         {filtered.length === 0 ? emptyState : (
           <>
+            {/* The Nearby tab rendered no partner cards at all — a business
+                could be the closest relevant thing on the map and still never
+                appear here. Category leaders go first, same rule as the list. */}
+            {leadPartners.length > 0 && (
+              <div className="space-y-2.5 mb-3">
+                {leadPartners.map(p => (
+                  <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
+                    eyebrow={`Featured · ${activeCatTitle || cityName}`}
+                    onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
+                ))}
+              </div>
+            )}
             <div>
               {visibleSpots.map(s=>(
                 <RowItem key={s.id} spot={s} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
