@@ -2215,10 +2215,10 @@ const TrustPanel = ({ onAddSpot }) => (
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 // Positions in the results list where a featured partner card appears. One
-// slot per partner we can show — five now that Sandy McDermott S&C is on.
+// slot per partner we can show — six now that Jack Daniels Fitness is on.
 // Slots and the slice below both derive from this array's length, so adding a
 // partner without adding a slot silently drops them off the end.
-const PARTNER_SLOTS = [2, 9, 17, 25, 33];
+const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot }) => {

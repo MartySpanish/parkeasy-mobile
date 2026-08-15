@@ -9,7 +9,7 @@
 // Everyone else keeps their normal interleaved slots, so leading one category
 // never costs an unrelated partner its placement.
 //
-// DELIBERATELY IN CODE, not a partners column. It is five hand-curated rows,
+// DELIBERATELY IN CODE, not a partners column. It is six hand-curated rows,
 // it needs no migration, and it means this reasoning sits beside the data.
 // A partner missing from this map simply never leads a category — forgetting
 // to tag one costs a placement, never a disappearance.
@@ -17,6 +17,7 @@
 // Category ids must match CATEGORIES in components/home/CategoryGrid.jsx.
 export const PARTNER_CATEGORIES = {
   'sandy-mcdermott-sc':      ['fitness'],
+  'jack-daniels-fitness':    ['fitness'],
   'sbg-maeda-belfast':       ['fitness'],
   'marcus-donnelly-fitness': ['fitness'],
   'gransha-grill':           ['brunch'],
