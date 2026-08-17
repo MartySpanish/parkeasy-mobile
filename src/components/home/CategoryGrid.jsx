@@ -36,8 +36,22 @@ export const CATEGORIES = [
     Icon: Hotel, from: '#54E6D8', to: '#2ED3C6', action: 'search', query: 'hotel',
   },
   {
-    id: 'nights', title: 'Nights & Weekends', blurb: 'Free after hours, if you know where',
-    Icon: Moon, from: '#8DA2BD', to: '#475569', action: 'filter', filter: 'free',
+    // MOVED UP from ninth, swapping with Nights & Weekends. Only the first six
+    // tiles show before "Show all 10", so ninth meant hidden — and this is the
+    // category with four partners leading it. A tile nobody sees cannot send
+    // anybody to a business we feature.
+    //
+    // The one tile that is a TEXT match rather than a place. "leisure" hits 44
+    // council leisure centres and pools by name — Whiterock, Olympia, Valley,
+    // Foyle Arena, Lagan Valley LeisurePlex and so on — in towns right across
+    // Northern Ireland, not just Belfast. That is a genuinely better answer
+    // than pointing at one street, and unlike the food and drink tiles the
+    // word itself is all over the data, so there is nothing to fake.
+    //
+    // action:'text' and not 'search' on purpose: a bare noun handed to a
+    // geocoder resolves to somewhere, and you get "spots near leisure".
+    id: 'fitness', title: 'Gyms & Wellbeing', blurb: 'Leisure centres and pools, NI-wide',
+    Icon: Dumbbell, from: '#6BEFB9', to: '#059669', action: 'text', query: 'leisure',
   },
   {
     id: 'commuting', title: 'Daily & Commuting', blurb: 'Council car parks & park-and-ride',
@@ -63,17 +77,11 @@ export const CATEGORIES = [
     Icon: Beer, from: '#FFB4A2', to: '#E11D48', action: 'search', query: 'Cathedral Quarter',
   },
   {
-    // The one tile that is a TEXT match rather than a place. "leisure" hits 44
-    // council leisure centres and pools by name — Whiterock, Olympia, Valley,
-    // Foyle Arena, Lagan Valley LeisurePlex and so on — in towns right across
-    // Northern Ireland, not just Belfast. That is a genuinely better answer
-    // than pointing at one street, and unlike the food and drink tiles the
-    // word itself is all over the data, so there is nothing to fake.
-    //
-    // action:'text' and not 'search' on purpose: a bare noun handed to a
-    // geocoder resolves to somewhere, and you get "spots near leisure".
-    id: 'fitness', title: 'Gyms & Wellbeing', blurb: 'Leisure centres and pools, NI-wide',
-    Icon: Dumbbell, from: '#6BEFB9', to: '#059669', action: 'text', query: 'leisure',
+    // Moved down from fourth to make room for Gyms & Wellbeing in the visible
+    // six. Still one tap away behind "Show all 10", and it is a filter rather
+    // than a destination — the kind of thing somebody goes looking for.
+    id: 'nights', title: 'Nights & Weekends', blurb: 'Free after hours, if you know where',
+    Icon: Moon, from: '#8DA2BD', to: '#475569', action: 'filter', filter: 'free',
   },
   {
     id: 'premium', title: 'Premium Hotspots', blurb: 'The spots locals keep quiet',
