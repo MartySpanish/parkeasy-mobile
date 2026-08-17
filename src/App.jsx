@@ -4250,14 +4250,27 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
 
   return (
     <aside ref={ref} aria-labelledby={`partner-${partner.slug}-name`}
-      className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0e1a2c]">
+      {...(onOpenPartner ? { onClick: () => onOpenPartner(partner) } : {})}
+      className={`mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0e1a2c]${onOpenPartner ? ' cursor-pointer active:scale-[0.995] transition' : ''}`}>
+      {/* THE WHOLE CARD OPENS THE BUSINESS PAGE. It used to be only the small
+          "See photos & parking nearby" link — the one part of a large,
+          obviously-tappable card that nobody aims at. People tapped the photo,
+          the name, or the middle of the box and nothing happened.
+          
+          Deliberately NOT role="button" on this container. It holds a link out
+          to the business and a list of buttons for nearby spots; declaring the
+          wrapper a button buries those for anyone on a keyboard or a screen
+          reader. Fixing "nobody can tap the card" must not break the people who
+          cannot tap at all. So: pointer users get the whole card, and the real
+          button below stays as the keyboard and screen-reader route. Every
+          inner control stops propagation so it still does its own job. */}
       {(() => {
         // One photo → full-width banner. Several → swipeable strip.
         const photos = (partner.photo_urls?.length ? partner.photo_urls : (partner.photo_url ? [partner.photo_url] : []));
         if (!photos.length) return null;
         if (photos.length === 1) return (
-          <img src={photos[0]} alt={partner.name} onClick={()=>onOpenPartner?.(partner)}
-            className={`w-full h-32 object-cover${onOpenPartner ? ' cursor-pointer' : ''}`} loading="lazy"/>
+          <img src={photos[0]} alt={partner.name}
+            className="w-full h-32 object-cover" loading="lazy"/>
         );
         return (
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar snap-x snap-mandatory">
@@ -4285,14 +4298,14 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
             the full description, and a map of the parking around the door,
             which is the bit that makes an advert useful to a driver. */}
         {onOpenPartner && (
-          <button onClick={()=>onOpenPartner(partner)}
+          <button onClick={(e)=>{ e.stopPropagation(); onOpenPartner(partner); }}
             className="mt-2.5 inline-flex items-center gap-1 text-[12px] font-bold text-[#5BE7DA] active:opacity-70">
             See photos &amp; parking nearby<ChevronRight size={14}/>
           </button>
         )}
         {partner.link_url && (
           <a href={partner.link_url} target="_blank" rel="noopener noreferrer nofollow"
-            onClick={()=>trackPartnerEvent(partner.id, listingId, 'click')}
+            onClick={(e)=>{ e.stopPropagation(); trackPartnerEvent(partner.id, listingId, 'click'); }}
             className="mt-3.5 inline-flex items-center gap-1.5 btn-teal text-[#06231f] font-bold text-[11px] uppercase tracking-[0.1em] px-4 py-2.5 rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5BE7DA]">
             Visit {partner.name}<span aria-hidden>↗</span>
           </a>
@@ -4315,7 +4328,7 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
                   </span>
                 );
                 return onOpenSpot
-                  ? <button key={s.id} onClick={()=>onOpenSpot(s)} className="w-full text-left py-1 hover:opacity-80">{row}</button>
+                  ? <button key={s.id} onClick={(e)=>{ e.stopPropagation(); onOpenSpot(s); }} className="w-full text-left py-1 hover:opacity-80">{row}</button>
                   : <div key={s.id} className="py-1">{row}</div>;
               })}
             </div>
