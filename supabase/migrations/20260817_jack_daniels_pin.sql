@@ -26,3 +26,14 @@ update partners set
   address = '3rd Floor, Conway Mill, 5-7 Conway Street, Belfast',
   postcode = 'BT13 2DE'
 where slug = 'jack-daniels-fitness';
+
+-- ── ADDENDUM, 17 Aug ────────────────────────────────────────────────────────
+-- Conway Mill parking confirmed FREE by Marty, both the Mill's own spaces and
+-- the on-street bays on Conway Street. The spot went in badged 'official'
+-- while the tariff was unknown, on the reasoning that the two errors are not
+-- symmetrical — telling somebody a space is free when it is not earns them a
+-- ticket, while the reverse costs a moment's thought. Now confirmed, so it is
+-- badged 'free' in src/App.jsx (id 305) and no longer says "check the signs".
+--
+-- No database change here: community spots live in the static dataset, not in
+-- Supabase. Recorded alongside the pin because they are one piece of work.
