@@ -32,14 +32,12 @@ export const CATEGORIES = [
     Icon: Plane, from: '#7CC4FF', to: '#3B82F6', action: 'search', query: 'Belfast City Airport',
   },
   {
-    id: 'hotels', title: 'Travel & Hotels', blurb: 'Park near where you’re staying',
-    Icon: Hotel, from: '#54E6D8', to: '#2ED3C6', action: 'search', query: 'hotel',
-  },
-  {
-    // MOVED UP from ninth, swapping with Nights & Weekends. Only the first six
-    // tiles show before "Show all 10", so ninth meant hidden — and this is the
-    // category with four partners leading it. A tile nobody sees cannot send
-    // anybody to a business we feature.
+    // THIRD, at Marty's call. It started ninth — hidden behind "Show all 10" —
+    // then went fourth, now third. The reason it keeps climbing is that it is
+    // the category with the most partners behind it: four of the seven
+    // featured businesses lead this tile, more than every other category
+    // combined. Placement here is worth more to them than anywhere else on the
+    // home screen.
     //
     // The one tile that is a TEXT match rather than a place. "leisure" hits 44
     // council leisure centres and pools by name — Whiterock, Olympia, Valley,
@@ -52,6 +50,14 @@ export const CATEGORIES = [
     // geocoder resolves to somewhere, and you get "spots near leisure".
     id: 'fitness', title: 'Gyms & Wellbeing', blurb: 'Leisure centres and pools, NI-wide',
     Icon: Dumbbell, from: '#6BEFB9', to: '#059669', action: 'text', query: 'leisure',
+  },
+  {
+    // Down one to make room, and still comfortably inside the visible six.
+    // Tara Lodge leads this tile, so it stays above the fold — a hotel that is
+    // putting ParkEasy in its own pre-stay email should not be behind a
+    // "show more" button.
+    id: 'hotels', title: 'Travel & Hotels', blurb: 'Park near where you’re staying',
+    Icon: Hotel, from: '#54E6D8', to: '#2ED3C6', action: 'search', query: 'hotel',
   },
   {
     id: 'commuting', title: 'Daily & Commuting', blurb: 'Council car parks & park-and-ride',
