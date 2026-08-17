@@ -635,7 +635,7 @@ const BUSINESSES = [
   { id:13, name:'Botanic Gardens',      area:'South Belfast',     addr:'Stranmillis Road, Belfast BT9 5AB',   cat:'Park',           icon:'🌿',  key:'botanic gardens',    lat:54.5840, lng:-5.9330 },
   { id:14, name:'Lyric Theatre',        area:'Stranmillis',       addr:'55 Ridgeway Street, Belfast BT9 5FB', cat:'Theatre',        icon:'🎭',  key:'stranmillis',        lat:54.5825, lng:-5.9357 },
   { id:15, name:'Ulster Museum',        area:'Botanic Gardens',   addr:'Botanic Gardens, Belfast BT9 5AB',    cat:'Museum',         icon:'🏛️',  key:'botanic gardens',    lat:54.5837, lng:-5.9322 },
-  { id:16, name:'SSE Arena Belfast',    area:'Titanic Quarter',   addr:'2 Queens Quay, Belfast BT3 9QQ',      cat:'Arena',          icon:'🎤',  key:'titanic quarter',    lat:54.6037, lng:-5.9170 },
+  { id:16, name:'The O2 Belfast',      area:'Titanic Quarter',   addr:'2 Queens Quay, Belfast BT3 9QQ',      cat:'Arena',          icon:'🎤',  key:'titanic quarter',    lat:54.6037, lng:-5.9170 },
   { id:17, name:'Belfast City Hall',    area:'City Centre',       addr:'Donegall Square, Belfast BT1 5GS',    cat:'Landmark',       icon:'🏛️',  key:'city hall',          lat:54.5965, lng:-5.9301 },
   { id:18, name:'Parliament Buildings (Stormont)', area:'Stormont', addr:'Stormont Estate, Belfast BT4 3XX',  cat:'Landmark',       icon:'🏛️',  key:'stormont',           lat:54.6038, lng:-5.8345 },
   { id:19, name:'Ulster Hall',          area:'City Centre',       addr:'34 Bedford Street, Belfast BT2 7FF',  cat:'Concert Hall',   icon:'🎵',  key:'ulster hall',        lat:54.5955, lng:-5.9295 },
@@ -2215,10 +2215,10 @@ const TrustPanel = ({ onAddSpot }) => (
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 // Positions in the results list where a featured partner card appears. One
-// slot per partner we can show — five now that Sandy McDermott S&C is on.
+// slot per partner we can show — six now that Jack Daniels Fitness is on.
 // Slots and the slice below both derive from this array's length, so adding a
 // partner without adding a slot silently drops them off the end.
-const PARTNER_SLOTS = [2, 9, 17, 25, 33];
+const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot }) => {
@@ -2694,8 +2694,14 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           .map(p => ({ ...p, d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000) }))
           .filter(p => p.d < 8000)
           .sort((a, b) => b.priority - a.priority || a.d - b.d);
-        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near.length ? ` → showing ${near.slice(0,PARTNER_SLOTS.length).map(p=>p.name).join(', ')}` : ''}`);
-        setCityPartners(near.slice(0, PARTNER_SLOTS.length));
+        // Keep ALL of them, sorted. The slice used to happen here, which meant
+        // the global slot count decided who could lead a category: with six
+        // partners and five slots, the sixth was cut before the fitness split
+        // even ran — so the most relevant business on a fitness page could be
+        // dropped for being sixth overall. Whoever is relevant leads; the cap
+        // now applies only to the interleaved leftovers, where it belongs.
+        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near.length ? ` → ${near.map(p=>p.name).join(', ')}` : ''}`);
+        setCityPartners(near);
       } catch (e) { if (live) setPartnerDiag(`partners: FETCH FAILED ${e?.message || e}`); }
     })();
     return () => { live = false; };
@@ -2704,14 +2710,40 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // Partners split by whether they belong to the category being shown. The
   // matching ones lead the page; everyone else keeps the normal interleaved
   // slots, so a category never costs an unrelated partner its placement.
-  const [leadPartners, restPartners] = useMemo(
-    () => splitPartnersByCategory(cityPartners, activeCat), [cityPartners, activeCat]);
+  const [leadPartners, restPartners] = useMemo(() => {
+    const [lead, rest] = splitPartnersByCategory(cityPartners, activeCat, geo);
+    // Every partner that belongs to this category leads it, however many that
+    // is — being seventh overall says nothing about being the best answer to
+    // "gyms". The leftovers are what the interleaved slots were sized for.
+    return [lead, rest.slice(0, PARTNER_SLOTS.length)];
+  }, [cityPartners, activeCat, geo?.lat, geo?.lng]);
   const activeCatTitle = activeCat ? CATEGORIES.find(c => c.id === activeCat)?.title : null;
 
 
   // ── LIST mode (Search tab): kicker + heading, count + sort, full-width cards ──
   if (mode === 'list') {
     const sortLabel = SORT_OPTIONS.find(s=>s.id===sortBy)?.label || 'Sort';
+    const premiumPromo = (!isPremium && !premiumPromoDismissed) ? (
+          <div className="px-4 pt-3">
+            <div className="relative overflow-hidden rounded-2xl p-4" style={{background:'linear-gradient(135deg, rgba(201,167,255,0.16), rgba(91,231,218,0.10))', border:'1px solid rgba(201,167,255,0.35)'}}>
+              <button aria-label="Dismiss" onClick={()=>{ls.set('pe_prem_promo_dismissed', true); setPremiumPromoDismissed(true);}}
+                className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><X size={12} className="text-[rgba(234,241,248,0.6)]"/></button>
+              <p className="font-display font-extrabold text-[16px] text-[#EAF1F8] leading-tight pr-7">✨ Did you know ParkEasy has Premium?</p>
+              <p className="text-[12.5px] text-[#cdd9e8] leading-relaxed mt-1.5">
+                {/* This used to read "N hidden gems in Belfast" off a
+                    city-scoped count. The list is the whole network now, so N
+                    counts gems AND EV picks across every town — claiming they
+                    were all gems, all in one city, would be two lies in five
+                    words. Say what each number actually is. */}
+                Unlock <strong className="text-[#C9A7FF]">{gatedGems > 0 ? `${gatedGems} hidden gem${gatedGems!==1?'s':''}` : 'every hidden gem'}</strong> — the free spots locals keep to themselves — {gatedEv > 0 ? <>plus <strong className="text-[#C9A7FF]">{gatedEv} EV charger pick{gatedEv!==1?'s':''}</strong> across Northern Ireland.</> : 'plus every EV charger pick across the map.'} One parking ticket costs more than a month of Premium.
+              </p>
+              <button onClick={onUpgrade} className="mt-3 inline-flex items-center gap-1.5 font-display font-bold text-[12.5px] text-[#06231f] px-4 py-2.5 rounded-xl" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
+                See what you're missing<ChevronRight size={14}/>
+              </button>
+            </div>
+          </div>
+    ) : null;
+
     // Counted from the live network, never typed in: a hard-coded number is
     // wrong the first time anybody adds a spot.
     const gemCount = (networkSpots || []).filter(s => s.badge === 'hidden_gem').length;
@@ -2805,26 +2837,6 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
             </button>
           </div>
         )}
-        {!isPremium && !premiumPromoDismissed && (
-          <div className="px-4 pt-3">
-            <div className="relative overflow-hidden rounded-2xl p-4" style={{background:'linear-gradient(135deg, rgba(201,167,255,0.16), rgba(91,231,218,0.10))', border:'1px solid rgba(201,167,255,0.35)'}}>
-              <button aria-label="Dismiss" onClick={()=>{ls.set('pe_prem_promo_dismissed', true); setPremiumPromoDismissed(true);}}
-                className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><X size={12} className="text-[rgba(234,241,248,0.6)]"/></button>
-              <p className="font-display font-extrabold text-[16px] text-[#EAF1F8] leading-tight pr-7">✨ Did you know ParkEasy has Premium?</p>
-              <p className="text-[12.5px] text-[#cdd9e8] leading-relaxed mt-1.5">
-                {/* This used to read "N hidden gems in Belfast" off a
-                    city-scoped count. The list is the whole network now, so N
-                    counts gems AND EV picks across every town — claiming they
-                    were all gems, all in one city, would be two lies in five
-                    words. Say what each number actually is. */}
-                Unlock <strong className="text-[#C9A7FF]">{gatedGems > 0 ? `${gatedGems} hidden gem${gatedGems!==1?'s':''}` : 'every hidden gem'}</strong> — the free spots locals keep to themselves — {gatedEv > 0 ? <>plus <strong className="text-[#C9A7FF]">{gatedEv} EV charger pick{gatedEv!==1?'s':''}</strong> across Northern Ireland.</> : 'plus every EV charger pick across the map.'} One parking ticket costs more than a month of Premium.
-              </p>
-              <button onClick={onUpgrade} className="mt-3 inline-flex items-center gap-1.5 font-display font-bold text-[12.5px] text-[#06231f] px-4 py-2.5 rounded-xl" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
-                See what you're missing<ChevronRight size={14}/>
-              </button>
-            </div>
-          </div>
-        )}
         {/* Two columns from 1024px up, one below. Until now the whole app was
             a 680px column whatever the screen, so a desktop visitor got a
             phone laid out on a monitor. Purely a media query — every rule is
@@ -2861,13 +2873,20 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                   feature is not an interruption — it is the answer. */}
               {leadPartners.map(p => (
                 <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
-                  eyebrow={`Featured · ${activeCatTitle || cityName}`}
+                  eyebrow={`Featured · ${activeCatTitle || (geo ? geo.label.split(',')[0] : cityName)}`}
                   onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
               ))}
               {visibleSpots.map((s,i)=>(
                 <React.Fragment key={s.id}>
                   <ListCard spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
                   {i===1 && onAdvertise && <SponsorCard onAdvertise={onAdvertise}/>}
+                  {/* The Premium pitch used to sit ABOVE the map, 204px of
+                      advertising between the search box and the first parking
+                      space. It converts on understanding what is being gated,
+                      and nobody understands that before they have seen a
+                      single result. Moved to just after the first two, beside
+                      the locked cards it is actually talking about. */}
+                  {i===1 && premiumPromo}
                   {/* Spaced out so they read as "while you're here" rather than
                       a block of adverts. Index maths, not a filter, so a second
                       or third partner simply doesn't render on a short list.
@@ -2954,6 +2973,18 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         </div>
         {filtered.length === 0 ? emptyState : (
           <>
+            {/* The Nearby tab rendered no partner cards at all — a business
+                could be the closest relevant thing on the map and still never
+                appear here. Category leaders go first, same rule as the list. */}
+            {leadPartners.length > 0 && (
+              <div className="space-y-2.5 mb-3">
+                {leadPartners.map(p => (
+                  <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
+                    eyebrow={`Featured · ${activeCatTitle || (geo ? geo.label.split(',')[0] : cityName)}`}
+                    onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
+                ))}
+              </div>
+            )}
             <div>
               {visibleSpots.map(s=>(
                 <RowItem key={s.id} spot={s} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>

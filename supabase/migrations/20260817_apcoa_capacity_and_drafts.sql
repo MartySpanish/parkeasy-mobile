@@ -1,0 +1,54 @@
+-- APCOA Belfast: capacity ceiling raised, two sites scaffolded. APPLIED 17 Aug 2026.
+--
+-- ── WHY DRAFT, NOT ACTIVE ────────────────────────────────────────────────────
+-- Adam Richards (Head of Commercial Asset Management, APCOA UK) replied on
+-- 17 Aug: "Happy for you to draft the HoT's bud." That is agreement to draft
+-- terms, not agreement to them. The Heads of Terms went out three hours later
+-- and has not come back signed.
+--
+-- Four things a booking needs are still open, by Marty's own list in that
+-- email: how many bays APCOA will release, the pilot length, the access and
+-- booking process, and APCOA's terms of use. There is also no Stripe account
+-- for them, so a booking taken today would have nowhere to pay out to.
+--
+-- Selling a space at a car park that has not agreed a bay count, a price or a
+-- way in is the Davitt Park gate failure repeated with a national operator
+-- watching. status='draft' means every field is ready and nothing is sellable.
+--
+-- ── COORDINATES ARE NOT GUESSED ──────────────────────────────────────────────
+-- Both sites already exist in src/apcoaSpots.js with surveyed pins, so these
+-- reuse them exactly rather than geocoding (which is blocked here anyway):
+--   Oxford Street  54.5983, -5.9225   public tariff £4.10/hr
+--   Lanyon Place   54.5978, -5.9161   public tariff £4.70/hr
+--
+-- ── PRICE IS DELIBERATELY NULL ───────────────────────────────────────────────
+-- Those public tariffs are what APCOA charges at its own barrier. The ParkEasy
+-- price under a 15% commission model is a commercial decision neither side has
+-- made. Copying the barrier rate across would invent a price and, worse, make
+-- it look agreed.
+alter table rental_listings drop constraint if exists capacity_range;
+alter table rental_listings add constraint capacity_range
+  check (spaces >= 1 and spaces <= 2000);
+
+-- ── WHY THE CEILING MOVED ────────────────────────────────────────────────────
+-- capacity_range capped spaces at 200. Right when every host was a driveway or
+-- a club car park — it stops somebody typing 9999 into a form. Wrong now:
+-- Lanyon Place is 570 bays and could not be recorded at all.
+--
+-- Widened, not removed: still catching typos, just no longer sized for the
+-- smallest kind of host we have. This says nothing about how many bays we may
+-- SELL — that is the pilot number APCOA has yet to give, and it will be
+-- smaller than either figure here.
+--
+-- ── WHAT WAS DELIBERATELY NOT CHANGED ────────────────────────────────────────
+-- host_type stays ('residential','organization'). Adding a 'commercial' value
+-- would have quietly exempted these listings from publish_org_fields and
+-- publish_photos — the guards that stop anything going live without an access
+-- method, an access contact, a phone number, founder approval and two photos.
+-- Those are precisely the things APCOA has not supplied. The right answer is
+-- to let the existing guards bite, not to route around them. So APCOA goes in
+-- as host_type='organization' and the schema enforces the caution for us: even
+-- flipping status to 'active' by hand would fail until the real details land.
+--
+-- The listing rows themselves are data, not schema, and were inserted
+-- alongside this — see the two 'draft' rows owned by Adam.Richards@apcoa.com.

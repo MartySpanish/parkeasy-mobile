@@ -14,7 +14,7 @@
 // Tiles are illustrated with a gradient + icon rather than photography.
 // Stock photos of American parking garages would be worse than no photo at
 // all, and we don't have licensed imagery for six categories.
-import React from 'react';
+import React, { useState } from 'react';
 import { Calendar, Plane, Hotel, Moon, Sun, Sparkles, Coffee, ShoppingBag, Beer, Dumbbell, ChevronRight } from 'lucide-react';
 import { space, type, color, radius, elevation, motion } from '../../theme/tokens';
 import { Text, Overline, Badge } from '../ui';
@@ -89,11 +89,19 @@ const CategoryCard = ({ cat, isPremium, onSelect }) => {
       className="pe-pressable"
       aria-label={`${cat.title} — ${cat.blurb}`}
       style={{
-        // Uniform aspect and a single internal grid: every tile is the same
-        // shape whatever the length of its title, which is most of what makes
-        // a grid read as designed rather than assembled.
-        position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-        textAlign: 'left', width: '100%', aspectRatio: '1 / 0.92',
+        // Icon BESIDE the text, not stacked above it with a gap.
+        //
+        // These were near-square (aspectRatio 1/0.92), which made ten tiles
+        // 979px tall — a full phone screen of mostly empty middle, sitting
+        // between the search box and the first parking result. Measured on a
+        // 420x900 viewport, a driver scrolled 2.3 screens before seeing a
+        // single space, in an app whose entire job is showing them one.
+        //
+        // A row layout keeps all ten visible and scannable — no horizontal
+        // scroller hiding options behind a swipe — and gives the block back
+        // about half its height.
+        position: 'relative', display: 'flex', alignItems: 'center', gap: space[3],
+        textAlign: 'left', width: '100%', minHeight: 76,
         padding: space[3], borderRadius: radius.xl, cursor: 'pointer',
         background: color.surface, border: `1px solid ${color.hairline}`,
         boxShadow: elevation.sm, overflow: 'hidden',
@@ -106,21 +114,21 @@ const CategoryCard = ({ cat, isPremium, onSelect }) => {
         position: 'absolute', inset: 0, opacity: 0.16, pointerEvents: 'none',
         background: `radial-gradient(120% 90% at 0% 0%, ${cat.to} 0%, transparent 60%)`,
       }} />
-      <span style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <span style={{
-          width: 38, height: 38, borderRadius: radius.md, display: 'inline-flex',
-          alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          background: `linear-gradient(135deg, ${cat.from}, ${cat.to})`,
-          boxShadow: elevation.sm,
-        }}>
-          <Icon size={19} color={color.brandInk} strokeWidth={2.4} />
-        </span>
-        {cat.premium && !isPremium && <Badge tone="premium">★</Badge>}
+      <span style={{
+        position: 'relative', width: 38, height: 38, borderRadius: radius.md,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        background: `linear-gradient(135deg, ${cat.from}, ${cat.to})`,
+        boxShadow: elevation.sm,
+      }}>
+        <Icon size={19} color={color.brandInk} strokeWidth={2.4} />
       </span>
-      <span style={{ position: 'relative', display: 'block' }}>
+      <span style={{ position: 'relative', display: 'block', minWidth: 0, flex: 1 }}>
         <Text role="h3" style={{ display: 'block' }}>{cat.title}</Text>
-        <Text role="caption" tone="faint" style={{ display: 'block', marginTop: space[1] }}>{cat.blurb}</Text>
+        <Text role="caption" tone="faint" style={{ display: 'block', marginTop: 2 }}>{cat.blurb}</Text>
       </span>
+      {cat.premium && !isPremium && (
+        <span style={{ position: 'relative', flexShrink: 0 }}><Badge tone="premium">★</Badge></span>
+      )}
     </button>
   );
 };
@@ -130,7 +138,18 @@ const CategoryCard = ({ cat, isPremium, onSelect }) => {
  * so this component never reaches into app state and can be dropped onto any
  * screen — including, later, a web landing page for SEO.
  */
+const INITIAL = 6;
+
 export default function CategoryGrid({ isPremium, onSelect, cityName }) {
+  // Six by default, ten on request.
+  //
+  // Even compacted, ten tiles are 563px — most of a phone screen standing
+  // between the search box and the first parking space. Six covers the common
+  // cases and gets the results ~230px closer; the rest are one tap away and
+  // nothing is hidden permanently. The count is in the button, so the tap is
+  // an informed one rather than a mystery.
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? CATEGORIES : CATEGORIES.slice(0, INITIAL);
   return (
     <section style={{ padding: `0 ${space[4]}` }} aria-labelledby="pe-browse-heading">
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: space[3] }}>
@@ -146,10 +165,26 @@ export default function CategoryGrid({ isPremium, onSelect, cityName }) {
           tall — the aspect ratio that makes a phone grid feel deliberate makes
           a desktop grid look broken. */}
       <div className="pe-cat-grid" style={{ display: 'grid', gap: space[3] }}>
-        {CATEGORIES.map(cat => (
+        {shown.map(cat => (
           <CategoryCard key={cat.id} cat={cat} isPremium={isPremium} onSelect={onSelect} />
         ))}
       </div>
+      {CATEGORIES.length > INITIAL && (
+        <button
+          onClick={() => setExpanded(v => !v)}
+          aria-expanded={expanded}
+          className="pe-pressable"
+          style={{
+            width: '100%', marginTop: space[3], padding: `${space[3]} ${space[4]}`,
+            borderRadius: radius.lg, cursor: 'pointer', textAlign: 'center',
+            background: 'transparent', border: `1px solid ${color.hairline}`,
+          }}
+        >
+          <Text role="caption" style={{ color: color.brand, fontWeight: 700 }}>
+            {expanded ? 'Show fewer' : `Show all ${CATEGORIES.length} categories`}
+          </Text>
+        </button>
+      )}
     </section>
   );
 }
