@@ -2234,10 +2234,13 @@ const TrustPanel = ({ onAddSpot }) => (
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 // Positions in the results list where a featured partner card appears. One
-// slot per partner we can show — six now that Jack Daniels Fitness is on.
+// slot per partner we can show — seven now that Tara Lodge is on.
 // Slots and the slice below both derive from this array's length, so adding a
-// partner without adding a slot silently drops them off the end.
-const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41];
+// partner without adding a slot silently drops them off the end. That has now
+// happened at four, five and six partners: the symptom is never an error, just
+// a business quietly missing from the app it was promised a place in. Add the
+// slot in the same commit as the partner, every time.
+const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41, 49];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot }) => {
@@ -4323,7 +4326,15 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
         {onOpenPartner && (
           <button onClick={(e)=>{ e.stopPropagation(); onOpenPartner(partner); }}
             className="mt-2.5 inline-flex items-center gap-1 text-[12px] font-bold text-[#5BE7DA] active:opacity-70">
-            See photos &amp; parking nearby<ChevronRight size={14}/>
+            {/* Don't offer parking we are about to admit we can't show. An
+                online partner has none to show, and one without a trusted pin
+                gets "map coming shortly" on the page this link opens — the
+                same gate the map and the nearby list already use, so all three
+                tell a driver the same story. */}
+            {(partner.is_online || !partner.geo_verified)
+              ? <>See photos &amp; details</>
+              : <>See photos &amp; parking nearby</>}
+            <ChevronRight size={14}/>
           </button>
         )}
         {partner.link_url && (
