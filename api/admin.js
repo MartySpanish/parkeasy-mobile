@@ -134,6 +134,105 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── Founder action: apply the pending partner rows ────────────────────────
+  //
+  // WHY THIS EXISTS. Partner rows are written by hand through the Supabase
+  // connector, and the connector is regularly unavailable — bookableSpaces.js
+  // says as much, and it has now cost real time twice in one day: Tara Lodge
+  // agreed a partnership on 12 August and Jack Daniels' gym has had its map
+  // switched off since morning, both waiting on a connection rather than on a
+  // decision. Sitting on a signed partner because a tool is offline is the
+  // wrong failure. This is the same three writes, through a route that is
+  // always up.
+  //
+  // DELIBERATELY NOT A SQL RUNNER. It executes one fixed, reviewed set of
+  // writes, not whatever it is handed — an admin-authenticated "run this SQL"
+  // endpoint on a public deployment is a much bigger thing to own than the
+  // problem it would solve. Every value below is the one committed in
+  // supabase/migrations/, and the reasoning for each lives there.
+  //
+  // Idempotent: the insert merges on slug, the updates match on slug. Running
+  // it twice changes nothing the second time.
+  if (req.method === 'POST') {
+    let p = req.body;
+    if (typeof p === 'string') { try { p = JSON.parse(p); } catch { p = {}; } }
+    if (p?.action === 'sync-partners') {
+      const steps = [];
+      const run = async (label, url, method, payload, extraHeaders) => {
+        try {
+          const r = await fetch(url, {
+            method, headers: { ...svcH, ...(extraHeaders || {}) },
+            body: payload ? JSON.stringify(payload) : undefined,
+          });
+          const text = await r.text().catch(() => '');
+          steps.push({ step: label, ok: r.ok, status: r.status, ...(r.ok ? {} : { error: text.slice(0, 400) }) });
+          return r.ok;
+        } catch (e) {
+          steps.push({ step: label, ok: false, error: e.message || 'request failed' });
+          return false;
+        }
+      };
+
+      // 1. Tara Lodge — 20260817_tara_lodge.sql, already carrying the verified
+      //    pin from 20260817_tara_lodge_pin.sql rather than the placeholder.
+      //    One write instead of two; identical end state.
+      await run('tara-lodge', `${URL_}/rest/v1/partners?on_conflict=slug`, 'POST', {
+        slug: 'tara-lodge',
+        name: 'Tara Lodge',
+        tagline: '4-star boutique hotel in the Queen’s Quarter — and one of the few places in central Belfast with free, secure parking of its own.',
+        description: 'A 34-room boutique hotel on a quiet residential street off Botanic Avenue, five minutes from Queen’s University and the Ulster Museum and about fifteen minutes’ walk from the city centre.\n\n'
+          + 'The part that matters if you are driving: Tara Lodge has its own free, secure on-site car park, which almost nothing else this close to the middle of Belfast can say. Guests are not paying for parking and not circling for it. Breakfast is à la carte and made to order, and the WiFi is free throughout.\n\n'
+          + 'Visiting rather than staying? Cromwell Road sits in the middle of the Botanic and Queen’s parking that ParkEasy already maps — free evening and weekend kerbside on the side streets, and the University Road bays after 6pm.',
+        logo_url: null,
+        photo_url: 'https://parkeasy.uk/taralodge/1-exterior.jpg',
+        photo_urls: ['https://parkeasy.uk/taralodge/1-exterior.jpg',
+                     'https://parkeasy.uk/taralodge/2-reception.jpg'],
+        link_url: 'https://www.taralodge.com/',
+        links: [{ label: 'Book a room at Tara Lodge', url: 'https://www.taralodge.com/' }],
+        is_online: false,
+        address: '36 Cromwell Road, Belfast',
+        postcode: 'BT7 1JW',
+        // OSNI Irish Grid E333754 N373031 for BT7 1JW, converted offline and
+        // confirmed against the published decimal centroid for the same
+        // postcode. Postcode centroid, not the door — tens of metres, on a
+        // 700m radius. See 20260817_tara_lodge_pin.sql.
+        lat: 54.587835, lng: -5.931730, geo_verified: true,
+        radius_m: 700,
+        priority: 4,
+        active: true,
+      }, { Prefer: 'resolution=merge-duplicates' });
+
+      // 2. Jack Daniels Fitness — 20260817_jack_daniels_pin.sql. Conway Mill,
+      //    from Apple Maps' own place card for Atlas Gym Belfast.
+      await run('jack-daniels-fitness', `${URL_}/rest/v1/partners?slug=eq.jack-daniels-fitness`, 'PATCH', {
+        lat: 54.599499, lng: -5.951222, geo_verified: true,
+        address: '3rd Floor, Conway Mill, 5-7 Conway Street, Belfast',
+        postcode: 'BT13 2DE',
+      });
+
+      // 3. Read back what is actually in the table, so the dashboard reports
+      //    the database's answer rather than this function's optimism.
+      let partners = null;
+      try {
+        const r = await fetch(`${URL_}/rest/v1/partners?select=slug,name,priority,geo_verified,active,lat,lng&order=priority.desc`, { headers: svcH });
+        if (r.ok) partners = await r.json();
+      } catch { /* reported as null below */ }
+
+      const failed = steps.filter(s => !s.ok);
+      return res.status(200).json({
+        ok: failed.length === 0,
+        steps,
+        partners,
+        // The one failure this cannot fix itself: PostgREST cannot add a
+        // column, so if 20260817_partners_geo_verified.sql never ran, both
+        // writes above fail on an unknown column and the fix is that file.
+        ...(failed.some(s => /geo_verified/.test(s.error || ''))
+          ? { hint: 'partners.geo_verified is missing — run supabase/migrations/20260817_partners_geo_verified.sql first.' }
+          : {}),
+      });
+    }
+  }
+
   // ── Founder actions: approve / reject organization listings ──
   if (req.method === 'POST') {
     let body = req.body;

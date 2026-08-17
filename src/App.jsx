@@ -5802,6 +5802,64 @@ const GrantPremium = () => {
   );
 };
 
+// Applies the pending partner rows without the Supabase connector.
+//
+// Partner rows are hand-written through the connector, and the connector is
+// regularly unavailable. That has already cost a signed partner real time:
+// Tara Lodge agreed on 12 August, and Jack Daniels' gym had its map switched
+// off for a day, both waiting on a tool rather than a decision. The writes are
+// fixed and reviewed server-side — this button chooses nothing, it only asks
+// for them to be applied — and it reports the rows the DATABASE returns
+// afterwards, not what the request hoped for.
+const SyncPartners = () => {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const sync = async () => {
+    setBusy(true); setResult(null);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const r = await apiFetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess?.session?.access_token}` },
+        body: JSON.stringify({ action: 'sync-partners' }),
+      });
+      setResult(await r.json().catch(() => ({ ok: false, error: 'No response' })));
+    } catch (e) { setResult({ ok: false, error: e.message || 'Request failed' }); }
+    setBusy(false);
+  };
+  return (
+    <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
+      <p className="font-display font-bold text-[12.5px] text-[#EAF1F8]">Apply pending partner rows</p>
+      <p className="text-[11.5px] text-[rgba(234,241,248,0.55)] mt-1 leading-relaxed">
+        Tara Lodge (new, pinned) and Jack Daniels&rsquo; Conway Mill pin. Safe to run twice.
+      </p>
+      <button onClick={sync} disabled={busy}
+        className="mt-2.5 btn-teal text-[#06231f] font-bold text-[13px] px-4 py-2.5 rounded-xl disabled:opacity-50">
+        {busy ? 'Applying…' : 'Apply'}
+      </button>
+      {result && (
+        <div className="mt-2.5">
+          <p className={`text-[12px] font-semibold ${result.ok ? 'text-[#6BEFB9]' : 'text-red-300'}`}>
+            {result.ok ? '✅ Applied' : `⚠️ ${result.error || result.hint || 'Some writes failed'}`}
+          </p>
+          {result.steps?.filter(s => !s.ok).map(s => (
+            <p key={s.step} className="text-[11px] text-red-300 mt-1">{s.step}: {s.error || `HTTP ${s.status}`}</p>
+          ))}
+          {/* The database's own answer, not this component's. */}
+          {result.partners?.map(p => (
+            <p key={p.slug} className="text-[11.5px] text-[#cdd9e8] mt-1 flex items-center justify-between gap-2">
+              <span className="truncate">{p.name}</span>
+              <span className="flex-shrink-0 text-[10.5px] text-[rgba(234,241,248,0.5)]">
+                p{p.priority} · {p.geo_verified ? '📍 pinned' : 'no pin'}
+              </span>
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminOverlay = ({ onClose }) => {
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
@@ -5985,6 +6043,7 @@ const AdminOverlay = ({ onClose }) => {
                     Every entitlement is now account-linked — Stripe purchases, promo codes and hidden-gem rewards. MRR is an estimate: long entitlements count as annual (÷ 12), short ones as monthly, each priced at whatever was current when that member joined. Members from before 28 Jul 2026 are grandfathered at £20 / £2.99; new ones are £29 / £3.99.
                   </p>
                   <GrantPremium/>
+                  <SyncPartners/>
                 </div>
               )}
               {d.bookings && (
