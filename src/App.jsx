@@ -7,7 +7,6 @@ import {
   Bookmark, Camera, Check, X, ChevronRight, ChevronLeft, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon, Sparkles,
-  BarChart3,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -7156,18 +7155,23 @@ export default function App() {
 
       {/* ── Header ── */}
       <header style={{background:'var(--header-grad)', paddingTop:'env(safe-area-inset-top)'}} className="sticky top-0 z-50 shadow-xl border-b border-white/5">
-        <div className="px-4 py-3 flex items-center gap-3">
+        <div className="px-3 min-[360px]:px-4 py-3 flex items-center gap-2 min-[360px]:gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:'linear-gradient(135deg, #54E6D8 0%, #2ED3C6 100%)', boxShadow:'0 4px 16px rgba(46,211,198,0.5)'}}>
             <MapPin size={20} className="text-[#06231f]" strokeWidth={2.6}/>
           </div>
-          <div className="relative min-w-0 flex-1">
-            <p className="font-display text-white font-extrabold text-[15px] leading-tight tracking-tight whitespace-nowrap">ParkEasy</p>
-            <p className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium truncate whitespace-nowrap">
+          <div className="relative flex-shrink-0 mr-auto">
+            {/* truncate, not just nowrap. min-w-0 lets this box shrink to
+                nothing when the actions need room, and nowrap text with no
+                overflow rule then runs straight over the buttons — the
+                wordmark was sitting on top of the theme and saved icons for
+                any signed-in admin. */}
+            <p className="font-display text-white font-extrabold text-[15px] leading-tight tracking-tight truncate">ParkEasy</p>
+            <p className="text-[rgba(234,241,248,0.55)] text-[10px] font-medium whitespace-nowrap hidden min-[560px]:block">
               UK &amp; Ireland · {ALL_SPOTS.length} spots
             </p>
           </div>
 
-          <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <button aria-label="Toggle light or dark theme" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}
               className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 border border-white/15 bg-white/10 text-white hover:bg-white/20">
               {theme==='dark' ? <Sun size={15}/> : <Moon size={15}/>}
@@ -7185,26 +7189,20 @@ export default function App() {
             </button>
             {!isStandalone && (
               <button onClick={()=>isIOS ? setShowIOSGuide(true) : handleInstall()}
-                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 hidden min-[400px]:flex items-center gap-1">
+                className="text-[11px] h-9 bg-white/10 text-white px-3 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 hidden min-[560px]:flex items-center gap-1">
                 <Download size={11}/><span className="hidden min-[430px]:inline">Install</span>
               </button>
             )}
             {!isPremium ? (
               <button onClick={()=>setShowPricing(true)}
-                className="text-[11px] text-[#06231f] px-2 py-1.5 rounded-full font-bold active:scale-95 transition-all btn-teal whitespace-nowrap">
-                ★ Premium
+                className="text-[11px] h-9 px-3 inline-flex items-center text-[#06231f] rounded-full font-bold active:scale-95 transition-all btn-teal whitespace-nowrap">
+                ★<span className="hidden min-[380px]:inline">&nbsp;Premium</span>
               </button>
             ) : (
               <button onClick={()=>setShowPricing(true)} aria-label="Your Premium status"
-                className="text-[11px] px-2 py-1.5 rounded-full font-bold active:scale-95 transition-all whitespace-nowrap text-[#06231f]"
+                className="text-[11px] h-9 px-3 inline-flex items-center rounded-full font-bold active:scale-95 transition-all whitespace-nowrap text-[#06231f]"
                 style={{background:'linear-gradient(135deg,#FFD27A,#eab308)'}}>
-                ★ Premium ✓
-              </button>
-            )}
-            {isAdminUser(user) && (
-              <button onClick={()=>setShowAdmin(true)} aria-label="Admin analytics"
-                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 whitespace-nowrap flex items-center gap-1">
-                <BarChart3 size={12}/> Analytics
+                ★<span className="hidden min-[380px]:inline">&nbsp;Premium ✓</span>
               </button>
             )}
             {user ? (
@@ -7217,7 +7215,7 @@ export default function App() {
               </button>
             ) : (
               <button onClick={()=>setShowWelcome(true)}
-                className="text-[11px] bg-white/10 text-white px-2.5 py-1.5 rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 whitespace-nowrap">
+                className="text-[11px] h-9 px-3 inline-flex items-center bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 active:scale-95 transition-all border border-white/15 whitespace-nowrap">
                 Sign in
               </button>
             )}
