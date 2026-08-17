@@ -1,0 +1,45 @@
+{
+  "_comment": [
+    "MCP servers for Claude Code sessions on this repo.",
+    "",
+    "WHY THIS FILE EXISTS. Connecting Supabase at claude.ai does NOT give it to a",
+    "Claude Code session. Those are two different surfaces: the claude.ai",
+    "connector list feeds claude.ai chats, and Claude Code reads its servers from",
+    "its own config — this file, plus user/project settings. Every connector on",
+    "the account reported connected:true and enabledInChat:false at once, which is",
+    "the tell: nothing was toggled off, the session simply never consumes that",
+    "list. Only the GitHub server, provisioned by the environment, was ever here.",
+    "",
+    "That cost most of a day: Tara Lodge agreed a partnership on 12 August and",
+    "could not be written to the database, and Jack Daniels' gym had its map off",
+    "for a day, both waiting on a tool rather than a decision.",
+    "",
+    "SETUP — one thing, once. This file carries NO secret and must not. The server",
+    "reads SUPABASE_ACCESS_TOKEN from the environment, so add it as an environment",
+    "variable on the Claude Code environment (not here, not in git):",
+    "",
+    "  Supabase dashboard -> Account -> Access Tokens -> Generate new token",
+    "  Claude Code -> environment settings -> add SUPABASE_ACCESS_TOKEN",
+    "",
+    "There is deliberately no `env` block below: the server process inherits the",
+    "environment, so inheritance does the job without depending on how this file",
+    "expands variables.",
+    "",
+    "Scoped to the ParkEasy project with --project-ref, so a session here cannot",
+    "reach another project by accident. NOT --read-only: writing partner rows is",
+    "the entire reason for it.",
+    "",
+    "Takes effect in a NEW session — a running one keeps the servers it started",
+    "with, which is why none of today's reconnecting changed anything."
+  ],
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=bbgqregyogtjzaustbng"
+      ]
+    }
+  }
+}
