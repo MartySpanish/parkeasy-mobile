@@ -2711,12 +2711,12 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // matching ones lead the page; everyone else keeps the normal interleaved
   // slots, so a category never costs an unrelated partner its placement.
   const [leadPartners, restPartners] = useMemo(() => {
-    const [lead, rest] = splitPartnersByCategory(cityPartners, activeCat);
+    const [lead, rest] = splitPartnersByCategory(cityPartners, activeCat, geo);
     // Every partner that belongs to this category leads it, however many that
     // is — being seventh overall says nothing about being the best answer to
     // "gyms". The leftovers are what the interleaved slots were sized for.
     return [lead, rest.slice(0, PARTNER_SLOTS.length)];
-  }, [cityPartners, activeCat]);
+  }, [cityPartners, activeCat, geo?.lat, geo?.lng]);
   const activeCatTitle = activeCat ? CATEGORIES.find(c => c.id === activeCat)?.title : null;
 
 
@@ -2873,7 +2873,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                   feature is not an interruption — it is the answer. */}
               {leadPartners.map(p => (
                 <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
-                  eyebrow={`Featured · ${activeCatTitle || cityName}`}
+                  eyebrow={`Featured · ${activeCatTitle || (geo ? geo.label.split(',')[0] : cityName)}`}
                   onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
               ))}
               {visibleSpots.map((s,i)=>(
@@ -2980,7 +2980,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               <div className="space-y-2.5 mb-3">
                 {leadPartners.map(p => (
                   <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
-                    eyebrow={`Featured · ${activeCatTitle || cityName}`}
+                    eyebrow={`Featured · ${activeCatTitle || (geo ? geo.label.split(',')[0] : cityName)}`}
                     onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
                 ))}
               </div>

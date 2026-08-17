@@ -37,13 +37,27 @@ export const PARTNER_CATEGORIES = {
  *
  * @param partners  partners for the current city, already sorted
  * @param catId     the active category id, or null when none is showing
+ * @param geo       the searched location {lat,lng}, or null
+ * @param radiusM   how near a partner must be to lead on location alone
  * @returns [leadPartners, restPartners]
  */
-export function splitPartnersByCategory(partners, catId) {
-  if (!catId) return [[], partners || []];
+export function splitPartnersByCategory(partners, catId, geo, radiusM = 1500) {
+  if (!catId && !geo) return [[], partners || []];
   const lead = [], rest = [];
   for (const p of partners || []) {
-    ((PARTNER_CATEGORIES[p.slug] || []).includes(catId) ? lead : rest).push(p);
+    const byCategory = catId && (PARTNER_CATEGORIES[p.slug] || []).includes(catId);
+    // A business two streets from where you just searched is as relevant as
+    // one that matches the category you tapped — arguably more so. Straight
+    // line, same as everywhere else in the app, and generous at 1.5km because
+    // a partner is a suggestion rather than a destination.
+    //
+    // is_online partners are excluded: their coordinates are the city-centre
+    // placeholder the NOT NULL columns demand, so a distance test on them
+    // measures nothing. Marcus would otherwise "lead" every city-centre
+    // search by sitting exactly on the pin.
+    const byPlace = geo && !p.is_online && typeof p.lat === 'number'
+      && Math.hypot((p.lat - geo.lat) * 111320, (p.lng - geo.lng) * 65000) <= radiusM;
+    ((byCategory || byPlace) ? lead : rest).push(p);
   }
   return [lead, rest];
 }
