@@ -193,6 +193,26 @@ const SPOTS = [
   // of thing only somebody who used the spot would know, and it is the
   // difference between a good tip and a wasted journey.
   { id:300, name:'Lower Ormeau — small free spot off the Embankment', near:'Lower Ormeau / Gasworks', tags:['lower ormeau','gasworks','ormeau embankment','south belfast','free parking','city centre walk','commuter'], badge:'hidden_gem', dist:0.57, walk:'12 min', restriction:'Free — fills up from the morning rush', notes:'Community pick from Ciaran M: a handy free spot for getting into the city centre, with room for about six to eight cars. It generally fills from rush hour in the morning, so it is a better bet later in the day or in the evening. Tight enough that a smaller car helps — worth knowing before you commit to the turn.', lat:54.590009, lng:-5.921546, by:'Ciaran M · ParkEasy community', votes:1, photo:null, price:null, spaces:8, premium:true },
+  // Conway Mill, off the Falls Road — reported by Marty, 17 Aug 2026, as the
+  // parking for Atlas Gym and Jack Daniels Fitness inside the Mill.
+  //
+  // Coordinate is Apple Maps' own pin for Atlas Gym Belfast, shared from the
+  // place card: 54.599499, -5.951222. Cross-checked before use — 276m from
+  // Twin Spires on Northumberland Street (the adjacent cross-street between
+  // the Falls and the Shankill), 1.41km west of City Hall, 956m from the Red
+  // Devil further up the Falls. All three land where the Lower Falls should
+  // be, and nothing already sits within 80m.
+  //
+  // ONE spot, not two. Marty reports parking both inside the Mill and on
+  // Conway Street outside it, but the Mill's address IS 5-7 Conway Street, so
+  // a second pin would either duplicate this coordinate or be an invented
+  // offset. The street option is described in the notes instead.
+  //
+  // Badged 'official' rather than 'free' deliberately: the tariff is not
+  // confirmed, and the two errors are not symmetrical. Telling somebody a
+  // space is free when it is not earns them a ticket; telling them it may be
+  // paid when it is free costs them a moment's thought.
+  { id:305, name:'Conway Mill car park', near:'Conway Street, off the Falls Road', tags:['conway mill','conway street','falls road','lower falls','west belfast','atlas gym','city centre walk'], badge:'official', dist:0.88, walk:'18 min', restriction:'Conway Mill site parking — check the signage on arrival', notes:'Parking at Conway Mill on Conway Street, just off the Falls Road, serving the units inside the Mill including Atlas Gym. There is also on-street parking on Conway Street itself. Reported by ParkEasy; the tariff has not been confirmed, so check the signs before you leave the car.', lat:54.599499, lng:-5.951222, by:'ParkEasy', votes:0, photo:null, price:null, spaces:null },
   { id:66, name:'LORAG centre / Shaftesbury Rec kerbside', near:'Lower Ormeau / Gasworks', tags:['lorag','shaftesbury','lower ormeau','gasworks','south belfast','free parking','city centre walk'], badge:'hidden_gem', dist:0.30, walk:'8 min', restriction:'Free all day', notes:'Founder pick: free kerbside and community-centre parking around LORAG on the Lower Ormeau, beside the Gasworks. Park up and walk into the city centre in minutes — ideal on match and gig days.', lat:54.5900, lng:-5.9235, by:'ParkEasy', votes:0, photo:null, price:null, spaces:null, premium:true },
   { id:67, name:'Kennedy Centre car park', near:'Falls Road', tags:['kennedy centre','kennedy center','falls road','west belfast','ev charging','andersonstown','shopping centre','free parking'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Free customer car park at the Kennedy Centre on the Falls Road with EV charging points — a handy West Belfast charging stop while you shop. Community estimate on charger speed and availability.', lat:54.5943, lng:-5.9808, by:'WestBelfastLocal', votes:0, photo:null, price:null, spaces:400, ev:{available:true, ports:2, speed:'22kW'}, premium:true },
   { id:68, name:'Olympia Leisure Centre car park', near:'Olympia / Windsor Park', tags:['olympia','olympia leisure centre','boucher road','windsor park','national football stadium','linfield','south belfast','free parking','leisure centre','swimming'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Big free car park at Olympia Leisure Centre on Boucher Road, right beside Windsor Park. Plenty of room most of the day for the pool and gym. Fills fast before Northern Ireland and Linfield home games — get there early on match days or you will be circling Boucher.', lat:54.5817, lng:-5.9487, by:'ParkEasy', votes:0, photo:null, price:null, spaces:250 },
@@ -4202,7 +4222,7 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
                 </span>
                 <span className="flex-shrink-0 text-right">
                   <span className="block text-[12px] font-bold text-[#5BE7DA]">{Math.max(1, Math.round(d / 80))} min walk</span>
-                  <span className="block text-[11px] text-[rgba(234,241,248,0.5)]">{s.price ? String(s.price).split('/')[0] : 'Free'}</span>
+                  <span className="block text-[11px] text-[rgba(234,241,248,0.5)]">{s.price ? String(s.price).split('/')[0] : (['free','hidden_gem'].includes(s.badge) ? 'Free' : 'Check signs')}</span>
                 </span>
               </button>
             ))}
@@ -4328,7 +4348,7 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
                 const row = (
                   <span className="flex items-center justify-between gap-2 w-full">
                     <span className="text-[12.5px] text-[#cdd9e8] truncate">{s.name}</span>
-                    <span className="flex-shrink-0 text-[11px] text-[#5BE7DA] font-semibold">{Math.max(1, Math.round(d / 80))} min walk{s.price ? ` · ${String(s.price).split('/')[0]}` : ' · free'}</span>
+                    <span className="flex-shrink-0 text-[11px] text-[#5BE7DA] font-semibold">{Math.max(1, Math.round(d / 80))} min walk{s.price ? ` · ${String(s.price).split('/')[0]}` : (['free','hidden_gem'].includes(s.badge) ? ' · free' : '')}</span>
                   </span>
                 );
                 return onOpenSpot
