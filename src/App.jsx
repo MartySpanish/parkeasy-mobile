@@ -2685,7 +2685,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       if (!isSupabaseEnabled || !cityCenter) { setPartnerDiag('partners: supabase disabled'); setCityPartners([]); return; }
       try {
         const { data, error } = await supabase.from('partners')
-          .select('id, slug, name, name_irish, tagline, description, logo_url, photo_url, photo_urls, link_url, links, is_online, address, postcode, contact_phone, lat, lng, radius_m, priority');
+          .select('id, slug, name, name_irish, tagline, description, logo_url, photo_url, photo_urls, link_url, links, is_online, address, postcode, contact_phone, lat, lng, radius_m, priority, geo_verified');
         if (!live) return;
         if (error) { setPartnerDiag(`partners: ERROR ${error.message}`); return; }
         if (!data?.length) { setPartnerDiag('partners: 0 rows visible (inactive or out of window?)'); return; }
@@ -4155,19 +4155,22 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
               No gym to drive to. Everything runs remotely, so there&rsquo;s nowhere to park and nothing to find.
             </p>
           </div>
-        ) : !partner.address ? (
+        ) : !partner.geo_verified ? (
           // A third case, between "online" and "we know where it is": a real
-          // premises whose address we have not confirmed yet. lat/lng are NOT
-          // NULL in the table, so a partner always HAS a coordinate — and
-          // drawing a map from a placeholder is how Gransha Grill ended up
-          // pinned 953 metres from its own front door, taking three parking
-          // spots with it. No address, no map. It appears by itself the moment
-          // the address is filled in.
+          // premises whose PIN is not confirmed. The test is the COORDINATE,
+          // not the address — those are different things, and conflating them
+          // nearly put Jack Daniels' map half a kilometre away on the strength
+          // of a confirmed address and a placeholder pin. lat/lng are NOT
+          // NULL, so a partner always HAS a coordinate; that is exactly why
+          // having one proves nothing. Drawing a map from an unverified pin is
+          // how Gransha Grill ended up 953 metres from its own front door,
+          // taking three parking spots with it.
           <div className="mt-5 rounded-2xl px-4 py-3.5" style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.12)'}}>
             <p className="font-display font-bold text-[14px] text-[#EAF1F8]">Parking map coming shortly</p>
             <p className="text-[12.5px] text-[#cdd9e8] mt-1 leading-relaxed">
-              We&rsquo;re confirming the exact address with {partner.name} before we show you where to park —
-              we&rsquo;d rather say nothing than send you to the wrong street.
+              {partner.address
+                ? <>We know where {partner.name} is — we&rsquo;re just pinning it to the metre before we show you where to park. We&rsquo;d rather say nothing than send you to the wrong street.</>
+                : <>We&rsquo;re confirming the exact address with {partner.name} before we show you where to park — we&rsquo;d rather say nothing than send you to the wrong street.</>}
             </p>
           </div>
         ) : (
@@ -4311,10 +4314,11 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
           </a>
         )}
         {(() => {
-          // Same rule as the detail map: no confirmed address, no nearby-spots
-          // list. The coordinate exists because the column is NOT NULL, not
-          // because we know where the place is.
-          if (partner.is_online || !partner.address) return null;
+          // Same rule as the detail map, and the same correction: it is the
+          // PIN that has to be trusted, not the address. A nearby-spots list
+          // computed from an unverified coordinate is a list of the wrong
+          // streets, stated with total confidence.
+          if (partner.is_online || !partner.geo_verified) return null;
           const nearby = nearestSpotsTo(partner.lat, partner.lng, 3, Math.max(700, partner.radius_m || 900));
           if (!nearby.length) return null;
           return (
