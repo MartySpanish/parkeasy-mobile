@@ -193,6 +193,26 @@ const SPOTS = [
   // of thing only somebody who used the spot would know, and it is the
   // difference between a good tip and a wasted journey.
   { id:300, name:'Lower Ormeau — small free spot off the Embankment', near:'Lower Ormeau / Gasworks', tags:['lower ormeau','gasworks','ormeau embankment','south belfast','free parking','city centre walk','commuter'], badge:'hidden_gem', dist:0.57, walk:'12 min', restriction:'Free — fills up from the morning rush', notes:'Community pick from Ciaran M: a handy free spot for getting into the city centre, with room for about six to eight cars. It generally fills from rush hour in the morning, so it is a better bet later in the day or in the evening. Tight enough that a smaller car helps — worth knowing before you commit to the turn.', lat:54.590009, lng:-5.921546, by:'Ciaran M · ParkEasy community', votes:1, photo:null, price:null, spaces:8, premium:true },
+  // Conway Mill, off the Falls Road — reported by Marty, 17 Aug 2026, as the
+  // parking for Atlas Gym and Jack Daniels Fitness inside the Mill.
+  //
+  // Coordinate is Apple Maps' own pin for Atlas Gym Belfast, shared from the
+  // place card: 54.599499, -5.951222. Cross-checked before use — 276m from
+  // Twin Spires on Northumberland Street (the adjacent cross-street between
+  // the Falls and the Shankill), 1.41km west of City Hall, 956m from the Red
+  // Devil further up the Falls. All three land where the Lower Falls should
+  // be, and nothing already sits within 80m.
+  //
+  // ONE spot, not two. Marty reports parking both inside the Mill and on
+  // Conway Street outside it, but the Mill's address IS 5-7 Conway Street, so
+  // a second pin would either duplicate this coordinate or be an invented
+  // offset. The street option is described in the notes instead.
+  //
+  // Free, confirmed by Marty 17 Aug. It went in badged 'official' while the
+  // tariff was unknown, because the two errors are not symmetrical — telling
+  // somebody a space is free when it is not earns them a ticket. Now that it
+  // is confirmed, 'free' is the honest badge and the one a driver needs to see.
+  { id:305, name:'Conway Mill car park', near:'Conway Street, off the Falls Road', tags:['conway mill','conway street','falls road','lower falls','west belfast','atlas gym','free parking','city centre walk'], badge:'free', dist:0.88, walk:'18 min', restriction:'Free', notes:'Free parking at Conway Mill on Conway Street, just off the Falls Road, serving the units inside the Mill including Atlas Gym. There is free on-street parking on Conway Street itself too. Handy for the Lower Falls, and about a 20-minute walk into the city centre.', lat:54.599499, lng:-5.951222, by:'ParkEasy', votes:0, photo:null, price:null, spaces:null },
   { id:66, name:'LORAG centre / Shaftesbury Rec kerbside', near:'Lower Ormeau / Gasworks', tags:['lorag','shaftesbury','lower ormeau','gasworks','south belfast','free parking','city centre walk'], badge:'hidden_gem', dist:0.30, walk:'8 min', restriction:'Free all day', notes:'Founder pick: free kerbside and community-centre parking around LORAG on the Lower Ormeau, beside the Gasworks. Park up and walk into the city centre in minutes — ideal on match and gig days.', lat:54.5900, lng:-5.9235, by:'ParkEasy', votes:0, photo:null, price:null, spaces:null, premium:true },
   { id:67, name:'Kennedy Centre car park', near:'Falls Road', tags:['kennedy centre','kennedy center','falls road','west belfast','ev charging','andersonstown','shopping centre','free parking'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Free customer car park at the Kennedy Centre on the Falls Road with EV charging points — a handy West Belfast charging stop while you shop. Community estimate on charger speed and availability.', lat:54.5943, lng:-5.9808, by:'WestBelfastLocal', votes:0, photo:null, price:null, spaces:400, ev:{available:true, ports:2, speed:'22kW'}, premium:true },
   { id:68, name:'Olympia Leisure Centre car park', near:'Olympia / Windsor Park', tags:['olympia','olympia leisure centre','boucher road','windsor park','national football stadium','linfield','south belfast','free parking','leisure centre','swimming'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Big free car park at Olympia Leisure Centre on Boucher Road, right beside Windsor Park. Plenty of room most of the day for the pool and gym. Fills fast before Northern Ireland and Linfield home games — get there early on match days or you will be circling Boucher.', lat:54.5817, lng:-5.9487, by:'ParkEasy', votes:0, photo:null, price:null, spaces:250 },
@@ -2214,10 +2234,13 @@ const TrustPanel = ({ onAddSpot }) => (
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 // Positions in the results list where a featured partner card appears. One
-// slot per partner we can show — six now that Jack Daniels Fitness is on.
+// slot per partner we can show — seven now that Tara Lodge is on.
 // Slots and the slice below both derive from this array's length, so adding a
-// partner without adding a slot silently drops them off the end.
-const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41];
+// partner without adding a slot silently drops them off the end. That has now
+// happened at four, five and six partners: the symptom is never an error, just
+// a business quietly missing from the app it was promised a place in. Add the
+// slot in the same commit as the partner, every time.
+const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41, 49];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot }) => {
@@ -2685,7 +2708,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       if (!isSupabaseEnabled || !cityCenter) { setPartnerDiag('partners: supabase disabled'); setCityPartners([]); return; }
       try {
         const { data, error } = await supabase.from('partners')
-          .select('id, slug, name, name_irish, tagline, description, logo_url, photo_url, photo_urls, link_url, links, is_online, address, postcode, contact_phone, lat, lng, radius_m, priority');
+          .select('id, slug, name, name_irish, tagline, description, logo_url, photo_url, photo_urls, link_url, links, is_online, address, postcode, contact_phone, lat, lng, radius_m, priority, geo_verified');
         if (!live) return;
         if (error) { setPartnerDiag(`partners: ERROR ${error.message}`); return; }
         if (!data?.length) { setPartnerDiag('partners: 0 rows visible (inactive or out of window?)'); return; }
@@ -4155,19 +4178,22 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
               No gym to drive to. Everything runs remotely, so there&rsquo;s nowhere to park and nothing to find.
             </p>
           </div>
-        ) : !partner.address ? (
+        ) : !partner.geo_verified ? (
           // A third case, between "online" and "we know where it is": a real
-          // premises whose address we have not confirmed yet. lat/lng are NOT
-          // NULL in the table, so a partner always HAS a coordinate — and
-          // drawing a map from a placeholder is how Gransha Grill ended up
-          // pinned 953 metres from its own front door, taking three parking
-          // spots with it. No address, no map. It appears by itself the moment
-          // the address is filled in.
+          // premises whose PIN is not confirmed. The test is the COORDINATE,
+          // not the address — those are different things, and conflating them
+          // nearly put Jack Daniels' map half a kilometre away on the strength
+          // of a confirmed address and a placeholder pin. lat/lng are NOT
+          // NULL, so a partner always HAS a coordinate; that is exactly why
+          // having one proves nothing. Drawing a map from an unverified pin is
+          // how Gransha Grill ended up 953 metres from its own front door,
+          // taking three parking spots with it.
           <div className="mt-5 rounded-2xl px-4 py-3.5" style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.12)'}}>
             <p className="font-display font-bold text-[14px] text-[#EAF1F8]">Parking map coming shortly</p>
             <p className="text-[12.5px] text-[#cdd9e8] mt-1 leading-relaxed">
-              We&rsquo;re confirming the exact address with {partner.name} before we show you where to park —
-              we&rsquo;d rather say nothing than send you to the wrong street.
+              {partner.address
+                ? <>We know where {partner.name} is — we&rsquo;re just pinning it to the metre before we show you where to park. We&rsquo;d rather say nothing than send you to the wrong street.</>
+                : <>We&rsquo;re confirming the exact address with {partner.name} before we show you where to park — we&rsquo;d rather say nothing than send you to the wrong street.</>}
             </p>
           </div>
         ) : (
@@ -4199,7 +4225,7 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
                 </span>
                 <span className="flex-shrink-0 text-right">
                   <span className="block text-[12px] font-bold text-[#5BE7DA]">{Math.max(1, Math.round(d / 80))} min walk</span>
-                  <span className="block text-[11px] text-[rgba(234,241,248,0.5)]">{s.price ? String(s.price).split('/')[0] : 'Free'}</span>
+                  <span className="block text-[11px] text-[rgba(234,241,248,0.5)]">{s.price ? String(s.price).split('/')[0] : (['free','hidden_gem'].includes(s.badge) ? 'Free' : 'Check signs')}</span>
                 </span>
               </button>
             ))}
@@ -4300,7 +4326,15 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
         {onOpenPartner && (
           <button onClick={(e)=>{ e.stopPropagation(); onOpenPartner(partner); }}
             className="mt-2.5 inline-flex items-center gap-1 text-[12px] font-bold text-[#5BE7DA] active:opacity-70">
-            See photos &amp; parking nearby<ChevronRight size={14}/>
+            {/* Don't offer parking we are about to admit we can't show. An
+                online partner has none to show, and one without a trusted pin
+                gets "map coming shortly" on the page this link opens — the
+                same gate the map and the nearby list already use, so all three
+                tell a driver the same story. */}
+            {(partner.is_online || !partner.geo_verified)
+              ? <>See photos &amp; details</>
+              : <>See photos &amp; parking nearby</>}
+            <ChevronRight size={14}/>
           </button>
         )}
         {partner.link_url && (
@@ -4311,10 +4345,11 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
           </a>
         )}
         {(() => {
-          // Same rule as the detail map: no confirmed address, no nearby-spots
-          // list. The coordinate exists because the column is NOT NULL, not
-          // because we know where the place is.
-          if (partner.is_online || !partner.address) return null;
+          // Same rule as the detail map, and the same correction: it is the
+          // PIN that has to be trusted, not the address. A nearby-spots list
+          // computed from an unverified coordinate is a list of the wrong
+          // streets, stated with total confidence.
+          if (partner.is_online || !partner.geo_verified) return null;
           const nearby = nearestSpotsTo(partner.lat, partner.lng, 3, Math.max(700, partner.radius_m || 900));
           if (!nearby.length) return null;
           return (
@@ -4324,7 +4359,7 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
                 const row = (
                   <span className="flex items-center justify-between gap-2 w-full">
                     <span className="text-[12.5px] text-[#cdd9e8] truncate">{s.name}</span>
-                    <span className="flex-shrink-0 text-[11px] text-[#5BE7DA] font-semibold">{Math.max(1, Math.round(d / 80))} min walk{s.price ? ` · ${String(s.price).split('/')[0]}` : ' · free'}</span>
+                    <span className="flex-shrink-0 text-[11px] text-[#5BE7DA] font-semibold">{Math.max(1, Math.round(d / 80))} min walk{s.price ? ` · ${String(s.price).split('/')[0]}` : (['free','hidden_gem'].includes(s.badge) ? ' · free' : '')}</span>
                   </span>
                 );
                 return onOpenSpot
