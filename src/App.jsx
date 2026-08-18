@@ -2382,13 +2382,23 @@ const TrustPanel = ({ onAddSpot }) => (
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 // Positions in the results list where a featured partner card appears. One
-// slot per partner we can show — seven now that Tara Lodge is on.
+// slot per partner we can show — eight now that Aaron Quinn Hair is on.
 // Slots and the slice below both derive from this array's length, so adding a
 // partner without adding a slot silently drops them off the end. That has now
-// happened at four, five and six partners: the symptom is never an error, just
+// happened at four, five, six and seven partners: never an error, just
 // a business quietly missing from the app it was promised a place in. Add the
 // slot in the same commit as the partner, every time.
-const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41, 49];
+//
+// EVERY SLOT MUST FALL INSIDE THE FIRST PAGE. PAGE is 40, so the previous
+// spacing — which ran to 57 — put the seventh and eighth partners behind two
+// taps of "show more". Nobody taps twice. They were not dropped, which is why
+// nothing looked wrong; they were simply never reached, which is the same
+// outcome for the business.
+//
+// Gaps widen early and tighten late (7,7,6,5,4,4,4) rather than spreading
+// evenly. Attention decays down a list, so the space is worth more at the top;
+// four cards between adverts at position 35 costs less than it would at 5.
+const PARTNER_SLOTS = [2, 9, 16, 22, 27, 31, 35, 39];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
