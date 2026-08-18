@@ -2898,13 +2898,27 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // Partners split by whether they belong to the category being shown. The
   // matching ones lead the page; everyone else keeps the normal interleaved
   // slots, so a category never costs an unrelated partner its placement.
+  // THE FEATURED PARTNER: whoever sits top of the priority order, given a
+  // block of their own on the landing screen rather than a slot buried in the
+  // results. Data-driven, not hardcoded — it follows the partner order in the
+  // database, so promoting somebody is a priority change and not a code change.
+  //
+  // Landing only. A featured card on top of somebody's own search results is
+  // an advert interrupting an answer, which is the same rule the featured
+  // bookable space already follows.
+  const featuredPartner = (!isSearching && cityPartners[0]) || null;
+
   const [leadPartners, restPartners] = useMemo(() => {
     const [lead, rest] = splitPartnersByCategory(cityPartners, activeCat, geo);
     // Every partner that belongs to this category leads it, however many that
     // is — being seventh overall says nothing about being the best answer to
     // "gyms". The leftovers are what the interleaved slots were sized for.
-    return [lead, rest.slice(0, PARTNER_SLOTS.length)];
-  }, [cityPartners, activeCat, geo?.lat, geo?.lng]);
+    // Never twice on one screen. The featured block above already shows the
+    // top partner on the landing state, so they must not also turn up in the
+    // interleaved slots a few cards further down.
+    const withoutFeatured = featuredPartner ? rest.filter(p => p.id !== featuredPartner.id) : rest;
+    return [lead, withoutFeatured.slice(0, PARTNER_SLOTS.length)];
+  }, [cityPartners, activeCat, geo?.lat, geo?.lng, featuredPartner?.id]);
   const activeCatTitle = activeCat ? CATEGORIES.find(c => c.id === activeCat)?.title : null;
 
 
@@ -3025,6 +3039,19 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         {!isSearching && (
           <div className="pt-3">
             <CategoryGrid isPremium={isPremium} cityName={cityName} onSelect={onCategory}/>
+          </div>
+        )}
+        {/* The featured partner, first thing under the browse grid.
+            Marty's call, and a reasonable one: a business that has agreed to
+            put ParkEasy in front of its own customers should not be at result
+            twelve. It sits BELOW the search box and the categories on purpose
+            though — the driver's own errand comes first, and an advert above
+            the search field would undo the work of moving that field up. */}
+        {featuredPartner && (
+          <div className="px-4 pt-3">
+            <PartnerCard partner={featuredPartner} listingId={null}
+              eyebrow={`Featured partner · ${cityName}`}
+              onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
           </div>
         )}
         {/* Above the how-it-works and Premium cards: this is a bookable space
