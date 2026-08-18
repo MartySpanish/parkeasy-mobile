@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>List your car park — ParkEasy</title>
+<meta name="description" content="Clubs, churches and schools across Northern Ireland are renting out their empty car parks. You set the price and the hours, you keep 85%, and it costs nothing to list.">
+<link rel="canonical" href="https://parkeasy.uk/hosts">
+<meta property="og:title" content="Your empty car park could fund your club">
+<meta property="og:description" content="Free to list. You keep 85%. Drivers pay by card before they arrive.">
+<meta property="og:url" content="https://parkeasy.uk/hosts">
+<meta property="og:image" content="https://parkeasy.uk/og-image.png">
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap">
+<style>
+  /* Brand values lifted from src/theme/tokens.js and src/index.css so this page
+     and the app cannot drift apart. Manrope only — the app deliberately runs a
+     single family. */
+  :root{
+    --bg:#0a111e; --sheet:#0d1626; --surface:#111d31; --hairline:rgba(255,255,255,0.10);
+    --ink:#EAF1F8; --muted:#aebfd4; --faint:#6b7d96;
+    --teal:#2ED3C6; --teal-lt:#5BE7DA; --teal-ink:#06231f;
+    --green:#34E0A0; --amber:#FFC24B;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:Manrope,system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--teal-lt)}
+  .wrap{max-width:680px; margin:0 auto; padding:0 20px}
+  h1,h2,h3{margin:0; letter-spacing:-.02em; text-wrap:balance; font-weight:800}
+
+  header.top{border-bottom:1px solid var(--hairline); background:var(--sheet)}
+  header.top .wrap{display:flex; align-items:center; gap:12px; padding-top:14px; padding-bottom:14px}
+  .brand{display:flex; align-items:center; gap:9px; font-weight:800; font-size:17px; color:var(--ink); text-decoration:none}
+  .brand span.dot{
+    width:28px; height:28px; border-radius:9px; flex-shrink:0;
+    background:linear-gradient(135deg,var(--teal-lt),var(--teal));
+    display:inline-flex; align-items:center; justify-content:center; color:var(--teal-ink); font-size:15px
+  }
+  .top a.back{margin-left:auto; font-size:13.5px; font-weight:700; text-decoration:none}
+
+  .hero{padding:44px 0 34px}
+  .kicker{
+    font-size:11.5px; font-weight:800; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--teal-lt); margin:0 0 12px
+  }
+  .hero h1{font-size:clamp(30px,7.4vw,44px); line-height:1.08}
+  .hero p.lede{font-size:17px; color:var(--muted); margin:16px 0 0}
+  .cta{
+    display:inline-block; margin-top:22px; background:linear-gradient(135deg,var(--teal-lt),var(--teal));
+    color:var(--teal-ink); font-weight:800; font-size:15.5px; padding:14px 24px;
+    border-radius:14px; text-decoration:none; min-height:48px
+  }
+  .cta.ghost{background:none; border:1px solid var(--hairline); color:var(--ink); margin-left:8px}
+
+  section{padding:34px 0; border-top:1px solid var(--hairline)}
+  section h2{font-size:clamp(21px,4.6vw,27px); line-height:1.15}
+  section p{color:var(--muted); margin:12px 0 0}
+
+  /* calculator */
+  .calc{background:var(--surface); border:1px solid var(--hairline); border-radius:20px; padding:20px; margin-top:20px}
+  .field{margin-bottom:18px}
+  .field:last-of-type{margin-bottom:6px}
+  .field label{display:flex; justify-content:space-between; align-items:baseline; font-size:13.5px; font-weight:700; margin-bottom:9px}
+  .field label b{color:var(--teal-lt); font-size:15px}
+  input[type=range]{width:100%; accent-color:var(--teal); height:34px}
+  .result{
+    margin-top:18px; padding:18px; border-radius:16px; text-align:center;
+    background:rgba(46,211,198,0.10); border:1px solid rgba(91,231,218,0.30)
+  }
+  .result .big{font-size:clamp(30px,8vw,42px); font-weight:800; color:var(--teal-lt); letter-spacing:-.03em; line-height:1.1}
+  .result .lab{font-size:13px; color:var(--muted); margin-top:6px}
+  .result .split{font-size:12.5px; color:var(--faint); margin-top:10px; padding-top:10px; border-top:1px solid var(--hairline)}
+  .calc .note{font-size:12px; color:var(--faint); margin-top:12px; line-height:1.5}
+
+  ul.facts{list-style:none; padding:0; margin:20px 0 0; display:grid; gap:12px}
+  ul.facts li{
+    background:var(--surface); border:1px solid var(--hairline); border-radius:14px;
+    padding:14px 16px; font-size:14.5px
+  }
+  ul.facts b{display:block; color:var(--ink); font-weight:800; margin-bottom:3px}
+  ul.facts span{color:var(--muted); font-size:13.5px}
+
+  details{border-bottom:1px solid var(--hairline); padding:15px 0}
+  details:first-of-type{border-top:1px solid var(--hairline)}
+  summary{cursor:pointer; font-weight:700; font-size:15px; list-style:none; display:flex; gap:10px; align-items:flex-start}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:'+'; color:var(--teal-lt); font-weight:800; flex-shrink:0}
+  details[open] summary::before{content:'–'}
+  details p{font-size:14.5px; margin-top:10px}
+
+  form{margin-top:20px; display:grid; gap:14px}
+  form label{font-size:13px; font-weight:700; display:block; margin-bottom:6px}
+  input[type=text],input[type=email],input[type=tel],input[type=number]{
+    width:100%; padding:13px 14px; border-radius:13px; font-size:16px; font-family:inherit;
+    background:rgba(255,255,255,0.05); border:1px solid var(--hairline); color:var(--ink); min-height:48px
+  }
+  input:focus{outline:2px solid var(--teal); outline-offset:1px}
+  .row{display:grid; gap:14px}
+  @media(min-width:560px){ .row{grid-template-columns:1fr 1fr} }
+  button.submit{
+    background:linear-gradient(135deg,var(--teal-lt),var(--teal)); color:var(--teal-ink);
+    font-weight:800; font-size:15.5px; padding:15px; border:0; border-radius:14px; cursor:pointer;
+    font-family:inherit; min-height:50px
+  }
+  button.submit:disabled{opacity:.55; cursor:default}
+  .msg{font-size:14px; padding:13px 15px; border-radius:13px; display:none}
+  .msg.ok{display:block; background:rgba(52,224,160,0.12); border:1px solid rgba(52,224,160,0.35); color:var(--green)}
+  .msg.err{display:block; background:rgba(255,194,75,0.12); border:1px solid rgba(255,194,75,0.35); color:var(--amber)}
+  .small{font-size:12.5px; color:var(--faint); line-height:1.55}
+
+  footer{border-top:1px solid var(--hairline); padding:26px 0 44px; margin-top:10px}
+  footer p{font-size:12.5px; color:var(--faint); margin:0 0 8px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><span class="dot">P</span>ParkEasy</a>
+    <a class="back" href="/">Find parking →</a>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <p class="kicker">For clubs, churches &amp; schools</p>
+    <h1>Your empty car park could fund your club.</h1>
+    <p class="lede">
+      Most club car parks sit empty six days a week. ParkEasy lets drivers book and pay
+      for a space before they travel — you set the price and the hours, and you keep 85%
+      of every booking. It costs nothing to list.
+    </p>
+    <a class="cta" href="#signup">Talk to us about listing</a>
+    <a class="cta ghost" href="#calculator">See what it could raise</a>
+  </div>
+
+  <section id="calculator">
+    <h2>What could it raise?</h2>
+    <p>Drag the three sliders. This is an estimate, not a quote — real income depends on
+      how often your spaces actually sell.</p>
+
+    <div class="calc">
+      <div class="field">
+        <label for="spaces">Spaces you'd release <b><span id="spacesV">20</span></b></label>
+        <input type="range" id="spaces" min="1" max="150" value="20" step="1">
+      </div>
+      <div class="field">
+        <label for="events">Days or events you'd open per week <b><span id="eventsV">2</span></b></label>
+        <input type="range" id="events" min="1" max="7" value="2" step="1">
+      </div>
+      <div class="field">
+        <label for="price">Price per space <b>£<span id="priceV">5</span></b></label>
+        <input type="range" id="price" min="2" max="25" value="5" step="1">
+      </div>
+
+      <div class="result">
+        <div class="big" id="net">£8,840</div>
+        <div class="lab">to your club per year, after our 15%</div>
+        <div class="split" id="split">
+          Drivers pay £10,400 · ParkEasy keeps £1,560 · you keep £8,840
+        </div>
+      </div>
+
+      <p class="note">
+        Assumes every space sells every time you open, 52 weeks a year — so treat it as a
+        ceiling, not a forecast. A club opening 20 spaces for two matchdays a week at £5
+        is the middle of the range we'd expect.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works for you</h2>
+    <ul class="facts">
+      <li><b>You keep 85%</b><span>ParkEasy keeps 15% of the space price. There's no listing fee, no monthly fee and no minimum.</span></li>
+      <li><b>Free to list</b><span>You tell us the spaces, the hours and the price. You can pause or come off at any time.</span></li>
+      <li><b>No cash at the gate</b><span>Drivers pay by card when they book, before they leave home. Nobody on your committee handles money.</span></li>
+      <li><b>You set the hours</b><span>Only the days and times you choose are bookable. Nobody can book your car park during your own fixtures.</span></li>
+      <li><b>Paid straight to your account</b><span>Payouts go through Stripe to the club's bank account. No invoicing us, no chasing.</span></li>
+      <li><b>Somebody still opens up</b><span>Being straight with you: if your car park is gated, someone has to unlock it. We only sell slots with enough notice for that to be arranged.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>The questions committees actually ask</h2>
+
+    <details>
+      <summary>What about insurance and liability?</summary>
+      <p>Drivers park at their own risk, and that's stated in our terms and shown at
+      checkout — ParkEasy doesn't insure vehicles or the ground itself. What we do is take
+      the payment, hold the booking and keep a record of who booked which slot and when.</p>
+      <p><strong>Tell your own insurer before you list.</strong> Most policies are fine with
+      occasional paid parking, but it's a five-minute call and it's your committee's call to
+      make, not ours. We'd rather you asked and were sure.</p>
+    </details>
+
+    <details>
+      <summary>Is it worth it for only a few spaces?</summary>
+      <p>Ten spaces at £5, opened two days a week, is around <strong>£4,400 a year</strong> to
+      the club at 85% — for tarmac that was sitting empty. Small car parks near a busy
+      destination often do better than big ones in the middle of nowhere, because what a
+      driver is paying for is the walk.</p>
+    </details>
+
+    <details>
+      <summary>What if a driver overstays or parks badly?</summary>
+      <p>Every booking has a start and end time and the driver's registration, so you know
+      whose car it is. Tell us and we'll deal with the driver directly — you shouldn't be
+      chasing anyone. We can also block a driver from booking your site again.</p>
+      <p>We don't clamp, and we don't run enforcement. If that matters to your site, say so
+      when you get in touch and we'll be honest about whether we're a fit.</p>
+    </details>
+
+    <details>
+      <summary>How does the money actually reach us?</summary>
+      <p>The driver pays ParkEasy by card. Your share is paid out through Stripe to the
+      club's own bank account — you'll set that up once, and it takes about ten minutes with
+      your bank details and one committee member's ID.</p>
+    </details>
+
+    <details>
+      <summary>How much work is this for the committee?</summary>
+      <p>Setting up is one conversation and one form. After that you get an email when a
+      booking is made, telling you the date, the time and how many cars. If your site is
+      gated, that email is your cue to make sure it's open.</p>
+      <p>You're not staffing anything, not taking money and not marshalling cars.</p>
+    </details>
+
+    <details>
+      <summary>Can we try it for one event first?</summary>
+      <p>Yes, and honestly that's how we'd rather start. Put one matchday or one Saturday up,
+      see how it goes, and decide after. There's nothing to cancel if you'd rather not
+      continue.</p>
+    </details>
+  </section>
+
+  <section id="signup">
+    <h2>Tell us about your car park</h2>
+    <p>No commitment — this just starts a conversation. Marty reads every one of these
+      himself and comes back within a day or two.</p>
+
+    <form id="hostForm" novalidate>
+      <div class="row">
+        <div>
+          <label for="name">Your name</label>
+          <input type="text" id="name" name="name" autocomplete="name" required>
+        </div>
+        <div>
+          <label for="org">Club, church or school</label>
+          <input type="text" id="org" name="org" autocomplete="organization" required>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="postcode">Postcode of the car park</label>
+          <input type="text" id="postcode" name="postcode" autocomplete="postal-code" required>
+        </div>
+        <div>
+          <label for="spacesN">Roughly how many spaces?</label>
+          <input type="number" id="spacesN" name="spaces" min="1" max="2000" inputmode="numeric">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" autocomplete="email" required>
+        </div>
+        <div>
+          <label for="phone">Phone</label>
+          <input type="tel" id="phone" name="phone" autocomplete="tel">
+        </div>
+      </div>
+      <button class="submit" type="submit" id="send">Send this to Marty</button>
+      <div class="msg" id="msg" role="status"></div>
+      <p class="small">
+        We'll only use these details to talk to you about listing your car park. Nothing
+        else, and nobody else gets them.
+      </p>
+    </form>
+  </section>
+
+  <section>
+    <h2>The agreement</h2>
+    <p>It's one page. It covers what you're offering, the hours, the price, the 85% split
+      and how either side ends it. Nothing is signed until you've read it and you're happy.</p>
+    <p class="small" style="margin-top:14px">
+      <!-- PLACEHOLDER. The signed Davitt Park and Belfast Royal Academy licences exist as
+           PDFs but are specific to those clubs and carry their details. A blank template
+           needs to be produced and dropped in at /host-agreement.pdf before this becomes a
+           link — inventing one here would put unreviewed terms in front of a committee. -->
+      A blank copy is on its way — ask for it when you get in touch and we'll send it over.
+    </p>
+  </section>
+
+  <section>
+    <h2>Who's behind this</h2>
+    <p>ParkEasy is built in Belfast and run by Marty Rooney. It's new — almost 500 members
+      have signed up so far, and we're growing the number of car parks people can actually
+      book. Being early means your site gets seen by everyone looking in your area.</p>
+    <p style="margin-top:16px"><a class="cta" href="#signup">Start the conversation</a></p>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <p>ParkEasy · parkeasy.uk · <a href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a></p>
+    <p>Figures on this page are estimates to help you think it through, not an offer or a
+      guarantee of income.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // ── Calculator ──────────────────────────────────────────────────────────
+  // spaces × open days per week × 52 × price = what drivers pay in a year.
+  // The club keeps 85%. Deliberately shows all three numbers rather than just
+  // the happy one: a treasurer who finds out about the 15% later is a
+  // treasurer who stops trusting the rest of the page.
+  var HOST_SHARE = 0.85;
+  var el = function (id) { return document.getElementById(id); };
+  var gbp = function (n) { return '£' + Math.round(n).toLocaleString('en-GB'); };
+
+  function recalc() {
+    var spaces = +el('spaces').value, events = +el('events').value, price = +el('price').value;
+    el('spacesV').textContent = spaces;
+    el('eventsV').textContent = events;
+    el('priceV').textContent = price;
+    var gross = spaces * events * 52 * price;
+    var net = gross * HOST_SHARE;
+    el('net').textContent = gbp(net);
+    el('split').textContent =
+      'Drivers pay ' + gbp(gross) + ' · ParkEasy keeps ' + gbp(gross - net) + ' · you keep ' + gbp(net);
+  }
+  ['spaces', 'events', 'price'].forEach(function (id) {
+    el(id).addEventListener('input', recalc);
+  });
+  recalc();
+
+  // ── Form ────────────────────────────────────────────────────────────────
+  // Posts to /api/notify, which emails CONTACT_EMAIL through Resend — the same
+  // route the in-app enquiry and spot-submission forms already use, so there is
+  // no new service to configure or pay for.
+  var form = el('hostForm'), msg = el('msg'), btn = el('send');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var d = {
+      name: el('name').value.trim(), org: el('org').value.trim(),
+      postcode: el('postcode').value.trim(), spaces: el('spacesN').value.trim(),
+      email: el('email').value.trim(), phone: el('phone').value.trim()
+    };
+    if (!d.name || !d.org || !d.postcode || !d.email) {
+      msg.className = 'msg err';
+      msg.textContent = 'Please fill in your name, organisation, postcode and email.';
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Sending…';
+    msg.className = 'msg'; msg.textContent = '';
+    fetch('/api/notify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'host', data: d })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('send failed');
+      msg.className = 'msg ok';
+      msg.textContent = 'Got it — thanks. Marty will come back to you within a day or two.';
+      form.reset(); recalc();
+      btn.textContent = 'Sent';
+    }).catch(function () {
+      // Never a dead end: give them the address so the lead is not lost.
+      msg.className = 'msg err';
+      msg.innerHTML = 'That did not send. Please email <a href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a> and we will pick it up.';
+      btn.disabled = false; btn.textContent = 'Try again';
+    });
+  });
+})();
+</script>
+</body>
+</html>
