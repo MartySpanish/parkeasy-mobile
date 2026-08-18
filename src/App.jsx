@@ -16,6 +16,7 @@ import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
+import { trackSearch, trackSpotOpen, trackDirections, trackSignup } from './funnel';
 import { paymentError } from './errors';
 import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
 import { splitPartnersByCategory } from './data/partnerCategories';
@@ -764,6 +765,22 @@ const InUseBadge = ({ spot }) => {
   );
 };
 
+// A car park run by an operator we have a deal with.
+//
+// Says PARTNER and nothing more. Not "book here", not "discount" — the APCOA
+// listings are still drafts with no agreed price and no discounted booking
+// link, so any badge implying either would be selling something that does not
+// exist yet. When the link lands, this is where it goes.
+const PartnerOperatorBadge = ({ spot }) => {
+  if (!spot.partner) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
+      style={{color:'#5BE7DA',border:'1px solid rgba(91,231,218,0.35)',background:'rgba(91,231,218,0.10)'}}>
+      <Star size={10} className="flex-shrink-0"/>ParkEasy partner
+    </span>
+  );
+};
+
 const FreeNowBadge = ({ spot }) => {
   if (spot.badge === 'official') return null;
   if (!isSpotFree(spot) && isFreeNow(spot)) return <span className="inline-flex items-center text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap" style={{color:'#34E0A0',border:'1px solid rgba(52,224,160,0.35)',background:'rgba(52,224,160,0.10)'}}>Free right now</span>;
@@ -1499,7 +1516,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
         <div className="overflow-auto p-5" style={{maxHeight:'calc(92vh - 112px)'}}>
           <h2 className="font-display font-bold text-2xl text-[#EAF1F8] leading-tight">{spot.name}</h2>
           <div className="flex items-center gap-1.5 mt-1.5 text-sm text-[rgba(234,241,248,0.55)]"><MapPin size={14}/>{spot.near}</div>
-          <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/><InUseBadge spot={spot}/></div>
+          <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/><PartnerOperatorBadge spot={spot}/><InUseBadge spot={spot}/></div>
           <div className="flex items-center gap-4 mt-4 p-4 rounded-2xl bg-white/5 border border-white/10">
             <div className="relative w-16 h-16 flex-shrink-0">
               <svg width="64" height="64" viewBox="0 0 64 64">
@@ -1560,6 +1577,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
           )}
           <div className={`flex gap-3 ${bookableListing ? 'mt-3' : 'mt-5'}`}>
             <a href={directionsUrl(spot.lat,spot.lng)} target="_blank" rel="noreferrer"
+              onClick={()=>trackDirections(spot.badge)}
               className={`flex-1 py-3.5 rounded-2xl flex items-center justify-center gap-2 font-display font-bold active:scale-95 transition ${
                 bookableListing ? 'bg-white/8 border border-white/15 text-[#EAF1F8]' : 'text-[#06231f] btn-teal'}`}>
               <Navigation size={18}/>Get directions
@@ -2320,7 +2338,7 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
           </span>
         </div>
       </div>
-      <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/><InUseBadge spot={spot}/></div>
+      <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/><PartnerOperatorBadge spot={spot}/><InUseBadge spot={spot}/></div>
       <div className="flex items-center gap-2.5 mt-3">
         <div className="flex-1 h-[7px] rounded-full bg-white/10 overflow-hidden"><div style={{width:`${Math.round(occ.pct*100)}%`,background:occ.grad}} className="h-full rounded-full"/></div>
         <span className={`text-[12px] font-bold whitespace-nowrap ${occCls}`}>{occ.label}</span>
@@ -2403,7 +2421,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     if (geo) { const c = nearestCity(geo.lat, geo.lng); if (c) onCityDetected?.(c.id); }
     // The app has just answered the question it was opened for. That — and
     // only that — is when it has earned the right to ask for an account.
-    if (geo) onSearched?.();
+    if (geo) { onSearched?.(); trackSearch(geo.via || 'search'); }
   }, [geo]);
 
   const viewOnMap = (spot) => {
@@ -6833,6 +6851,10 @@ export default function App() {
   // beside a result rather than in front of one.
   const [searchedOnce,  setSearchedOnce]  = useState(false);
   const [nudgeDone,     setNudgeDone]     = useState(false);
+  // Every route into the spot sheet goes through here — list tap, map pin,
+  // event overlay, partner card, deep link — so the open is counted once and
+  // in one place. Closing passes null and is deliberately not an open.
+  const openSpot = useCallback((sp) => { if (sp) trackSpotOpen(sp.badge); setDetailSpot(sp); }, []);
   const [showUserMenu,  setShowUserMenu]  = useState(false);
   const [showBizModal,  setShowBizModal]  = useState(false);
   // Premium is either lifetime/subscription (pe_premium) or time-limited
@@ -6854,7 +6876,7 @@ export default function App() {
       const sp = ALL_SPOTS.find(x => x.id === +m[1]);
       if (sp) {
         if (!isPremium && isGated(sp)) setShowPricing(true);
-        else setDetailSpot(sp);
+        else openSpot(sp);
       }
     }
   }, []);
@@ -7242,6 +7264,7 @@ export default function App() {
   const setAuthNudge = (v) => { if (!v) setNudgeDone(true); };
 
   const handleJoin = (userData) => {
+    trackSignup(searchedOnce ? 'after-search' : 'header');
     setUser(userData);
     ls.set('pe_user', userData);
     setShowWelcome(false);
@@ -7406,8 +7429,8 @@ export default function App() {
         </div>
       )}
       {detailPartner && <PartnerDetail partner={detailPartner} onClose={()=>setDetailPartner(null)}
-        onOpenSpot={(sp)=>{ setDetailPartner(null); setDetailSpot(sp); }}/>}
-      {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={setDetailSpot} bookableSpots={rentalSpots}/>}
+        onOpenSpot={(sp)=>{ setDetailPartner(null); openSpot(sp); }}/>}
+      {showEvent && <EventOverlay onClose={()=>setShowEvent(false)} saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>{setShowEvent(false);setShowPricing(true);}} onOpenSpot={openSpot} bookableSpots={rentalSpots}/>}
       {/* renderSpot is a render-prop rather than an import so the events screen
           never has to know about SpotCard, isGated, the paywall or saved state —
           it asks for "the app's card for this spot" and gets the real one,
@@ -7573,8 +7596,8 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
-        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
+        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}

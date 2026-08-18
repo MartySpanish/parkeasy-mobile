@@ -35,14 +35,20 @@ export const TIER = {
   BOOKABLE: 1,      // our hosts — 15% commission
   PREMIUM_GEM: 2,   // behind the paywall — drives subscriptions
   COMMUNITY: 3,     // free spots people come here for
-  THIRD_PARTY: 4,   // operator car parks we earn nothing from
+  PARTNER: 4,       // operators we have a deal with — paid, but ours
+  THIRD_PARTY: 5,   // operator car parks we earn nothing from
 };
 
+// PARTNER sits BELOW the free spots on purpose. A £4.70/hr multi-storey is not
+// a better answer for a driver than a free bay two streets away, and the free
+// spots are what this app ranks #1 for. Being a partner earns a promotion out
+// of "other car parks nearby" — it does not buy the top of the list.
 export const TIER_LABEL = {
   1: 'Book & reserve',
   2: 'Premium picks',
   3: 'Free & community spots',
-  4: 'Other car parks nearby',
+  4: 'Partner car parks',
+  5: 'Other car parks nearby',
 };
 
 /**
@@ -58,6 +64,18 @@ export const TIER_LABEL = {
 export function tierOf(spot, isGated) {
   if (spot.rental && spot.listing) return TIER.BOOKABLE;
   if (isGated?.(spot)) return TIER.PREMIUM_GEM;
+  // A PARTNER IS NOT A THIRD PARTY.
+  //
+  // The regex below demotes operator car parks on the reasoning in TIER's own
+  // comment: "operator car parks we earn nothing from". That reasoning stopped
+  // being true for APCOA the day a commercial partnership was agreed, and the
+  // rule was still sorting them beneath every free spot on the map — ranking a
+  // partner as a competitor because their name matched a pattern written
+  // before the deal existed.
+  //
+  // The flag beats the name, in both directions: a partner is never demoted by
+  // the regex, and a non-partner operator still is, however it is spelled.
+  if (spot.partner) return TIER.PARTNER;
   if (THIRD_PARTY.test(spot.name || '')) return TIER.THIRD_PARTY;
   return TIER.COMMUNITY;
 }
