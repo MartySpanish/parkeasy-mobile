@@ -2373,7 +2373,7 @@ const TrustPanel = ({ onAddSpot }) => (
 const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41, 49];
 
 
-const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot }) => {
+const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -2401,6 +2401,9 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // nearest NI town so the header + browse context follow the search.
   useEffect(() => {
     if (geo) { const c = nearestCity(geo.lat, geo.lng); if (c) onCityDetected?.(c.id); }
+    // The app has just answered the question it was opened for. That — and
+    // only that — is when it has earned the right to ask for an account.
+    if (geo) onSearched?.();
   }, [geo]);
 
   const viewOnMap = (spot) => {
@@ -2737,18 +2740,24 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           standing on a street, and it was previously invisible unless you
           happened to open Nearby. Paired with a search button so desktop has
           something to click and Enter still works. */}
+      {/* ONE button, not two of equal weight.
+          "Use my location" and "Search parking" sat side by side in the same
+          size, which is two primary actions and therefore none. Location is
+          the faster route to an answer for somebody already in the car, so it
+          takes the full width; search stays reachable as a compact icon and on
+          Enter, which is what the keyboard's Go key does anyway. */}
       <div className="flex gap-2">
         <button onClick={locateMe} disabled={geoBusy}
           aria-label="Use my location to find parking near me"
-          className="flex-1 min-h-[44px] flex items-center justify-center gap-2 rounded-2xl text-[13px] font-bold text-[#06231f] btn-teal active:scale-[0.985] transition disabled:opacity-60">
+          className="flex-1 min-h-[48px] flex items-center justify-center gap-2 rounded-2xl text-[14px] font-bold text-[#06231f] btn-teal active:scale-[0.985] transition disabled:opacity-60">
           {geoBusy
             ? <><span className="w-4 h-4 border-2 border-[#06231f]/30 border-t-[#06231f] rounded-full animate-spin"/>Finding you…</>
-            : <><Crosshair size={16}/>Use my location</>}
+            : <><Crosshair size={17}/>Use my location</>}
         </button>
         <button onClick={()=>doSearch(query)} disabled={!query.trim() || geoBusy}
           aria-label="Search parking"
-          className="min-h-[44px] px-4 flex items-center justify-center gap-2 rounded-2xl text-[13px] font-bold bg-white/8 border border-white/15 text-[#EAF1F8] active:scale-[0.985] transition disabled:opacity-40">
-          <Search size={16}/><span className="hidden min-[380px]:inline">Search parking</span>
+          className="min-h-[48px] w-[48px] flex-shrink-0 flex items-center justify-center rounded-2xl bg-white/8 border border-white/15 text-[#EAF1F8] active:scale-[0.985] transition disabled:opacity-30">
+          <Search size={17}/>
         </button>
       </div>
       {locErr && (
@@ -2757,6 +2766,14 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           {locErr}
         </div>
       )}
+      {/* Filters belong on results, not on a landing page.
+          Five chips before a single spot is a decision with no information
+          behind it — and they sat between the search box and the categories,
+          pushing the first parking space further down the one screen that
+          matters. Once somebody has searched they mean something, so that is
+          when they appear. The chips also remain visible while a filter is
+          active, so there is always a way back to "All". */}
+      {(isSearching || badgeFilter !== 'all' || evOnly) && (
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4">
         {BADGE_FILTERS.map(f => (
           <button key={f.id} onClick={()=>setBadgeFilter(f.id)}
@@ -2766,6 +2783,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           </button>
         ))}
       </div>
+      )}
       {/* Directly under the chips, not down beside the results. The first
           version sat next to the "588 spots" header, which put it below the
           hero, the how-it-works card and the Premium promo — you had to scroll
@@ -2899,6 +2917,9 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     // Counted from the live network, never typed in: a hard-coded number is
     // wrong the first time anybody adds a spot.
     const gemCount = (networkSpots || []).filter(s => s.badge === 'hidden_gem').length;
+    // Counted, never typed. An inflated number is the one thing a stranger can
+    // catch you out on, and this one is in the headline's supporting line.
+    const spotTotal = (networkSpots || []).length;
     // Same test the booking button uses, so the promise and the button agree.
     const hasBookable = (networkSpots || []).some(s => s.rental && s.listing
       && (Number(s.listing.price_per_hour) > 0 || Number(s.listing.price_per_day) > 0));
@@ -2906,7 +2927,18 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       <div className="pb-6 pt-2">
         <div className="px-4 pb-3">
           <p className="font-display text-[12px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">{CITIES.find(c=>c.name===cityName)?.region || 'Northern Ireland'}</p>
-          <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">Find parking across Northern Ireland</h1>
+          {/* "Find parking across Northern Ireland" named a category. It did
+              not make a promise, and it did not say anything a directory
+              could not say. This is the thing a driver actually wants, and
+              741 mapped spots can keep it today — unlike "book a guaranteed
+              space", which has been bought twice in the product's life. */}
+          <h1 className="font-display font-extrabold text-[30px] text-[#EAF1F8] leading-tight mt-0.5">
+            Know where you&rsquo;re parking before you leave the house
+          </h1>
+          <p className="text-[13.5px] text-[rgba(234,241,248,0.66)] leading-relaxed mt-2">
+            {spotTotal} spots across Northern Ireland &mdash; the free ones, the cheap ones, and{' '}
+            <strong className="text-[#EAF1F8]">{gemCount} hidden gems</strong> locals told us about.
+          </p>
           {/* The generic subtitle — "Compare nearby car parks, street parking,
               free spots and local parking tips" — is gone. It said the same
               thing as the strip below it and as the trust row below that:
@@ -2923,32 +2955,44 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               nothing is bookable this quietly drops to three items rather than
               advertising something that ends at a dead end — the same rule the
               pre-rendered homepage follows. */}
-          <div className="pe-offer-grid mt-3.5" style={{display:'grid', gap:'8px'}}>
-            {[
-              [Sparkles, `${gemCount} hidden gems`, 'the free spots locals keep quiet'],
-              [Receipt,  'Prices and rules',        'checked before you leave the house'],
-              ...(hasBookable ? [[Key, 'Book a private space', 'reserved, and held when you arrive']] : []),
-              [Building2, 'Rent out your space',    'a driveway or a car park — keep 85%'],
-            ].map(([Ic, title, sub], i) => (
-              <span key={i} className="flex items-start gap-2">
-                <Ic size={14} className="text-[#5BE7DA] flex-shrink-0 mt-[3px]"/>
-                <span className="min-w-0">
-                  <span className="block text-[12.5px] font-bold text-[#EAF1F8] leading-tight">{title}</span>
-                  <span className="block text-[11.5px] text-[rgba(234,241,248,0.5)] leading-snug mt-0.5">{sub}</span>
-                </span>
-              </span>
-            ))}
-          </div>
-          {/* Was "Live prices & rules". We do not have live prices or live
-              availability — the occupancy figure on a spot says "community
-              estimate" in the app's own words. Claiming otherwise is the kind
-              of thing a driver only discovers at a full car park. */}
+          {/* The three-item offer grid that used to sit here is gone. It said
+              "89 hidden gems" directly under a subhead that already said
+              "89 hidden gems", which is the exact duplication the comment on
+              this block once warned about — three versions of one idea inside
+              100 pixels, at the top of the page paid traffic lands on. The
+              stat line above says it once; the trust row below answers the
+              objections; and the search box moves ~140px up the screen, which
+              is the only thing this space is really for.
+
+              "Rent out your space" moved out with it. Hosts are a real
+              audience but not this driver's errand, and the route survives in
+              the Spaces tab and further down the page. */}
+          {/* The three objections that stop a first search — cost, signup,
+              reliability — answered before the search box rather than in a
+              panel at the bottom of the page. "No account needed" is new and
+              is the one that matters: the app used to open behind a signup
+              form, so saying it out loud is worth more than any other badge
+              here. */}
           <div className="flex flex-wrap gap-x-3.5 gap-y-1 mt-2.5">
-            {[[Check,'Free to use'],[Star,'Community-verified'],[Receipt,'Prices & rules from drivers']].map(([Ic,label],i)=>(
+            {[[Check,'Free to use'],[User,'No account needed'],[Star,'Checked by drivers who park there']].map(([Ic,label],i)=>(
               <span key={i} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[rgba(234,241,248,0.6)]">
                 <Ic size={12} className="text-[#5BE7DA]"/>{label}
               </span>
             ))}
+          </div>
+          {/* THE RANKING. Stated WITH the phrase it is true for.
+              parkeasy.uk is #1 for "free parking spots Belfast where locals
+              park" — a long-tail phrase. A bare "#1 on Google" would be read
+              as #1 for "parking Belfast", which is not true, and rankings move
+              without anyone noticing. Naming the search keeps the claim
+              checkable and makes it one string to change if it slips. */}
+          <div className="mt-3 inline-flex items-start gap-2 rounded-xl px-3 py-2"
+            style={{background:'rgba(52,224,160,0.10)', border:'1px solid rgba(52,224,160,0.28)'}}>
+            <Star size={13} className="text-[#6BEFB9] flex-shrink-0 mt-[2px]"/>
+            <span className="text-[11.5px] leading-snug text-[#cdd9e8]">
+              <strong className="text-[#6BEFB9]">#1 on Google</strong> for
+              &ldquo;free parking spots Belfast where locals park&rdquo;
+            </span>
           </div>
           {typeof location !== 'undefined' && new URLSearchParams(location.search).get('debug') === '1' && (
             <p className="text-[10px] text-[#FFD27A] mt-1.5 break-all">🔧 {partnerDiag || 'partners: loading…'} · build {new Date(__BUILD_TIME__).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
@@ -6779,7 +6823,16 @@ export default function App() {
   const [user,          setUser]          = useState(()=>ls.get('pe_user', null));
   const [saved,         setSaved]         = useState(()=>new Set(ls.get('pe_saved', [])));
   const [ratings,       setRatings]       = useState(()=>ls.get('pe_ratings', {}));
-  const [showWelcome,   setShowWelcome]   = useState(()=>!ls.get('pe_user',null) && !ls.get('pe_skipped',false));
+  // NEVER on arrival. A search-first product whose first interaction is a
+  // registration form throws away the top of its own funnel — and this one
+  // asked for name, email, password and a promo code before a single parking
+  // space was visible. The account offer now comes AFTER the app has done
+  // something useful, which is the only moment it has earned the ask.
+  const [showWelcome,   setShowWelcome]   = useState(false);
+  // Set once the driver has completed a search, so the nudge below can appear
+  // beside a result rather than in front of one.
+  const [searchedOnce,  setSearchedOnce]  = useState(false);
+  const [nudgeDone,     setNudgeDone]     = useState(false);
   const [showUserMenu,  setShowUserMenu]  = useState(false);
   const [showBizModal,  setShowBizModal]  = useState(false);
   // Premium is either lifetime/subscription (pe_premium) or time-limited
@@ -7182,6 +7235,12 @@ export default function App() {
     setShowInstall(false);
   };
 
+  // Called by the search tab the first time a search resolves. One nudge per
+  // visit, never for someone who already has an account or has said no.
+  const authNudge = searchedOnce && !nudgeDone && !showWelcome
+    && !ls.get('pe_user', null) && !ls.get('pe_skipped', false);
+  const setAuthNudge = (v) => { if (!v) setNudgeDone(true); };
+
   const handleJoin = (userData) => {
     setUser(userData);
     ls.set('pe_user', userData);
@@ -7389,6 +7448,27 @@ export default function App() {
       )}
       {!cookieChoice && <CookieBanner onChoice={(c)=>{ setCookieChoice(c); ls.set('pe_cookie', c); }}/>}
       {showWelcome  && <WelcomeModal onJoin={handleJoin} onSkip={handleSkip}/>}
+      {/* The account ask, moved to the moment it is earned. It appears once a
+          driver has completed a search — never before — as a dismissible bar
+          rather than a wall, and only if they have not already joined or said
+          no. Saving a spot is a real reason to have an account; being new to
+          the site is not. */}
+      {authNudge && (
+        <div className="fixed left-0 right-0 z-[65] px-4"
+          style={{bottom:'calc(env(safe-area-inset-bottom) + 74px)'}}>
+          <div className="mx-auto flex items-center gap-3 rounded-2xl px-4 py-3 max-w-[520px]"
+            style={{background:'var(--sheet)', border:'1px solid rgba(91,231,218,0.35)', boxShadow:'var(--pop-shadow)'}}>
+            <Bookmark size={17} className="text-[#5BE7DA] flex-shrink-0"/>
+            <p className="flex-1 min-w-0 text-[12.5px] text-[#cdd9e8] leading-snug">
+              Want to save spots and get back to them? <strong className="text-[#EAF1F8]">Free account, no card.</strong>
+            </p>
+            <button onClick={()=>{ setAuthNudge(false); setShowWelcome(true); }}
+              className="flex-shrink-0 text-[12px] font-bold text-[#06231f] btn-teal px-3 py-2 rounded-xl">Join</button>
+            <button aria-label="No thanks" onClick={()=>{ ls.set('pe_skipped', true); setAuthNudge(false); }}
+              className="flex-shrink-0 text-[rgba(234,241,248,0.5)]"><X size={15}/></button>
+          </div>
+        </div>
+      )}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
       {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)} onRedeem={redeemVipCode}/>}
       {rewardUntil && (
@@ -7493,8 +7573,8 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')}/>}
-        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
+        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={setDetailSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
