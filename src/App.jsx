@@ -19,6 +19,7 @@ import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './part
 import { paymentError } from './errors';
 import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
 import { splitPartnersByCategory } from './data/partnerCategories';
+import { claimState, canClaim } from './data/spotClaims';
 import useBackButton from './useBackButton';
 import EventsScreen from './components/events/EventsScreen';
 
@@ -730,6 +731,18 @@ const TypeBadge = ({ badge }) => {
 const InUseBadge = ({ spot }) => {
   const n = spot.inUse || 0;
   const total = spot.spaces;
+  // Every space we can SEE is spoken for — parked drivers plus drivers on the
+  // way, against a capacity that was actually recorded. Deliberately not the
+  // word "full": we only see ParkEasy users, and a wrong "full" sends somebody
+  // past an empty space. "Claimed" is the strongest thing the data supports.
+  const { atCapacity } = claimState(spot);
+  if (atCapacity) return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
+      style={{color:'#FF9A8A',border:'1px solid rgba(255,154,138,0.40)',background:'rgba(255,154,138,0.12)'}}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{background:'#FF9A8A',boxShadow:'0 0 6px #FF9A8A'}}/>
+      All {total} claimed
+    </span>
+  );
   if (n) return (
     <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
       style={{color:'#FFC24B',border:'1px solid rgba(255,194,75,0.35)',background:'rgba(255,194,75,0.10)'}}>
@@ -1426,7 +1439,15 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
             </div>
             <div className="flex-1">
               <div className="font-bold text-[#EAF1F8]">{(spot.available??spot.spaces)!=null ? `${spot.available??spot.spaces} spaces typically free` : 'Usually has space'}</div>
-              <div className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5">{spot.total?`of ${spot.total} · `:''}community estimate</div>
+              {/* The typical figure and the live one sat side by side saying
+                  "8 spaces typically free" and "All 8 claimed", which reads as
+                  a contradiction even though both are true — one is the usual
+                  picture, the other is right now. Reconciled in the caption
+                  rather than by hiding either number. */}
+              <div className="text-xs text-[rgba(234,241,248,0.5)] mt-0.5">
+                {spot.total?`of ${spot.total} · `:''}community estimate
+                {claimState(spot).atCapacity && <span style={{color:'#FF9A8A'}}> · all claimed right now</span>}
+              </div>
             </div>
             <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#34E0A0]/12 border border-[#34E0A0]/30 flex-shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-[#34E0A0]" style={{boxShadow:'0 0 8px #34E0A0'}}/>
@@ -1488,22 +1509,50 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               which is the thing worth knowing before you set off. It clears
               itself after 30 minutes so a forgotten claim can't send the next
               driver past an empty space. */}
-          {onHeading && ['free','hidden_gem'].includes(spot.badge) && (
-            <button onClick={()=>onHeading(spot, !headingMine)}
-              className={`w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-sm active:scale-95 transition ${
-                headingMine
-                  ? 'bg-[#C9A7FF]/15 border border-[#C9A7FF]/40 text-[#C9A7FF]'
-                  : 'bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12'}`}>
-              <Navigation size={17} className={headingMine ? '' : 'text-[#C9A7FF]'}/>
-              {headingMine ? 'On your way — tap to cancel' : 'I\u2019m heading there'}
-            </button>
-          )}
-          {onHeading && ['free','hidden_gem'].includes(spot.badge) && (
-            <p className="text-[11px] text-[rgba(234,241,248,0.45)] mt-1.5 text-center leading-relaxed">
-              Lets other drivers know before they set off. It isn&rsquo;t a reservation &mdash;
-              nobody can hold a space on a public street &mdash; and it clears after 30 minutes.
-            </p>
-          )}
+          {onHeading && ['free','hidden_gem'].includes(spot.badge) && (() => {
+            const { others, atCapacity, capacity } = claimState(spot, headingMine);
+            const blocked = !canClaim(spot, headingMine);
+            return (
+              <>
+                {/* The warning that does the actual work. atCapacity needs four
+                    drivers converging on one small spot and will almost never
+                    fire; ONE other driver already en route is the everyday
+                    case, and it is worth knowing before setting off rather
+                    than on arrival. */}
+                {others > 0 && !blocked && (
+                  <p className="text-[12px] mt-3 px-3 py-2.5 rounded-xl leading-relaxed"
+                    style={{color:'#C9A7FF',border:'1px solid rgba(201,167,255,0.30)',background:'rgba(201,167,255,0.08)'}}>
+                    <strong>{others === 1 ? 'Another driver is' : `${others} drivers are`} already heading here.</strong>{' '}
+                    {capacity ? `There are about ${capacity} spaces.` : 'Worth having a second option in mind.'}
+                  </p>
+                )}
+                <button onClick={()=>{ if (!blocked) onHeading(spot, !headingMine); }}
+                  disabled={blocked} aria-disabled={blocked}
+                  className={`w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-sm transition ${
+                    blocked
+                      ? 'bg-white/5 border border-white/10 text-[rgba(234,241,248,0.40)] cursor-not-allowed'
+                      : headingMine
+                        ? 'bg-[#C9A7FF]/15 border border-[#C9A7FF]/40 text-[#C9A7FF] active:scale-95'
+                        : 'bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95'}`}>
+                  <Navigation size={17} className={blocked || headingMine ? '' : 'text-[#C9A7FF]'}/>
+                  {blocked
+                    ? 'Every space already claimed'
+                    : headingMine ? 'On your way — tap to cancel' : 'I\u2019m heading there'}
+                </button>
+                <p className="text-[11px] text-[rgba(234,241,248,0.45)] mt-1.5 text-center leading-relaxed">
+                  {blocked
+                    /* Even blocked, this must never read as "the spot is full".
+                       We see ParkEasy users and nobody else, so the street may
+                       be wide open. Say exactly what we know and no more. */
+                    ? <>Other ParkEasy drivers have claimed all {capacity} spaces. That doesn&rsquo;t mean
+                       the street is full &mdash; we only see our own users &mdash; so it is still worth a
+                       look if you are passing. Claims clear after 30 minutes.</>
+                    : <>Lets other drivers know before they set off. It isn&rsquo;t a reservation &mdash;
+                       nobody can hold a space on a public street &mdash; and it clears after 30 minutes.</>}
+                </p>
+              </>
+            );
+          })()}
           {onStartTimer && (
             <button onClick={()=>onStartTimer(spot)} className="w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
               <Timer size={17} className="text-[#5BE7DA]"/>Start parking timer
@@ -7222,7 +7271,16 @@ export default function App() {
           <SpotCard spot={sp} saved={saved.has(sp.id)} onSave={toggleSave} isPremium={isPremium}
             onUpgrade={()=>{setShowEvents(false);setShowPricing(true);}} onOpen={setDetailSpot}/>
         )}/>}
-      {detailSpot && <SpotDetail spot={detailSpot} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
+      {/* Enriched HERE rather than trusting the caller. A spot opened from a
+          list arrives carrying the live inUse / onWay counts, but one opened
+          from a #s= deep link comes straight out of ALL_SPOTS with neither —
+          so the sheet showed no live state at all on exactly the links people
+          share with each other. One lookup, and every route in agrees. */}
+      {detailSpot && <SpotDetail spot={{
+        ...detailSpot,
+        inUse: occupancy[String(detailSpot.id)] || undefined,
+        onWay: heading[String(detailSpot.id)]   || undefined,
+      }} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
         onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
