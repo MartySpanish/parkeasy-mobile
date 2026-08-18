@@ -1,0 +1,13 @@
+-- Aaron Quinn Hair: radius back to 700m. APPLIED 18 Aug 2026.
+--
+-- It was widened to 1300 an hour earlier for one reason: nothing was mapped
+-- within 700m of the Andersonstown Road, so a card promising "parking nearby"
+-- had an empty list under it. That was papering over a coverage gap, and the
+-- migration that did it said so.
+--
+-- Marty then supplied the two spots that were missing — the leisure centre car
+-- park at 130 Andersonstown Road (id 306) and the Andersonstown Social Club,
+-- the PD, on South Link (id 307). They sit at 0m and 202m. The gap is filled,
+-- so the workaround comes off and the 12- and 19-minute walks drop back out of
+-- his card where they belong.
+update partners set radius_m = 700 where slug = 'aaron-quinn-hair';
