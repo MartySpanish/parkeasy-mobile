@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/host-agreement",
+      "destination": "/host-agreement.html"
+    },
+    {
       "source": "/hosts",
       "destination": "/hosts.html"
     },
