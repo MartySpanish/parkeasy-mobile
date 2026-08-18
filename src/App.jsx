@@ -14,7 +14,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy } from './notify';
+import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { paymentError } from './errors';
 import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
@@ -1345,6 +1345,77 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
 };
 
 // ── Spot detail sheet ─────────────────────────────────────────────────────────
+// "Roughly how many spaces are here?" — asked of the people standing in one.
+//
+// 263 of 441 free and hidden-gem spots have no capacity recorded, which is
+// exactly why the "every space is claimed" backstop rarely fires: it needs a
+// number to compare against. Nobody is going to survey 263 streets. The
+// drivers already parked there can answer in one tap.
+//
+// BANDS, NOT A NUMBER. People glance, they don't count bays. Asking for a
+// precise figure invites a confident wrong one; a band is a claim the answer
+// can actually support, and the low end is stored so the estimate errs toward
+// caution — under-stating capacity makes the app warn sooner, which is the
+// safe direction to be wrong in.
+//
+// Only ever asked where the answer is missing and would be used: a free spot
+// somebody can claim. Never on a spot whose size is already recorded, and
+// never on a paid car park, where the operator's own number is the truth.
+const CAPACITY_BANDS = [
+  { label: '1–2',  value: 1 },
+  { label: '3–5',  value: 3 },
+  { label: '6–10', value: 6 },
+  { label: '10+',  value: 11 },
+];
+
+const CapacityPrompt = ({ spot }) => {
+  const [sent, setSent] = useState(false);
+  const [dismissed, setDismissed] = useState(
+    () => !!(ls.get('pe_capacity_asked', {}) || {})[String(spot.id)]);
+  // Already know, already answered, or not the kind of spot this helps.
+  if (typeof spot.spaces === 'number' || dismissed
+      || !['free','hidden_gem'].includes(spot.badge)) return null;
+
+  const answer = (n) => {
+    reportCapacity(spot.id, n);
+    const m = ls.get('pe_capacity_asked', {}) || {};
+    m[String(spot.id)] = n;
+    ls.set('pe_capacity_asked', m);
+    setSent(true);
+  };
+
+  if (sent) return (
+    <p className="text-[11.5px] mt-3 text-center" style={{color:'#6BEFB9'}}>
+      Thanks — that helps the next driver.
+    </p>
+  );
+
+  return (
+    <div className="mt-3 rounded-2xl px-3.5 py-3"
+      style={{background:'rgba(91,231,218,0.06)', border:'1px solid rgba(91,231,218,0.22)'}}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[12.5px] font-bold text-[#EAF1F8] leading-snug">
+          Parked here? Roughly how many spaces are there?
+        </p>
+        <button aria-label="Not now"
+          onClick={()=>{ const m = ls.get('pe_capacity_asked', {}) || {}; m[String(spot.id)] = 'skip'; ls.set('pe_capacity_asked', m); setDismissed(true); }}
+          className="text-[rgba(234,241,248,0.45)] flex-shrink-0 -mt-0.5"><X size={14}/></button>
+      </div>
+      <p className="text-[11px] text-[rgba(234,241,248,0.5)] mt-1 leading-relaxed">
+        We don&rsquo;t know this one&rsquo;s size, so we can&rsquo;t warn people when it fills up.
+      </p>
+      <div className="flex gap-1.5 mt-2.5">
+        {CAPACITY_BANDS.map(b => (
+          <button key={b.value} onClick={()=>answer(b.value)}
+            className="flex-1 py-2 rounded-xl text-[12px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 hover:bg-white/12 active:scale-95 transition">
+            {b.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine }) => {
   // Featured Partner: a local business within its radius of this spot. Same
   // contextual placement as on bookable listings — community spots are where
@@ -1523,7 +1594,11 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
                   <p className="text-[12px] mt-3 px-3 py-2.5 rounded-xl leading-relaxed"
                     style={{color:'#C9A7FF',border:'1px solid rgba(201,167,255,0.30)',background:'rgba(201,167,255,0.08)'}}>
                     <strong>{others === 1 ? 'Another driver is' : `${others} drivers are`} already heading here.</strong>{' '}
-                    {capacity ? `There are about ${capacity} spaces.` : 'Worth having a second option in mind.'}
+                    {capacity
+                      ? (spot.spacesEstimated
+                          ? `Drivers reckon there are about ${capacity} spaces.`
+                          : `There are about ${capacity} spaces.`)
+                      : 'Worth having a second option in mind.'}
                   </p>
                 )}
                 <button onClick={()=>{ if (!blocked) onHeading(spot, !headingMine); }}
@@ -1539,12 +1614,18 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
                     ? 'Every space already claimed'
                     : headingMine ? 'On your way — tap to cancel' : 'I\u2019m heading there'}
                 </button>
+                <CapacityPrompt spot={spot}/>
                 <p className="text-[11px] text-[rgba(234,241,248,0.45)] mt-1.5 text-center leading-relaxed">
                   {blocked
                     /* Even blocked, this must never read as "the spot is full".
                        We see ParkEasy users and nobody else, so the street may
                        be wide open. Say exactly what we know and no more. */
-                    ? <>Other ParkEasy drivers have claimed all {capacity} spaces. That doesn&rsquo;t mean
+                    // "all 6 spaces" reads as surveyed fact. When the figure came
+                    // from a show of hands it has to say so, or a community
+                    // estimate quietly acquires the authority of a measurement.
+                    ? <>Other ParkEasy drivers have claimed all{' '}
+                       {spot.spacesEstimated ? <>the roughly {capacity} spaces drivers reckon are here</>
+                                             : <>{capacity} spaces</>}. That doesn&rsquo;t mean
                        the street is full &mdash; we only see our own users &mdash; so it is still worth a
                        look if you are passing. Claims clear after 30 minutes.</>
                     : <>Lets other drivers know before they set off. It isn&rsquo;t a reservation &mdash;
@@ -6765,6 +6846,8 @@ export default function App() {
   // Live "in use" counts, keyed by spot id. Refreshed on a slow poll — this is
   // a helpful hint, not something worth a socket or a tight loop.
   const [occupancy, setOccupancy] = useState({});
+  // Community capacity, for the free spots whose size was never recorded.
+  const [capacity,  setCapacity]  = useState({});
   // Drivers who have said they are ON THEIR WAY to a spot, keyed the same way.
   // Separate from `occupancy` because it expires far faster (30 min vs 4h) and
   // means something different to the person reading it.
@@ -6773,7 +6856,7 @@ export default function App() {
     let live = true;
     const load = () => fetchOccupancy().then(d => {
       if (!live) return;
-      setOccupancy(d.counts || {}); setHeading(d.heading || {});
+      setOccupancy(d.counts || {}); setHeading(d.heading || {}); setCapacity(d.capacity || {});
     });
     load();
     const id = setInterval(load, 60000);
@@ -6870,10 +6953,16 @@ export default function App() {
       return all.map(s => {
         const n = occupancy[String(s.id)] || 0;
         const h = heading[String(s.id)] || 0;
-        return (n || h) ? { ...s, inUse: n || undefined, onWay: h || undefined } : s;
+        // A community figure fills a GAP; it never overrides a recorded one.
+        // The surveyed number, where we have it, beats a show of hands.
+        const c = (typeof s.spaces === 'number') ? null : (capacity[String(s.id)] || null);
+        return (n || h || c)
+          ? { ...s, inUse: n || undefined, onWay: h || undefined,
+              ...(c ? { spaces: c, spacesEstimated: true } : {}) }
+          : s;
       });
     },
-    [userSpots, approvedSpots, rentalSpots, currentCity.id, occupancy, heading]
+    [userSpots, approvedSpots, rentalSpots, currentCity.id, occupancy, heading, capacity]
   );
   // Everything addressable by id (used by Saved, which can hold community spots too).
   const allSpots    = useMemo(() => [...userSpots, ...Object.values(CITY_SPOTS).flat()], [userSpots]);
@@ -6893,9 +6982,13 @@ export default function App() {
     return all.map(s => {
       const n = occupancy[String(s.id)] || 0;
       const h = heading[String(s.id)] || 0;
-      return (n || h) ? { ...s, inUse: n || undefined, onWay: h || undefined } : s;
+      const c = (typeof s.spaces === 'number') ? null : (capacity[String(s.id)] || null);
+      return (n || h || c)
+        ? { ...s, inUse: n || undefined, onWay: h || undefined,
+            ...(c ? { spaces: c, spacesEstimated: true } : {}) }
+        : s;
     });
-  }, [userSpots, approvedSpots, rentalSpots, occupancy, heading]);
+  }, [userSpots, approvedSpots, rentalSpots, occupancy, heading, capacity]);
 
   // The phone's back button closes what's open instead of quitting the app.
   // Ordered outermost first: the LAST open one is the topmost on screen, and
@@ -7280,6 +7373,8 @@ export default function App() {
         ...detailSpot,
         inUse: occupancy[String(detailSpot.id)] || undefined,
         onWay: heading[String(detailSpot.id)]   || undefined,
+        ...(typeof detailSpot.spaces !== 'number' && capacity[String(detailSpot.id)]
+          ? { spaces: capacity[String(detailSpot.id)], spacesEstimated: true } : {}),
       }} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
         onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}

@@ -43,13 +43,21 @@ export default async function handler(req, res) {
       const rows = r.ok ? await r.json() : [];
       const counts  = Object.fromEntries(rows.filter(x => x.in_use).map(x => [String(x.spot_id), x.in_use]));
       const heading = Object.fromEntries(rows.filter(x => x.heading).map(x => [String(x.spot_id), x.heading]));
+      // Community capacity, for the 263 free spots whose size nobody recorded.
+      // TWO reports minimum: a single opinion is not an estimate, and the whole
+      // point of the number is to decide when to stop other drivers setting off.
+      let capacity = {};
+      try {
+        const c = await fetch(`${URL_}/rest/v1/spot_capacity_estimates?select=spot_id,spaces,reports&reports=gte.2`, { headers: svc });
+        if (c.ok) capacity = Object.fromEntries((await c.json()).map(x => [String(x.spot_id), x.spaces]));
+      } catch { /* an absent estimate is just no estimate */ }
       // Short cache: this is a live signal, but a few seconds of staleness is
       // fine and keeps a busy map from hammering the database.
       res.setHeader('Cache-Control', 'public, max-age=20');
-      return res.status(200).json({ counts, heading });
+      return res.status(200).json({ counts, heading, capacity });
     } catch {
       // Never fail the map over a nice-to-have. No counts just means no badges.
-      return res.status(200).json({ counts: {}, heading: {} });
+      return res.status(200).json({ counts: {}, heading: {}, capacity: {} });
     }
   }
 
@@ -65,6 +73,28 @@ export default async function handler(req, res) {
   const kind   = body?.kind === 'heading' ? 'heading' : 'parked';
   const city   = String(body?.city ?? '').slice(0, 40).trim() || null;
   if (!spotId || !key) return res.status(400).json({ error: 'Missing spotId or key' });
+
+  // A capacity report is a different shape of fact from an occupancy claim —
+  // it does not start or end, and it does not expire. Handled before the
+  // start/end path rather than bolted into it.
+  if (body?.kind === 'capacity') {
+    const spaces = Math.round(Number(body?.spaces));
+    if (!Number.isFinite(spaces) || spaces < 1 || spaces > 500) {
+      return res.status(400).json({ error: 'spaces must be 1-500' });
+    }
+    try {
+      // One answer per device per spot; a driver changing their mind updates
+      // it rather than voting twice.
+      const r = await fetch(`${URL_}/rest/v1/spot_capacity_reports?on_conflict=spot_id,client_key`, {
+        method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify({ spot_id: spotId, client_key: key, spaces }),
+      });
+      if (!r.ok) return res.status(502).json({ error: 'Could not record' });
+      return res.status(200).json({ ok: true });
+    } catch {
+      return res.status(200).json({ ok: false });
+    }
+  }
 
   try {
     if (action === 'end') {

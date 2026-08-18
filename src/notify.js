@@ -165,14 +165,30 @@ export async function reportOccupancy(spotId, action, city, kind = 'parked') {
   } catch { /* ignore */ }
 }
 
-/** → { counts, heading } — drivers parked, and drivers on their way. */
+/** → { counts, heading, capacity } — parked, on their way, and how big it is. */
 export async function fetchOccupancy() {
   try {
     const r = await apiFetch('/api/occupancy');
-    if (!r.ok) return { counts: {}, heading: {} };
+    if (!r.ok) return { counts: {}, heading: {}, capacity: {} };
     const d = await r.json();
-    return { counts: d?.counts || {}, heading: d?.heading || {} };
-  } catch { return { counts: {}, heading: {} }; }
+    return { counts: d?.counts || {}, heading: d?.heading || {}, capacity: d?.capacity || {} };
+  } catch { return { counts: {}, heading: {}, capacity: {} }; }
+}
+
+/**
+ * "Roughly how many spaces are here?", answered by somebody standing in it.
+ *
+ * Fire-and-forget like reportOccupancy: a driver telling us a lay-by holds
+ * about six cars must never be able to fail in a way they notice.
+ */
+export async function reportCapacity(spotId, spaces) {
+  try {
+    await apiFetch('/api/occupancy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spotId: String(spotId), key: clientKey(), kind: 'capacity', spaces }),
+    });
+  } catch { /* ignore */ }
 }
 
 // POST a notification to /api/notify, which emails CONTACT_EMAIL via Resend.
