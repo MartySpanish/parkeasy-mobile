@@ -1,0 +1,63 @@
+-- Aaron Quinn Hair: the address, confirmed by Marty. 18 Aug 2026.
+--
+--   address   147 Andersonstown Road, Belfast
+--   postcode  BT11 9BW
+--
+-- His row went in with both columns null, so his partner page has been
+-- reading "We're confirming the exact address with Aaron Quinn Hair before we
+-- show you where to park". That copy is now wrong — we do know — and this
+-- fills it in.
+--
+-- ── THE PIN IS DELIBERATELY NOT TOUCHED ───────────────────────────────────
+-- lat/lng stay at the city-centre placeholder (54.5973, -5.9301) and
+-- geo_verified stays FALSE. This is not an oversight, and it is not the same
+-- thing as not knowing the address:
+--
+--   * The coordinate could not be produced. Every geocoder is blocked by the
+--     network egress proxy from the environment this was written in —
+--     Nominatim, postcodes.io, Photon, OS and doogal all refuse CONNECT with
+--     403. There was no way to turn this address into a coordinate, and an
+--     estimate is not a coordinate. That is precisely how Gransha Grill ended
+--     up 953 metres from its own front door, taking three parking spots with
+--     it, and how Jack Daniels' map nearly went half a kilometre out on the
+--     strength of a confirmed address and a placeholder pin.
+--
+--   * The app already handles this correctly. PartnerScreen tests
+--     geo_verified, not address, so with an address and no verified pin he
+--     gets "Parking map coming shortly — we know where Aaron Quinn Hair is,
+--     we're just pinning it to the metre" instead of a map of the wrong
+--     street. That is the honest state, and it is an improvement on "we're
+--     confirming the address", which is no longer true.
+--
+-- TO FINISH IT: geocode 147 Andersonstown Road from somewhere with network
+-- access, then set lat, lng AND geo_verified = true in one statement. Setting
+-- the coordinate without the flag leaves the map off; setting the flag without
+-- a real coordinate draws a map of the city centre. Neither half is any use
+-- on its own.
+--
+-- ── TWO THINGS THAT DID NOT ADD UP, AND WHAT WAS DONE ABOUT THEM ──────────
+-- Both were put to Marty before this was written, and he confirmed 147:
+--
+--   1. 147 Andersonstown Road is listed elsewhere as Connolly House, Sinn
+--      Féin's offices. 147 is the odd side of the road.
+--   2. His own tagline on this row says "Belfast barber at Cut N Edge", and
+--      Cut N Edge's Andersonstown shop is 134a — the even side, near enough
+--      opposite. They also trade from 90-92 Shaws Road, BT11 9QR.
+--
+-- So if he has moved out of Cut N Edge and taken his own place at 147, the
+-- tagline is the stale part and should be reworded. If he has not, the number
+-- is wrong and this needs reverting to 134a / BT11 9BY. Worth thirty seconds
+-- with Aaron either way, because the number is what a driver will navigate to.
+--
+-- One more, unverifiable from here: a postcode lookup described BT11 9BW as
+-- inactive and non-deliverable, while an address directory lists 147 as live
+-- at that postcode. The pages that would settle it are blocked too. If the
+-- postcode turns out to be retired, the address line still reads correctly
+-- without it — postcode is nullable.
+--
+-- Idempotent, matched on slug, safe to re-run.
+
+update partners
+set address  = '147 Andersonstown Road, Belfast',
+    postcode = 'BT11 9BW'
+where slug = 'aaron-quinn-hair';
