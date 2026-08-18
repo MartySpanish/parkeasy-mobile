@@ -29,6 +29,15 @@ const TEMPLATES = {
     rows: [['From', d.name], ['Their email', d.email], ['Their phone', d.phone],
       ['Message', d.message],
       ['Space', d.title], ['Address', d.address], ['Owner contact', d.ownerEmail]] }),
+  // A club treasurer filling in the form at /hosts. This is the supply side of
+  // the marketplace, so it is the most valuable email this endpoint sends —
+  // the subject line leads with the organisation and space count so it is
+  // triageable from a phone lock screen. reply_to is set to their address
+  // further down, so replying goes straight back to them.
+  host:     (d) => ({ subject: `🅿️ Car park offered: ${d.org || 'a club'}${d.spaces ? ` (${d.spaces} spaces)` : ''}`,
+    rows: [['Organisation', d.org], ['Contact', d.name], ['Email', d.email], ['Phone', d.phone],
+      ['Postcode', d.postcode], ['Rough spaces', d.spaces],
+      ['Came from', 'parkeasy.uk/hosts']] }),
   business: (d) => ({ subject: `🏪 New business listing enquiry: ${d.name || ''}`,
     rows: [['Business', d.name], ['Email', d.email], ['Message', d.message]] }),
   spot:     (d) => ({ subject: `🅿️ New spot submitted: ${d.name || ''}`,

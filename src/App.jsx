@@ -3035,6 +3035,21 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               </span>
             ))}
           </div>
+          {/* The supply side, said once and plainly on the page drivers land
+              on. Clubs and churches are the other half of this marketplace and
+              there was no route to them from the home screen at all — the only
+              mention lived in an offer grid that was removed for repeating
+              itself. A driver ignores this line; a treasurer whose club has an
+              empty car park does not. */}
+          <a href="/hosts"
+            className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 active:scale-[0.99] transition"
+            style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.10)'}}>
+            <Building2 size={15} className="text-[#5BE7DA] flex-shrink-0"/>
+            <span className="text-[12.5px] leading-snug text-[#cdd9e8] flex-1 min-w-0">
+              Got a car park sitting empty? <strong className="text-[#EAF1F8]">Clubs keep 85%.</strong>
+            </span>
+            <ChevronRight size={15} className="text-[rgba(234,241,248,0.4)] flex-shrink-0"/>
+          </a>
           {/* THE RANKING. Restored at Marty's call after being pulled.
               Kept WITH the phrase it is true for: parkeasy.uk is #1 for "free
               parking spots Belfast where locals park", which is long-tail. A
@@ -6884,6 +6899,11 @@ const InfoOverlay = ({ page, onClose }) => {
 const Footer = ({ onOpen }) => (
   <footer className="px-4 pt-2 pb-6 text-center">
     <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-[rgba(234,241,248,0.5)]">
+      {/* A real <a> to a real URL, not an overlay. A club treasurer needs
+          something they can be sent in an email, bookmark and forward to the
+          rest of the committee — which is exactly what /list-your-space failed
+          to be while it silently served the homepage. */}
+      <a href="/hosts" className="hover:text-[#5BE7DA] transition font-bold text-[#5BE7DA]">List your car park</a>
       {[['howitworks','How it works'],['faq','FAQ'],['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
         <button key={id} onClick={()=>onOpen(id)} className="hover:text-[#5BE7DA] transition font-medium">{label}</button>
       ))}
