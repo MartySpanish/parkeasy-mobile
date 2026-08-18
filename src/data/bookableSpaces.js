@@ -43,7 +43,12 @@ const ALL_SPACES = [
     spaces: 15,
     pricePence: 2000,                // £20 per vehicle per day, set by the club
     allInPence: 2300,                // £23.00 — what the driver is charged
-    unit: 'day',
+    // 'day' was wrong twice over. The gates open at 9am and lock at 8.30pm, so
+    // this is an 11-and-a-half-hour visit, not a day — and calling it a day
+    // invited the one comparison ParkEasy loses, a city-centre multi-storey
+    // day rate. 'visit' is both more accurate and the frame a matchday driver
+    // is actually in.
+    unit: 'visit',
     hours: '9am–8.30pm',
     lat: 54.5875, lng: -5.9625,
     photo: 'https://parkeasy.uk/davitts/1-car-park.jpg',
@@ -64,7 +69,7 @@ const ALL_SPACES = [
     spaces: 64,
     pricePence: 1500,                // £15 per vehicle per day, set by the school
     allInPence: 1725,                // £17.25 — what the driver is charged
-    unit: 'day',
+    unit: 'visit',
     hours: '8am–5pm, Mon–Fri',       // clause 3 of the licence; weekends locked
     lat: 54.6180, lng: -5.9450,
     photo: 'https://parkeasy.uk/bra/1-front-bays.jpg',
@@ -93,6 +98,26 @@ const todayYmd = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date());
 
+// ── THE HEADLINE PRICE ──────────────────────────────────────────────────────
+// What the homepage says out loud, e.g. "from £X". Set it HERE.
+//
+// WHY IT IS NO LONGER DERIVED. It used to be the cheapest all-in price across
+// the sellable listings, which sounds sensible and is not: with one live site
+// it meant Michael Davitt GAC alone set the headline for the whole product.
+// The number that reached the homepage was "from £23.00 a day" — more than a
+// city-centre multi-storey, for a space in west Belfast, chosen by nobody.
+//
+// null = fall back to the derived figure, which is the old behaviour and the
+// safe default when there is nothing to say.
+//
+// THE GUARD BELOW IS THE POINT. A headline lower than anything actually on
+// sale is an advert for a price nobody can pay. That has already happened
+// once: the first draft of the homepage said "from £17.25", which was Belfast
+// Royal Academy's rate while the Academy was off sale. So a configured
+// headline is only used when a real listing meets or beats it; otherwise the
+// build falls back to the true cheapest and says so in the log.
+export const HEADLINE_PENCE = null;
+
 /** Still sellable on the given day: not paused, and inside its window. */
 export const isSellable = (s, today = todayYmd()) =>
   !s.paused && (!s.bookableUntil || today <= s.bookableUntil);
@@ -117,5 +142,37 @@ export const spacesForArea = (areaSlug) =>
   BOOKABLE_SPACES.filter(s => s.area === areaSlug);
 
 export const gbp = (pence) => `£${(pence / 100).toFixed(2)}`;
+
+/**
+ * The figure the homepage shows, and the unit to show it in.
+ *
+ * Returns null when there is nothing bookable — the homepage then leads with
+ * the free-spot product instead, which is the honest thing to do with an empty
+ * shelf.
+ *
+ * @returns {{pence:number, text:string, unit:string, derived:boolean, warning?:string}|null}
+ */
+export function headline(spaces = BOOKABLE_SPACES) {
+  if (!spaces.length) return null;
+  const cheapest = Math.min(...spaces.map(s => s.allInPence));
+  // Every sellable listing shares a unit today. If that ever stops being true,
+  // the headline says "visit" rather than inventing a blended unit.
+  const units = new Set(spaces.map(s => s.unit));
+  const unit = units.size === 1 ? [...units][0] : 'visit';
+
+  if (HEADLINE_PENCE == null) {
+    return { pence: cheapest, text: gbp(cheapest), unit, derived: true };
+  }
+  if (HEADLINE_PENCE < cheapest) {
+    // Configured below anything on sale. Refuse it rather than advertise it.
+    return {
+      pence: cheapest, text: gbp(cheapest), unit, derived: true,
+      warning: `HEADLINE_PENCE is ${gbp(HEADLINE_PENCE)} but the cheapest bookable space is `
+        + `${gbp(cheapest)}. Advertising a price nobody can pay is how "from £17.25" happened. `
+        + `Using ${gbp(cheapest)} instead — lower a listing's price to move the headline.`,
+    };
+  }
+  return { pence: HEADLINE_PENCE, text: gbp(HEADLINE_PENCE), unit, derived: false };
+}
 
 export default BOOKABLE_SPACES;

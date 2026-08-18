@@ -47,7 +47,7 @@ const bookingBlock = (spaces, town) => {
 <h3 style="font-family:Sora,sans-serif;font-size:17px;margin:0">${esc(s.name)}</h3>
 <p style="color:rgba(234,241,248,.62);margin:6px 0 0;font-size:14px">${esc(s.address)}, ${esc(s.postcode)} · ${s.spaces} spaces · gates ${esc(s.hours)}</p>
 ${s.bookableUntil ? `<p style="color:#FFD27A;margin:6px 0 0;font-size:13px;font-weight:700">Bookable up to ${esc(prettyDate(s.bookableUntil))}</p>` : ''}
-<p style="margin:10px 0 0;font-size:20px;font-weight:800;color:#6BEFB9">${gbp(s.allInPence)} <span style="font-size:13px;font-weight:600;color:rgba(234,241,248,.6)">per ${esc(s.unit)}, all-in</span></p>
+<p style="margin:10px 0 0;font-size:20px;font-weight:800;color:#6BEFB9">${gbp(s.allInPence)} <span style="font-size:13px;font-weight:600;color:rgba(234,241,248,.6)">per ${esc(s.unit)}, all-in${s.hours ? ` &middot; ${esc(s.hours)}` : ''}</span></p>
 <p style="margin:12px 0 0"><a href="https://parkeasy.uk/?spot=${esc(s.slug)}" style="display:inline-block;background:linear-gradient(135deg,#54E6D8,#2ED3C6);color:#06231F;font-weight:800;padding:11px 18px;border-radius:12px;text-decoration:none">Book this space →</a></p>
 </li>`).join('');
 
