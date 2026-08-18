@@ -3012,20 +3012,24 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               </span>
             ))}
           </div>
-          {/* THE RANKING. Stated WITH the phrase it is true for.
-              parkeasy.uk is #1 for "free parking spots Belfast where locals
-              park" — a long-tail phrase. A bare "#1 on Google" would be read
-              as #1 for "parking Belfast", which is not true, and rankings move
-              without anyone noticing. Naming the search keeps the claim
-              checkable and makes it one string to change if it slips. */}
-          <div className="mt-3 inline-flex items-start gap-2 rounded-xl px-3 py-2"
-            style={{background:'rgba(52,224,160,0.10)', border:'1px solid rgba(52,224,160,0.28)'}}>
-            <Star size={13} className="text-[#6BEFB9] flex-shrink-0 mt-[2px]"/>
-            <span className="text-[11.5px] leading-snug text-[#cdd9e8]">
-              <strong className="text-[#6BEFB9]">#1 on Google</strong> for
-              &ldquo;free parking spots Belfast where locals park&rdquo;
-            </span>
-          </div>
+          {/* THE RANKING BADGE IS DELIBERATELY NOT HERE.
+              It shipped on 18 Aug reading "#1 on Google for 'free parking
+              spots Belfast where locals park'", and it came from a note made
+              during the SEO work the day before rather than from a check.
+              Nobody re-ran the search before it went live, and it cannot be
+              re-run from the build environment — Google is blocked there.
+
+              A superlative about a third party's ranking is a consumer-facing
+              claim on a commercial homepage. It needs evidence with a date on
+              it, and it needs re-checking, because rankings move daily and
+              vary by location, device and personalisation.
+
+              TO PUT IT BACK: confirm the position in Search Console (Search
+              results → Queries) or an incognito Google search from a Belfast
+              IP, then restore this block with the phrase AND the date it was
+              verified, e.g. "#1 on Google for '<phrase>' — checked 18 Aug".
+              A claim that carries its own date is one somebody can re-check
+              instead of inherit. */}
           {typeof location !== 'undefined' && new URLSearchParams(location.search).get('debug') === '1' && (
             <p className="text-[10px] text-[#FFD27A] mt-1.5 break-all">🔧 {partnerDiag || 'partners: loading…'} · build {new Date(__BUILD_TIME__).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
           )}
