@@ -9,16 +9,21 @@
 // Every link is a plain <a> in the HTML — nothing here depends on JavaScript,
 // which is the whole point of the file.
 import { readFileSync, writeFileSync, readdirSync } from 'fs';
-import { BOOKABLE_SPACES, gbp } from '../src/data/bookableSpaces.js';
+import { BOOKABLE_SPACES, headline } from '../src/data/bookableSpaces.js';
 
-// Cheapest price anyone can ACTUALLY pay today. Derived, never typed: the
-// first draft of this line advertised "from £17.25", which is Belfast Royal
-// Academy's rate — and BRA is still pending_approval, so nobody could have
-// booked at that price. Advertising a price that cannot be paid is worse than
-// advertising none.
-const FROM_PRICE = BOOKABLE_SPACES.length
-  ? gbp(Math.min(...BOOKABLE_SPACES.map(s => s.allInPence)))
-  : null;
+// The headline now comes from bookableSpaces.js, which owns both the number
+// and the guard that stops it being lower than anything on sale. See the
+// comment on HEADLINE_PENCE for why it is settable at all.
+const HEAD = headline();
+const FROM_PRICE = HEAD?.text || null;
+// "a day" was wrong twice: the sites are 9am-8.30pm and 8am-5pm, so nobody is
+// buying a day — and the word invited a comparison with a multi-storey day
+// rate, which is the one comparison this loses.
+const FROM_UNIT = HEAD ? `a ${HEAD.unit}` : '';
+// The hours are what make the price make sense. A number with no window beside
+// it is just a number to be compared with a cheaper one.
+const FROM_HOURS = BOOKABLE_SPACES.find(s => s.allInPence === HEAD?.pence)?.hours || null;
+if (HEAD?.warning) console.warn('prerender: ' + HEAD.warning);
 
 // The page has to sell whichever product actually exists today.
 //
@@ -72,7 +77,7 @@ const townNav = [
 const seo = `<div id="seo-prerender" style="max-width:760px;margin:0 auto;padding:48px 22px;color:#EAF1F8;font-family:Manrope,system-ui,sans-serif;background:linear-gradient(180deg,#0d1626,#0a111e);min-height:100vh">
 <h1 style="font-family:Sora,sans-serif;font-size:32px;font-weight:800;letter-spacing:-.5px;line-height:1.15">Find parking across Northern Ireland</h1>
 <p style="color:rgba(234,241,248,.72);font-size:16px;line-height:1.6;margin-top:12px">${FROM_PRICE
-  ? `<strong style="color:#EAF1F8">Book and pay for a guaranteed parking space in Belfast from ${FROM_PRICE} a day</strong> &mdash; reserved in advance at school, church and GAA club car parks, and held for you when you arrive. ParkEasy also lists ${NETWORK.spots} free spots, on-street bays and local parking tips right across Northern Ireland.`
+  ? `<strong style="color:#EAF1F8">Book and pay for a guaranteed parking space in Belfast from ${FROM_PRICE} ${FROM_UNIT}</strong>${FROM_HOURS ? ` (${FROM_HOURS})` : ''} &mdash; reserved in advance at school, church and GAA club car parks, and held for you when you arrive. ParkEasy also lists ${NETWORK.spots} free spots, on-street bays and local parking tips right across Northern Ireland.`
   : `<strong style="color:#EAF1F8">${NETWORK.spots} parking spots across Northern Ireland &mdash; including ${NETWORK.gems} hidden gems the locals use and ${NETWORK.ev} EV chargers.</strong> Know where you're parking, what it costs and what the restrictions are before you leave the house, in Belfast, Derry~Londonderry, Lisburn, Newry, Bangor and towns right across Northern Ireland.`}</p>
 <p style="margin:18px 0 0">${FROM_PRICE
   ? '<a href="https://parkeasy.uk/?tab=spaces" style="display:inline-block;background:linear-gradient(135deg,#54E6D8,#2ED3C6);color:#06231F;font-weight:800;padding:13px 22px;border-radius:12px;text-decoration:none;font-size:16px">Book a space &rarr;</a>'
