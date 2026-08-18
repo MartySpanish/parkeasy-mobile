@@ -2382,13 +2382,23 @@ const TrustPanel = ({ onAddSpot }) => (
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 // Positions in the results list where a featured partner card appears. One
-// slot per partner we can show — seven now that Tara Lodge is on.
+// slot per partner we can show — eight now that Aaron Quinn Hair is on.
 // Slots and the slice below both derive from this array's length, so adding a
 // partner without adding a slot silently drops them off the end. That has now
-// happened at four, five and six partners: the symptom is never an error, just
-// a business quietly missing from the app it was promised a place in. Add the
-// slot in the same commit as the partner, every time.
-const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41, 49];
+// happened at four, five, six and seven partners: the symptom is never an
+// error, just a business quietly missing from the app it was promised a place
+// in. Add the slot in the same commit as the partner, every time.
+//
+// It happened again at seven. Aaron Quinn Hair went into the table without an
+// eighth slot, and the reason it looked fine is worth writing down: on the
+// LANDING state the top partner is lifted out into the featured block and
+// removed from this list, so eight partners minus one leaves exactly seven and
+// nothing is lost. The moment a driver searches, the featured block is gone by
+// design — an advert on top of somebody's own results — the top partner falls
+// back into the list, and eight into seven slots drops whoever is last.
+// So the bug only ever appeared for a driver who had searched, which is most
+// of them, and never on the screen anybody checks.
+const PARTNER_SLOTS = [2, 9, 17, 25, 33, 41, 49, 57];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
