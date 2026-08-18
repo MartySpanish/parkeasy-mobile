@@ -198,7 +198,17 @@ export default async function handler(req, res) {
         // 700m radius. See 20260817_tara_lodge_pin.sql.
         lat: 54.587835, lng: -5.931730, geo_verified: true,
         radius_m: 700,
-        priority: 4,
+        // TOP OF THE LIST. She leads the featured-partner block on the home
+        // screen, which renders whoever sits first in priority order.
+        //
+        // THIS BUTTON IS AUTHORITATIVE FOR PARTNER ORDERING, and that is worth
+        // stating because it has already bitten once: the payload said 4, the
+        // upsert merges duplicates, so tapping Apply after the order had been
+        // set to 10 in SQL silently reverted her below Sandy at 8 — and the
+        // home page quietly featured the wrong business. A number changed in
+        // the database and not changed here will be undone the next time
+        // somebody taps this. Change it HERE.
+        priority: 10,
         active: true,
       }, { Prefer: 'resolution=merge-duplicates' });
 
