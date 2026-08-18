@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/hosts",
+      "destination": "/hosts.html"
+    },
+    {
+      "source": "/list-your-space",
+      "destination": "/hosts.html"
+    },
+    {
       "source": "/api/connect/return",
       "destination": "/api/connect/link?mode=return"
     },
