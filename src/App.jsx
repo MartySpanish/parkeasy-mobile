@@ -1623,7 +1623,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
                     // "all 6 spaces" reads as surveyed fact. When the figure came
                     // from a show of hands it has to say so, or a community
                     // estimate quietly acquires the authority of a measurement.
-                    ? <>Other ParkEasy drivers have claimed {spot.spacesEstimated ? 'all' : 'all'}{' '}
+                    ? <>Other ParkEasy drivers have claimed all{' '}
                        {spot.spacesEstimated ? <>the roughly {capacity} spaces drivers reckon are here</>
                                              : <>{capacity} spaces</>}. That doesn&rsquo;t mean
                        the street is full &mdash; we only see our own users &mdash; so it is still worth a
