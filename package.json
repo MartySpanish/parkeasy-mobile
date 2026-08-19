@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "ParkEasy Belfast \u2014 community parking finder for Belfast locals",
+  "description": "ParkEasy Belfast — community parking finder for Belfast locals",
   "engines": {
     "node": "24.x"
   },
@@ -12,7 +12,8 @@
     "build": "vite build && node scripts/prerender.mjs && node scripts/inject-area-cta.mjs",
     "build:cap": "VITE_APP_CAPACITOR=true vite build",
     "preview": "vite preview",
-    "audit": "node scripts/audit-spots.mjs"
+    "audit": "node scripts/audit-spots.mjs",
+    "test": "tests/run-all.sh"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",

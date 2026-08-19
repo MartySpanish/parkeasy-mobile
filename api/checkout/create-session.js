@@ -271,7 +271,14 @@ export default async function handler(req, res) {
     const applicationFeePence = money.applicationFeePence;
     const totalPence = money.totalPence;
 
-    const meta = { listing_id: listing.id, host_id: listing.owner_id, duration: String(durationHours), weeks: String(repeatWeeks) };
+    // from_hotspot: whether this booking started at a free spot. Stripe metadata
+    // values are strings, so it is read back with === 'true' below.
+    const fromHotspot = body?.fromHotspot === true || body?.fromHotspot === 'true';
+    const meta = {
+      listing_id: listing.id, host_id: listing.owner_id,
+      duration: String(durationHours), weeks: String(repeatWeeks),
+      from_hotspot: String(fromHotspot),
+    };
 
     const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
     const session = await stripe.checkout.sessions.create({
@@ -330,6 +337,10 @@ export default async function handler(req, res) {
       stripe_session_id: i === 0 ? session.id : `${session.id}#${i}`,
       stripe_destination: host.stripe_account_id, status: 'pending',
       marketing_opt_in: marketingOptIn,
+      // On the first occurrence only, same rule as the money: a repeat series
+      // is one conversion from one comparison card, and counting it seven times
+      // would flatter the funnel it exists to measure.
+      from_hotspot: i === 0 ? fromHotspot : false,
       recurrence_group: recurrenceGroup, recurrence_index: i,
     }));
     // The response here was previously ignored. If the insert failed we still

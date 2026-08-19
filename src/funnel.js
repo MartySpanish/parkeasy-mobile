@@ -47,3 +47,78 @@ export const trackDirections = (kind) => send('directions', { kind: kind || 'unk
 
 /** An account was created. `from` says which prompt earned it. */
 export const trackSignup = (from) => send('signup', { from: from || 'unknown' });
+
+// ── The free → paid funnel ───────────────────────────────────────────────────
+//
+// THE QUESTION THESE FOUR ANSWER, and it is the only one that decides whether
+// the free spots are an asset or a liability: does somebody who came for a free
+// space ever pay for one?
+//
+// If they do, the 745 hand-checked free spots are the top of the marketplace
+// funnel and every hour spent on them pays for itself. If they never do, the
+// free spots are cannibalising the thing that makes money and the answer is a
+// different product, not more spots. Nobody could tell before, in either
+// direction, which is an expensive thing not to know.
+//
+//   hotspot_viewed            → someone opened a free spot
+//   funnel_card_shown         → we had a paid alternative worth showing
+//   paid_listing_clicked      → they were interested enough to look
+//   booking_completed_from_hotspot → they paid
+//
+// Same privacy rule as everything above: counts and short enums only. `taken`
+// and `walk_min` are buckets, not a location.
+
+/** A free or hidden-gem spot was opened. */
+export const trackHotspotViewed = (kind, taken) =>
+  send('hotspot_viewed', { kind: kind || 'unknown', taken: taken ? 'yes' : 'no' });
+
+/** A paid alternative existed near a free spot and was shown beside it. */
+export const trackFunnelCardShown = (reason, walkMin) =>
+  send('funnel_card_shown', { reason: reason || 'nearby', walk_min: bucket(walkMin) });
+
+/** The driver tapped through to the paid space. */
+export const trackPaidListingClicked = (reason, walkMin) =>
+  send('paid_listing_clicked', { reason: reason || 'nearby', walk_min: bucket(walkMin) });
+
+/**
+ * A booking completed that started at a free spot.
+ *
+ * Fired on the return from Stripe. The AUTHORITATIVE number is
+ * bookings.from_hotspot, written server-side from checkout metadata — a client
+ * event after a redirect is lost every time somebody closes the tab on the
+ * Stripe receipt page, which is exactly when a booking is most complete.
+ * This one exists so the analytics funnel has an end; the dashboard reads the
+ * database.
+ */
+export const trackBookingFromHotspot = () => send('booking_completed_from_hotspot', {});
+
+// ── Carrying "this started at a free spot" through checkout ──────────────────
+//
+// Between tapping the paid space on the comparison card and paying for it, a
+// driver passes through a spot sheet, a booking sheet and a hosted Stripe page.
+// Threading a prop through all of that would touch half the app for one boolean.
+//
+// A short-lived sessionStorage mark instead. Session-scoped so it dies with the
+// tab, and time-boxed so a card tapped this morning cannot attribute a booking
+// made this afternoon — an attribution that never expires eventually claims
+// credit for everything.
+const HOTSPOT_ORIGIN_KEY = 'pe_from_hotspot_at';
+const HOTSPOT_ORIGIN_TTL_MS = 30 * 60 * 1000;
+
+export const markHotspotOrigin = () => {
+  try { sessionStorage.setItem(HOTSPOT_ORIGIN_KEY, String(Date.now())); } catch { /* private mode */ }
+};
+
+export const cameFromHotspot = () => {
+  try {
+    const t = Number(sessionStorage.getItem(HOTSPOT_ORIGIN_KEY) || 0);
+    return t > 0 && Date.now() - t < HOTSPOT_ORIGIN_TTL_MS;
+  } catch { return false; }
+};
+
+export const clearHotspotOrigin = () => {
+  try { sessionStorage.removeItem(HOTSPOT_ORIGIN_KEY); } catch { /* private mode */ }
+};
+
+// Walk minutes as a bucket. An exact figure plus a timestamp is a location.
+const bucket = (m) => (m == null ? 'unknown' : m <= 3 ? '0-3' : m <= 6 ? '4-6' : m <= 10 ? '7-10' : '10+');

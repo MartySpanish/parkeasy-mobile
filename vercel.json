@@ -246,5 +246,11 @@
       "destination": "/area/titanic-quarter.html",
       "permanent": true
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/renewal-reminders",
+      "schedule": "0 9 * * *"
+    }
   ]
 }

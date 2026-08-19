@@ -1,11 +1,18 @@
 // POST /api/webhooks/stripe — Stripe's server-to-server notifications.
 // Verifies the signature against the raw body, then syncs state into Supabase:
 //   • checkout.session.completed / async_payment_succeeded  → booking paid
+//     (or, when metadata.kind is car_wash, the wash request is confirmed —
+//      checked first, because a wash has no bookings row to mark)
 //   • checkout.session.async_payment_failed / expired        → booking failed
 //   • account.updated / capability.updated                   → host_accounts state
 //   • payout.paid / payout.failed                            → logged (future host UI)
 //
 //   • invoice.paid                                            → Premium renewal
+//   • invoice.paid / payment_failed / subscription.updated|deleted, when the
+//     subscription belongs to a corporate permit block → block status + the
+//     invoice cache behind operator_settlements. Checked FIRST in every one of
+//     those cases, so a company's parking invoice never grants or revokes a
+//     consumer Premium subscription.
 // Supabase is a cache; Stripe is the source of truth.
 import Stripe from 'stripe';
 import { hostEmails } from '../_hostEmails.js';
@@ -42,6 +49,67 @@ async function syncHostAccount(stripe, svc, URL_, accountId) {
       body: JSON.stringify({ onboarding_status: status, transfers_active: transfersActive, updated_at: new Date().toISOString() }),
     });
   }
+}
+
+// ── ParkEasy for Business ────────────────────────────────────────────────────
+// The permit block behind a Stripe subscription, or null if this subscription
+// has nothing to do with corporate permits.
+//
+// EVERY CORPORATE CASE BELOW CALLS THIS FIRST, and that is not tidiness. The
+// existing invoice.paid handler grants Premium to whoever the invoice was
+// emailed to — so without this lookup, invoicing a company £300 for parking
+// permits would quietly hand their finance department a Premium subscription,
+// and cancelling that subscription would revoke it again. Corporate billing and
+// consumer Premium share an event type and share nothing else.
+async function corporateBlockFor(svc, URL_, subscriptionId) {
+  if (!subscriptionId) return null;
+  try {
+    const r = await fetch(
+      `${URL_}/rest/v1/corporate_permit_blocks?stripe_subscription_id=eq.${encodeURIComponent(subscriptionId)}&select=*`,
+      { headers: svc },
+    );
+    if (!r.ok) return null;
+    return (await r.json())?.[0] || null;
+  } catch { return null; }
+}
+
+// Stripe is the source of truth for whether a company is paying; the block row
+// is a cache of that. A block that is not 'active' issues no permits — see
+// claim_permit(), which refuses on status.
+const BLOCK_STATUS_FOR = {
+  active: 'active', trialing: 'active',
+  past_due: 'paused', unpaid: 'paused', paused: 'paused', incomplete: 'paused',
+  canceled: 'cancelled', incomplete_expired: 'cancelled',
+};
+
+async function syncCorporateBlock(svc, URL_, blockId, patch) {
+  await fetch(`${URL_}/rest/v1/corporate_permit_blocks?id=eq.${encodeURIComponent(blockId)}`, {
+    method: 'PATCH', headers: svc,
+    body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() }),
+  });
+}
+
+// Cache the invoice so public.operator_settlements has something to sum. Upsert
+// on the Stripe id, because Stripe re-sends events and an invoice counted twice
+// is an operator paid twice.
+async function recordCorporateInvoice(svc, URL_, inv, block) {
+  await fetch(`${URL_}/rest/v1/corporate_invoices?on_conflict=stripe_invoice_id`, {
+    method: 'POST', headers: { ...svc, Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({
+      corporate_account_id: block.corporate_account_id,
+      corporate_permit_block_id: block.id,
+      stripe_invoice_id: inv.id,
+      stripe_subscription_id: inv.subscription || null,
+      amount_due_pence: inv.amount_due ?? 0,
+      amount_paid_pence: inv.amount_paid ?? 0,
+      currency: inv.currency || 'gbp',
+      status: inv.status || 'open',
+      period_start: inv.period_start ? new Date(inv.period_start * 1000).toISOString() : null,
+      period_end: inv.period_end ? new Date(inv.period_end * 1000).toISOString() : null,
+      hosted_invoice_url: inv.hosted_invoice_url || null,
+      updated_at: new Date().toISOString(),
+    }),
+  });
 }
 
 // Premium bought via a Stripe payment link: find the auth user by the buyer's
@@ -171,7 +239,7 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     if (!b) return;
     let listing = null;
     if (b.listing_id) {
-      const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${b.listing_id}&select=title,address,contact_email,owner_email,instructions,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,overnight_fee_pence`, { headers: svc });
+      const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${b.listing_id}&select=title,address,contact_email,owner_email,instructions,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,overnight_fee_pence,wash_enabled,wash_days`, { headers: svc });
       listing = (await lr.json())?.[0] || null;
     }
     const gbp = (p) => `£${(p / 100).toFixed(2)}`;
@@ -232,6 +300,30 @@ async function sendBookingEmails(svc, URL_, sessionId) {
       const offer = ofr.ok ? (await ofr.json())?.[0] : null;
       if (offer) offerHtml = `<div style="font-family:system-ui;margin-top:14px;padding:12px 14px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa"><strong>📍 While you're there:</strong> ${esc(offer.description)} — ${esc(offer.business_name)}${offer.offer_code ? ` · code <strong>${esc(offer.offer_code)}</strong>` : ''}</div>`;
     } catch { /* no offers table yet */ }
+
+    // The wash offer, in the confirmation email as well as on the confirmation
+    // screen. Not a second product being pushed: somebody who has just paid for
+    // parking on a Monday is exactly the person for whom "while it's sitting
+    // there anyway" is a good idea, and the email is what they still have open
+    // when they think of it.
+    //
+    // ParkEasy is a booking AGENT for this — the wash is carried out by an
+    // independent contractor and the contract is with them. That sentence goes
+    // in the email too, not just in the app.
+    let washHtml = '';
+    try {
+      if (listing?.wash_enabled) {
+        const days = Array.isArray(listing.wash_days) && listing.wash_days.length ? listing.wash_days : [1];
+        const NAMES = ['', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
+        const dayText = days.map(d => NAMES[d]).filter(Boolean).join(' and ') || 'selected days';
+        washHtml = `<div style="font-family:system-ui;margin-top:14px;padding:12px 14px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa">
+            <strong>✨ Want your car washed while it's parked?</strong>
+            <div style="margin-top:4px">Standard car £30 · Large/SUV/4×4 £40 · Van/7-seater £50. ${dayText} at ${title}, and requests close 24 hours before.</div>
+            <div style="margin-top:6px"><a href="https://parkeasy.uk/" style="color:#0f766e;font-weight:700">Add a wash in the app →</a></div>
+            <div style="margin-top:8px;color:#64748b;font-size:12px">ParkEasy arranges the wash with an independent contractor. The wash itself is a contract between you and them — ParkEasy is booking it, not carrying it out.</div>
+          </div>`;
+      }
+    } catch { /* wash columns may not exist until the migration runs */ }
     // `.catch(() => {})` used to swallow everything here, including a 4xx from
     // Resend. When the club said they never knew about the 8 August bookings
     // there was no way to tell from the logs whether the email had gone out at
@@ -258,7 +350,7 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     if (b.driver_email) jobs.push(send(b.driver_email, `✅ Parking booked — ${title}`,
       `<h2 style="font-family:system-ui">Booking confirmed</h2>${findIt}${gateWarning}`
       + `<h3 style="font-family:system-ui;margin:18px 0 4px;font-size:15px">Your booking</h3>${bookingRows('')}`
-      + `${receiptRows()}${offerHtml}`
+      + `${receiptRows()}${offerHtml}${washHtml}`
       + `<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (the driver service fee is non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
     // The host's email is what a volunteer marshal actually stands in the car
     // park holding, so the registration goes at the TOP, big — not buried in a
@@ -322,6 +414,20 @@ export default async function handler(req, res) {
           await grantPremiumFromPaymentLink(svc, URL_, s).catch(e => console.error('premium link', e));
           break;
         }
+        // A car wash. Not a booking and not a pass: 100% ParkEasy, no host
+        // share, so it must not fall into markBooking below — which would look
+        // for a bookings row that does not exist and silently do nothing.
+        if (s.metadata?.kind === 'car_wash') {
+          await fetch(`${URL_}/rest/v1/wash_requests?stripe_session_id=eq.${encodeURIComponent(s.id)}`, {
+            method: 'PATCH', headers: svc,
+            body: JSON.stringify({
+              status: 'confirmed',
+              stripe_payment_intent: s.payment_intent || null,
+              updated_at: new Date().toISOString(),
+            }),
+          }).catch(e => console.error('wash confirm', e));
+          break;
+        }
         if (s.metadata?.pass_id) {
           // Season-pass purchase → credit the pass (idempotent on session id).
           await fetch(`${URL_}/rest/v1/pass_purchases?on_conflict=stripe_session_id`, {
@@ -341,6 +447,13 @@ export default async function handler(req, res) {
       case 'checkout.session.async_payment_failed':
       case 'checkout.session.expired': {
         const s = event.data.object;
+        if (s.metadata?.kind === 'car_wash') {
+          await fetch(`${URL_}/rest/v1/wash_requests?stripe_session_id=eq.${encodeURIComponent(s.id)}`, {
+            method: 'PATCH', headers: svc,
+            body: JSON.stringify({ status: 'cancelled', updated_at: new Date().toISOString() }),
+          }).catch(() => {});
+          break;
+        }
         await markBooking(svc, URL_, s.id, { status: 'failed' });
         break;
       }
@@ -354,14 +467,60 @@ export default async function handler(req, res) {
         break;
       }
       case 'invoice.paid': {
+        const inv = event.data.object;
+        // ParkEasy for Business first. A corporate permit invoice must NEVER
+        // fall through to the Premium grant below it.
+        const block = await corporateBlockFor(svc, URL_, inv.subscription);
+        if (block) {
+          await recordCorporateInvoice(svc, URL_, inv, block);
+          await syncCorporateBlock(svc, URL_, block.id, { status: 'active' });
+          break;
+        }
         // Subscription renewal → extend account-linked Premium by a month.
         // (Requires the invoice.paid event ticked on the Stripe webhook.)
-        const inv = event.data.object;
         const email = (inv.customer_email || inv.customer_details?.email || '').trim().toLowerCase();
         // Duration from what they actually paid: annual invoices shouldn't be
         // treated as a month.
         const renewalDays = (inv.amount_paid || 0) < 1000 ? 35 : 366;
         if (email) await grantPremiumByEmail(svc, URL_, email, renewalDays).catch(e => console.error('renewal grant', e));
+        break;
+      }
+      case 'invoice.payment_failed': {
+        const inv = event.data.object;
+        const block = await corporateBlockFor(svc, URL_, inv.subscription);
+        if (block) {
+          await recordCorporateInvoice(svc, URL_, inv, block);
+          // PAUSED, NOT CANCELLED, and the difference matters on a Monday
+          // morning. A paused block issues no NEW permits, but the claims
+          // already made stand — staff who planned their week around a permit
+          // are not turned away at the barrier because an invoice is four days
+          // late. Cancelling is a decision somebody makes, not a side effect of
+          // a failed direct debit.
+          await syncCorporateBlock(svc, URL_, block.id, { status: 'paused' });
+        }
+        break;
+      }
+      case 'customer.subscription.updated': {
+        const sub = event.data.object;
+        const block = await corporateBlockFor(svc, URL_, sub.id);
+        if (block) {
+          const status = BLOCK_STATUS_FOR[sub.status];
+          const patch = {};
+          if (status) patch.status = status;
+          // Quantity changed in the Stripe dashboard rather than in ParkEasy.
+          // Mirror it, but never below the claims already made: the database
+          // trigger refuses that update, which is exactly right — a quota cut
+          // under next Tuesday's fifteen claims is discovered on Tuesday, at
+          // the barrier. The PATCH failing here is the safe outcome, and it
+          // leaves Stripe and ParkEasy visibly disagreeing rather than
+          // silently overselling.
+          const qty = sub.items?.data?.[0]?.quantity;
+          if (Number.isInteger(qty) && qty > 0 && qty !== block.permit_count) patch.permit_count = qty;
+          if (Object.keys(patch).length) {
+            await syncCorporateBlock(svc, URL_, block.id, patch)
+              .catch(e => console.error('corporate block sync refused', e.message));
+          }
+        }
         break;
       }
       case 'customer.subscription.deleted': {
@@ -370,6 +529,13 @@ export default async function handler(req, res) {
         // Without this, expires_at was written once at purchase and never
         // revoked: cancel your subscription and you keep Premium forever.
         const sub = event.data.object;
+        // Again: a corporate permit subscription ending must not revoke a
+        // Premium entitlement belonging to whoever the invoices went to.
+        const corporateBlock = await corporateBlockFor(svc, URL_, sub.id);
+        if (corporateBlock) {
+          await syncCorporateBlock(svc, URL_, corporateBlock.id, { status: 'cancelled' });
+          break;
+        }
         let email = (sub.customer_email || '').trim().toLowerCase();
         if (!email && sub.customer) {
           try {

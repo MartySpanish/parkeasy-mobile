@@ -7,7 +7,7 @@ import {
   Bookmark, Camera, Check, X, ChevronRight, ChevronLeft, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon, Sparkles,
-  Store,
+  Store, Briefcase,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -17,11 +17,22 @@ import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
-import { trackSearch, trackSpotOpen, trackDirections, trackSignup } from './funnel';
+import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
 import { paymentError } from './errors';
 import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
 import { splitPartnersByCategory } from './data/partnerCategories';
 import { claimState, canClaim } from './data/spotClaims';
+import { networkPartner, networkSites, nearestSiteDistance } from './data/networkPartners';
+import { holdCopy } from './data/spaceHold';
+import { paidAlternativeFor } from './data/hotspotFunnel';
+import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
+import ComparisonCard from './components/funnel/ComparisonCard';
+import WashAddOn from './components/wash/WashAddOn';
+import CancelSubscription from './components/account/CancelSubscription';
+// Lazily loaded: ParkEasy for Business is a whole screen that almost every
+// driver will never open, and it has no business in the first paint of a
+// parking search.
+const CorporateScreen = React.lazy(() => import('./components/corporate/CorporateScreen'));
 import useBackButton from './useBackButton';
 import EventsScreen from './components/events/EventsScreen';
 
@@ -1139,7 +1150,17 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
             <Star size={28} fill="currentColor" className="text-[#FFD27A]"/>
           </div>
           <h2 className="text-white font-extrabold text-xl">ParkEasy Premium</h2>
-          <p className="text-[#5BE7DA] text-sm mt-1">Unlock the spots only locals know — hand-picked free hidden gems + EV chargers across NI</p>
+          {/* THE COUNT, HERE, because this is where somebody decides whether to
+              pay. It is the number that is actually growing and the one thing a
+              competitor cannot copy in an afternoon: 745 spots is months of
+              standing on streets. Derived from the same data the map draws, so
+              it can never disagree with what they are about to see, and it
+              includes community spots the moment they are approved. */}
+          <p className="text-white/90 text-[13px] mt-1.5">
+            <strong className="text-white">{ALL_SPOTS_STATS.length} parking spots across Northern Ireland</strong>,
+            every one checked before it goes on the map.
+          </p>
+          <p className="text-[#5BE7DA] text-sm mt-1.5">Unlock the spots only locals know — hand-picked free hidden gems + EV chargers across NI</p>
         </div>
         <div className="p-6 space-y-4">
           <div className="space-y-2">
@@ -1223,7 +1244,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
 };
 
 // ── User Menu ─────────────────────────────────────────────────────────────────
-const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin }) => (
+const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin, onCorporate }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
     <div className="absolute top-16 right-3 bg-[#0e1a2c] rounded-2xl shadow-2xl border border-white/10 w-64 overflow-hidden" onClick={e=>e.stopPropagation()}>
       <div style={{background:'var(--surface-solid)'}} className="p-4 flex items-center gap-3">
@@ -1254,11 +1275,24 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             ★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr
           </button>
         )}
+        {/* Only for somebody who actually has work permits. Shown to the 
+            handful of people it means something to and invisible to everyone
+            else, rather than a permanent menu item advertising a product most
+            drivers cannot buy. */}
+        {onCorporate && (
+          <button onClick={onCorporate} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-xs text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+            <Briefcase size={14} className="text-[#5BE7DA]"/> Work parking
+          </button>
+        )}
         {onAdmin && (
           <button onClick={onAdmin} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-xs text-[#06231f] btn-teal active:scale-95 transition">
             📊 Admin dashboard
           </button>
         )}
+        {/* Self-serve cancellation, right here in the account menu. It used to
+            be "contact ParkEasy", which is a liability and a slow one. Renders
+            nothing at all for somebody with no subscription. */}
+        {isPremium && <CancelSubscription/>}
         <div className="border-t border-white/10 pt-2">
           <button onClick={onSignOut} className="w-full flex items-center gap-2 text-sm text-red-300 hover:text-red-300 font-medium py-1 transition-colors">
             <LogOut size={15}/> Sign out
@@ -1447,7 +1481,67 @@ const CapacityPrompt = ({ spot }) => {
   );
 };
 
-const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine }) => {
+// One tap to say a spot is wrong, four reasons, an optional line of detail.
+//
+// It replaces a mailto: link, which is a report nobody files: it leaves the app,
+// opens a mail client that may not be configured, and asks somebody standing on
+// a wet street to compose a paragraph.
+const ReportSheet = ({ spot, onClose, onDone }) => {
+  const [reason, setReason] = useState(null);
+  const [note, setNote] = useState('');
+  const [state, setState] = useState('idle');
+  const submit = async () => {
+    if (!reason) return;
+    setState('sending');
+    const ok = await reportSpot(spot.id, reason, note);
+    setState(ok ? 'done' : 'error');
+    if (ok) { onDone?.(); setTimeout(onClose, 1400); }
+  };
+  return (
+    <div className="fixed inset-0 z-[120] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.7)'}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] px-5 pt-4 pb-8 animate-fade-in-up"
+        style={{maxWidth:680,width:'100%',margin:'0 auto',background:'var(--sheet)',borderTop:'1px solid var(--hairline)'}}>
+        <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
+        {state === 'done' ? (
+          <div className="py-6 text-center">
+            <p className="font-display font-extrabold text-[17px] text-[#EAF1F8]">Thanks — that helps.</p>
+            <p className="text-[13px] text-[#cdd9e8] mt-1.5 leading-relaxed">
+              It&rsquo;s queued for a check, and other drivers will see the flag straight away.
+            </p>
+          </div>
+        ) : (
+          <>
+            <h3 className="font-display font-extrabold text-[17px] text-[#EAF1F8]">What&rsquo;s wrong with {spot.name}?</h3>
+            <p className="text-[12.5px] text-[rgba(234,241,248,0.55)] mt-1 leading-relaxed">
+              We&rsquo;ll check it. Other drivers see a flag on this spot straight away.
+            </p>
+            <div className="mt-3 space-y-2">
+              {REPORT_REASONS.map(r => (
+                <button key={r.id} onClick={()=>setReason(r.id)}
+                  className={`w-full text-left px-3.5 py-3 rounded-xl transition ${
+                    reason === r.id ? 'bg-[#2ED3C6]/12 border border-[#5BE7DA]/45' : 'bg-white/[0.04] border border-white/10'}`}>
+                  <span className="block text-[13.5px] font-bold text-[#EAF1F8]">{r.label}</span>
+                  <span className="block text-[11.5px] text-[rgba(234,241,248,0.5)] mt-0.5">{r.hint}</span>
+                </button>
+              ))}
+            </div>
+            <input value={note} onChange={e=>setNote(e.target.value)} maxLength={500}
+              placeholder="Anything else? (optional)" aria-label="More detail, optional"
+              className="w-full mt-2.5 bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2.5 text-[13px] text-[#EAF1F8] placeholder-[rgba(234,241,248,0.4)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/50"/>
+            {state === 'error' && <p className="text-[12px] text-[#FFD27A] mt-2">Couldn&rsquo;t send that — try again in a moment.</p>}
+            <button onClick={submit} disabled={!reason || state === 'sending'}
+              className="w-full mt-3 py-3.5 rounded-2xl font-display font-bold text-[15px] text-[#06231f] btn-teal active:scale-95 transition disabled:opacity-50">
+              {state === 'sending' ? 'Sending…' : 'Send report'}
+            </button>
+            <button onClick={onClose} className="w-full mt-2 py-3 rounded-2xl font-bold text-[13px] text-[rgba(234,241,248,0.6)]">Cancel</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot, reportFlagged, onReported }) => {
   // Featured Partner: a local business within its radius of this spot. Same
   // contextual placement as on bookable listings — community spots are where
   // the traffic is, so the partner is visible while supply is still growing.
@@ -1473,6 +1567,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
     return () => { live = false; };
   }, [spot.id]);
   const [shareDone,setShareDone]=useState(false);
+  const [reporting,setReporting]=useState(false);
   // When a submitter supplied a photo of the space, that is far more useful at
   // the top than a map: it answers "will I recognise this when I get there".
   // The map stays one tap away rather than being replaced.
@@ -1490,6 +1585,12 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   const ring = spot.available!=null && spot.total ? spot.available/spot.total : occ.pct;
   const C = 2*Math.PI*26; const off = C*(1-Math.max(0.05,Math.min(1,ring)));
   const amen = amenitiesOf(spot);
+  // The paid space to offer beside this one, or null when there is no genuine
+  // decision to make. Recomputed only when the spot or the claim counts move.
+  const paidAlt = useMemo(
+    () => paidAlternativeFor(spot, bookableSpots, claimState(spot, headingMine), sellableNow, allInFrom),
+    [spot?.id, spot?.inUse, spot?.onWay, spot?.spaces, headingMine, bookableSpots],
+  );
   const share=async()=>{ const url=location.origin+location.pathname+'#s='+spot.id; const text=`${spot.name} — ${(spot.notes||'').slice(0,90)}`; if(navigator.share){try{await navigator.share({title:'ParkEasy',text,url});}catch{}}else{navigator.clipboard?.writeText(url);setShareDone(true);setTimeout(()=>setShareDone(false),2000);} };
   return (
     <div className="fixed inset-0 z-[70] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.6)'}} onClick={onClose}>
@@ -1671,6 +1772,36 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               </>
             );
           })()}
+          {/* WHAT OTHER DRIVERS SAID, before the notes rather than after them.
+              A spot whose details are out of date is a spot whose notes are
+              also out of date, so this has to come first or it is a correction
+              nobody reaches.
+
+              Never "this spot is wrong" — one person saying so is one person
+              saying so, and a spot pulled on two taps is a spot anybody can
+              vandalise off the map. It says what it knows and lets the driver
+              decide. */}
+          {reportFlagged && (
+            <p className="text-[12px] mt-3 px-3 py-2.5 rounded-xl leading-relaxed"
+              style={{color:'#FFD27A',border:'1px solid rgba(255,210,122,0.32)',background:'rgba(255,210,122,0.08)'}}>
+              <strong>Recently reported.</strong> {reportFlagged.text}
+            </p>
+          )}
+          {/* THE FREE → PAID CARD, AFTER the free spot has had its say and not
+              before. A driver opening a free space came for that space; putting
+              a paid alternative above the thing they asked for is how a useful
+              page becomes an advert. By this point they have read the walk, the
+              restrictions and whether anyone else is heading there, so the
+              comparison is a decision rather than an interruption.
+
+              It only appears when there is a real decision — see
+              data/hotspotFunnel.js. On a quiet free spot with nothing wrong
+              with it, there is no card at all. */}
+          {paidAlt && (
+            <ComparisonCard spot={spot} paid={paidAlt} reason={paidAlt.reason}
+              claim={claimState(spot, headingMine)}
+              onOpenPaid={(p) => { onClose?.(); onOpenSpot?.(p.spot); }}/>
+          )}
           {onStartTimer && (
             <button onClick={()=>onStartTimer(spot)} className="w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
               <Timer size={17} className="text-[#5BE7DA]"/>Start parking timer
@@ -1690,15 +1821,28 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
                 className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${rating==='changed'?'bg-[#FFC24B]/15 border-[#FFC24B]/50 text-[#FFD27A]':'border-white/15 text-[#cdd9e8] hover:border-[#FFC24B]/40'}`}>
                 👎 Changed
               </button>
-              <a href={reportHref}
-                className="flex items-center justify-center text-xs font-semibold py-2.5 px-3 rounded-xl border border-white/15 text-[rgba(234,241,248,0.6)] hover:text-red-300 hover:border-red-400/40 transition">
-                Report
-              </a>
+              {/* One tap, in the app. This was a mailto: link, which is a
+                  report nobody files — it leaves the app, needs a configured
+                  mail client, and asks somebody on a wet street to write a
+                  paragraph. The old link is kept as the fallback for a build
+                  with no database behind it. */}
+              {isSupabaseEnabled ? (
+                <button onClick={()=>setReporting(true)}
+                  className="flex items-center justify-center text-xs font-semibold py-2.5 px-3 rounded-xl border border-white/15 text-[rgba(234,241,248,0.6)] hover:text-red-300 hover:border-red-400/40 transition">
+                  Report
+                </button>
+              ) : (
+                <a href={reportHref}
+                  className="flex items-center justify-center text-xs font-semibold py-2.5 px-3 rounded-xl border border-white/15 text-[rgba(234,241,248,0.6)] hover:text-red-300 hover:border-red-400/40 transition">
+                  Report
+                </a>
+              )}
             </div>
           </div>
           {partner && <PartnerCard partner={partner} listingId={null}/>}
         </div>
       </div>
+      {reporting && <ReportSheet spot={spot} onClose={()=>setReporting(false)} onDone={onReported}/>}
     </div>
   );
 };
@@ -2001,8 +2145,11 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
         {bookable.length > 0 ? (
           <>
             <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-1">Book a space for the Fleadh</h3>
+            {/* "Held for you" only where ParkEasy actually holds it. See
+                data/spaceHold.js — an operator's car park is oversold by
+                design and is not ours to hold. */}
             <p className="text-[12.5px] text-[rgba(234,241,248,0.55)] mb-2.5">
-              Reserved in advance and held for you — outside the closed zone.
+              {holdCopy(bookable)} Outside the closed zone.
             </p>
             <div className="space-y-3">
               {bookable.map(s=>(
@@ -2450,9 +2597,18 @@ const TrustPanel = ({ onAddSpot }) => (
 // past 39 and quietly costing the bottom partner its placement — which is the
 // exact failure the paragraph above describes.
 //
-// There is not much left to give. A tenth partner cannot be absorbed this way
-// without the end of the list reading as advert, advert, advert; at that point
-// the honest fix is a bigger PAGE or fewer slots, not thinner gaps.
+// THE TENTH SLOT (44) TOOK THE OTHER OPTION. The paragraph that used to sit
+// here said a tenth partner could not be absorbed by tightening gaps again,
+// and that the honest fix was a bigger PAGE or fewer slots. APCOA made it a
+// tenth partner, so PAGE went from 40 to 48 and slot 44 sits five cards after
+// slot 39 — every gap above it is exactly what it was, and the end of the list
+// does not read as advert, advert, advert. The ceiling moved; the spacing did
+// not. That is the version of this change that costs the reader nothing.
+//
+// Note the arithmetic that means TEN partners fit TEN positions: on the landing
+// screen the top-priority partner is lifted out into the featured block, so
+// nine go in slots. During a search there is no featured block, and all ten
+// need a slot of their own — which is the case this tenth one exists for.
 // "Nothing bookable near here yet — want us to tell you when there is?"
 //
 // THE PROBLEM IT ANSWERS. ParkEasy has ONE active bookable site, a GAA club car
@@ -2546,7 +2702,7 @@ const RequestParking = ({ geo, cityName }) => {
   );
 };
 
-const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39];
+const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39, 44];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
@@ -2680,7 +2836,13 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // grows in blocks instead. The COUNT is always the real total; only how many
   // cards are painted is paged, which is why there's a "Show more" rather than
   // a silently truncated list.
-  const PAGE = 40;
+  // 48, not 40. The tenth partner needed a tenth slot, and the paragraph above
+  // PARTNER_SLOTS says what to do at that point: a bigger page, not thinner
+  // gaps. Every existing gap is untouched and the new slot sits at 44, five
+  // cards after the ninth — so the end of the list still reads as a list with
+  // adverts in it rather than a column of adverts. Eight more cards before
+  // "show more" costs nothing; three-in-a-row would have cost the format.
+  const PAGE = 48;
   const [shown, setShown] = useState(PAGE);
   useEffect(() => { setShown(PAGE); }, [geo, query, badgeFilter, sortBy, evOnly, cityName]);
   const visibleSpots = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
@@ -3070,10 +3232,19 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         // none. `regional` marks the fallback so the card stops claiming to be
         // near the driver, which would be the same lie in a friendlier font.
         const REGION_M = 30000;
-        const withD = data.map(p => ({
-          ...p,
-          d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000),
-        }));
+        const withD = data.map(p => {
+          // A NETWORK partner is measured from its nearest car park, not from
+          // its row's pin. APCOA runs sites in Belfast, Newry and Craigavon;
+          // stored as a single coordinate at Lanyon Place it would read as
+          // 55km from Newry and vanish from a town it actually operates in,
+          // while a driver stood in that town looks at one of its car parks in
+          // the results. See data/networkPartners.js.
+          const np = networkPartner(p);
+          const d = np
+            ? nearestSiteDistance(np, ALL_SPOTS, cityCenter[0], cityCenter[1])
+            : Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000);
+          return { ...p, d };
+        });
         const byRank = (a, b) => b.priority - a.priority || a.d - b.d;
         const trulyNear = withD.filter(p => p.d < 8000);
         const near = (trulyNear.length ? trulyNear : withD.filter(p => p.d < REGION_M))
@@ -3359,6 +3530,21 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                       the free spots ARE real before being asked about the
                       thing we cannot offer yet. */}
                   {i===1 && !bookableNearby && <RequestParking geo={geo} cityName={cityName}/>}
+                  {/* WORK WITH PARKEASY, MOVED UP TO HERE.
+                      It used to sit above the footer, which on this screen is
+                      below all forty results, the "show more" button and the
+                      Premium teaser. It rendered correctly and nobody ever
+                      reached it — Marty looked for it twice and concluded it
+                      had not shipped, which is the only verdict that matters.
+                      "At the bottom, where the ask is fair" was right in
+                      principle and wrong about where the bottom is on a list of
+                      745 spots.
+                      Same slot as the Premium promo and the demand card above:
+                      about one screen down, after the driver has had a real
+                      answer, and before the scroll gets long enough to give up
+                      on. Landing state only — once somebody is searching, the
+                      page belongs to their results. */}
+                  {i===1 && !isSearching && <WorkWithUs/>}
                   {/* Spaced out so they read as "while you're here" rather than
                       a block of adverts. Index maths, not a filter, so a second
                       or third partner simply doesn't render on a short list.
@@ -3379,32 +3565,11 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               {premiumTeaser}
             </>
           )}
-          {/* THE OTHER HALF OF THE SUPPLY SIDE, AT THE BOTTOM.
-              There is a route to clubs and churches near the top of this page
-              ("Got a car park sitting empty?"), and there has been a route to
-              businesses only in the footer, as one link among six. A barber or
-              a gym who wants to be featured had nowhere obvious to press.
-
-              At the BOTTOM on purpose, and not paired with the hosts card at
-              the top. A driver opening this page wants parking; two adverts
-              for two different B2B audiences before the first result is how a
-              home screen stops being useful. Somebody who has scrolled the
-              whole list has already had their answer, and that is the moment
-              the ask is fair rather than in the way.
-
-              Shown on the landing state only, same rule as TrustPanel above:
-              once a driver has searched, the page belongs to their results. */}
-          {!isSearching && (
-            <a href="/partners"
-              className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 active:scale-[0.99] transition"
-              style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.10)'}}>
-              <Store size={15} className="text-[#5BE7DA] flex-shrink-0"/>
-              <span className="text-[12.5px] leading-snug text-[#cdd9e8] flex-1 min-w-0">
-                Run a business near parking? <strong className="text-[#EAF1F8]">Get featured on ParkEasy.</strong>
-              </span>
-              <ChevronRight size={15} className="text-[rgba(234,241,248,0.4)] flex-shrink-0"/>
-            </a>
-          )}
+          {/* The "Run a business near parking?" strip that used to end this list
+              is now the WorkWithUs section, which renders a few pixels below it
+              on this very page — the same link to the same page, twice in a
+              row. The section says more and says it beside the hosts route,
+              which is the half this strip never had. */}
         </div>
         </div>
         </div>
@@ -4622,9 +4787,16 @@ const bizPin = (label) => L.divIcon({
 // map of the parking around it. The card can only ever show a teaser — this is
 // where "where do I actually put the car for this place" gets answered.
 const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
+  const np = networkPartner(partner);
   const nearby = useMemo(
     () => nearestSpotsTo(partner.lat, partner.lng, 8, Math.max(900, partner.radius_m || 900)),
     [partner.lat, partner.lng, partner.radius_m],
+  );
+  // A network's own sites, nearest its head pin first. Empty for every
+  // ordinary business, which never reaches the branch that uses it.
+  const sites = useMemo(
+    () => (np ? networkSites(np, ALL_SPOTS, partner.lat, partner.lng) : []),
+    [np, partner.lat, partner.lng],
   );
   const photos = partner.photo_urls?.length ? partner.photo_urls : (partner.photo_url ? [partner.photo_url] : []);
   useEffect(() => {
@@ -4654,12 +4826,17 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
       <button onClick={onClose} aria-label="Close" style={{top:'calc(env(safe-area-inset-top) + 10px)'}}
         className="fixed left-3 z-[600] w-11 h-11 rounded-full bg-black/60 border border-white/25 flex items-center justify-center text-white backdrop-blur active:scale-90 transition"><X size={20}/></button>
 
-      <div className="relative -mt-6 rounded-t-[28px] px-5 pt-3 pb-10 flex-1"
+      {/* pt-3 assumes a photo above it. APCOA is the first partner with none —
+          we have no licensed imagery for them and are not inventing any — and
+          without one the sheet starts at the top of the screen, putting the
+          fixed close button straight over the eyebrow and the business name.
+          Room for the button when there is nothing else to sit under. */}
+      <div className={`relative -mt-6 rounded-t-[28px] px-5 pb-10 flex-1 ${photos.length ? 'pt-3' : 'pt-16'}`}
         style={{background:'var(--sheet)', border:'1px solid var(--hairline)', borderBottom:'none', maxWidth:680, width:'100%', margin:'-24px auto 0'}}>
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
         <div className="flex items-center gap-2">
           {partner.logo_url && <img src={partner.logo_url} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0"/>}
-          <p className="font-display text-[11px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">Featured local business</p>
+          <p className="font-display text-[11px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">{np?.eyebrow || 'Featured local business'}</p>
         </div>
         <h2 className="font-display font-extrabold text-2xl text-[#EAF1F8] mt-1 leading-tight">{partner.name}</h2>
         {partner.name_irish && <p className="text-[12px] font-semibold tracking-[0.12em] text-[#5BE7DA] mt-0.5">{partner.name_irish}</p>}
@@ -4683,7 +4860,56 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
             question with no answer. Show what it actually wants — the ways to
             get in touch — instead of a map of a street it has nothing to do
             with. */}
-        {partner.is_online ? (
+        {np ? (
+          // THE NETWORK BRANCH. Everything below this in the ordinary case is
+          // "here is the free parking around their door", which on a car park
+          // operator's page would be a list of reasons not to use them. What a
+          // driver came here for is their car parks, so that is what this is:
+          // every APCOA site ParkEasy knows about, on one map, each one opening
+          // the same spot card it opens from the results list.
+          <>
+          <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2">{np.heading}</h3>
+          {sites.length > 0 && (
+            <div className="rounded-2xl overflow-hidden border border-white/10" style={{height:230}}>
+              {/* FITTED TO THE PINS, not centred at a guessed zoom. A network's
+                  sites are wherever they are — four across three towns today,
+                  a different spread the moment one is added — so any fixed
+                  zoom is right until it isn't. bounds lets Leaflet work it out.
+                  Two sites 500m apart still overlap at a scale that also has to
+                  show Newry; the list underneath is the unambiguous version,
+                  and pinch-zoom separates them. */}
+              <MapContainer
+                bounds={sites.map(s => [s.lat, s.lng])}
+                boundsOptions={{ padding: [34, 34], maxZoom: 13 }}
+                style={{width:'100%',height:'100%'}}
+                scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
+                <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+                {sites.map(s => (
+                  <Marker key={s.id} position={[s.lat, s.lng]} icon={pricePin(s, false)}
+                    eventHandlers={{ click: () => onOpenSpot?.(s) }}/>
+                ))}
+              </MapContainer>
+            </div>
+          )}
+          <div className="mt-2.5 divide-y divide-white/5">
+            {sites.map(s => (
+              <button key={s.id} onClick={()=>onOpenSpot?.(s)} className="w-full text-left py-2.5 flex items-center justify-between gap-3 active:opacity-70">
+                <span className="min-w-0">
+                  <span className="block text-[13.5px] font-semibold text-[#EAF1F8] truncate">{s.name}</span>
+                  <span className="block text-[11.5px] text-[rgba(234,241,248,0.5)] truncate">{s.near}</span>
+                </span>
+                {s.price && <span className="flex-shrink-0 text-[12px] font-bold text-[#5BE7DA]">{s.price}</span>}
+              </button>
+            ))}
+          </div>
+          {/* The line that keeps this page honest. Read it against the file it
+              points at before changing a word of it. */}
+          <p className="text-[12px] text-[#8da2bd] leading-relaxed mt-3.5 rounded-2xl px-4 py-3"
+            style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.12)'}}>
+            {np.note}
+          </p>
+          </>
+        ) : partner.is_online ? (
           <div className="mt-5 rounded-2xl px-4 py-3.5" style={{background:'rgba(46,211,198,0.10)', border:'1px solid rgba(91,231,218,0.30)'}}>
             <p className="font-display font-bold text-[14px] text-[#EAF1F8]">Online — coached from anywhere</p>
             <p className="text-[12.5px] text-[#cdd9e8] mt-1 leading-relaxed">
@@ -4770,6 +4996,10 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
 const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSpot, onOpenPartner }) => {
   const ref = useRef(null);
   const seen = useRef(false);
+  // Null for every ordinary business, which is all this card has ever had to
+  // handle. Set only for a partner that IS a parking network — see
+  // data/networkPartners.js for why that changes two things and nothing else.
+  const np = networkPartner(partner);
   useEffect(() => {
     const node = ref.current;
     if (!node || seen.current) return;
@@ -4843,7 +5073,8 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
                 gets "map coming shortly" on the page this link opens — the
                 same gate the map and the nearby list already use, so all three
                 tell a driver the same story. */}
-            {(partner.is_online || !partner.geo_verified)
+            {np ? <>{np.cardLink}</>
+              : (partner.is_online || !partner.geo_verified)
               ? <>See photos &amp; details</>
               : <>See photos &amp; parking nearby</>}
             <ChevronRight size={14}/>
@@ -4857,6 +5088,31 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
           </a>
         )}
         {(() => {
+          // A NETWORK PARTNER LISTS ITS OWN CAR PARKS. The block below this one
+          // draws the free kerbside around a business's front door, which is
+          // the right answer for a barber and precisely the wrong one for a car
+          // park operator: it would put the free alternatives to APCOA on
+          // APCOA's own card. Same shape, same taps, different list.
+          if (np) {
+            const sites = networkSites(np, ALL_SPOTS, partner.lat, partner.lng).slice(0, 3);
+            if (!sites.length) return null;
+            return (
+              <div className="mt-3.5 pt-3 border-t border-white/10">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[rgba(234,241,248,0.5)] mb-1.5">🅿 {np.heading}</p>
+                {sites.map(s => {
+                  const row = (
+                    <span className="flex items-center justify-between gap-2 w-full">
+                      <span className="text-[12.5px] text-[#cdd9e8] truncate">{s.name}</span>
+                      {s.price && <span className="flex-shrink-0 text-[11px] text-[#5BE7DA] font-semibold">{String(s.price).split('/')[0]}</span>}
+                    </span>
+                  );
+                  return onOpenSpot
+                    ? <button key={s.id} onClick={(e)=>{ e.stopPropagation(); onOpenSpot(s); }} className="w-full text-left py-1 hover:opacity-80">{row}</button>
+                    : <div key={s.id} className="py-1">{row}</div>;
+                })}
+              </div>
+            );
+          }
           // Same rule as the detail map, and the same correction: it is the
           // PIN that has to be trusted, not the address. A nearby-spots list
           // computed from an unverified coordinate is a list of the wrong
@@ -5731,6 +5987,7 @@ const MessageThread = ({ bookingId }) => {
 const BookingsPanel = ({ user }) => {
   const [rows, setRows] = useState(undefined);
   const [titles, setTitles] = useState({});
+  const [washSites, setWashSites] = useState({});
   const [offers, setOffers] = useState({});
   const [pendingRatings, setPendingRatings] = useState([]);
   const [busyId, setBusyId] = useState(null);
@@ -5746,8 +6003,13 @@ const BookingsPanel = ({ user }) => {
     setRows(list);
     const ids = [...new Set(list.map(b => b.listing_id).filter(Boolean))];
     if (ids.length) {
-      const { data: ls } = await supabase.from('rental_listings').select('id,title').in('id', ids);
+      // wash_enabled / wash_days come back with the title so the confirmation
+      // can offer a wash without a second round trip. Sites that don't wash
+      // simply render nothing.
+      const { data: ls } = await supabase.from('rental_listings')
+        .select('id,title,wash_enabled,wash_days').in('id', ids);
       setTitles(Object.fromEntries((ls || []).map(l => [l.id, l.title])));
+      setWashSites(Object.fromEntries((ls || []).map(l => [l.id, l])));
       // Local offers for these listings (RLS already limits to active+in-window).
       const { data: os } = await supabase.from('local_offers').select('listing_id,business_name,description,offer_code').in('listing_id', ids);
       if (os) setOffers(Object.fromEntries(os.map(o => [o.listing_id, o])));
@@ -5858,6 +6120,14 @@ const BookingsPanel = ({ user }) => {
                   📍 While you're there: {offers[b.listing_id].description} — <strong>{offers[b.listing_id].business_name}</strong>
                   {offers[b.listing_id].offer_code ? <> · code <strong>{offers[b.listing_id].offer_code}</strong></> : null}
                 </p>
+              )}
+              {/* The wash offer, AFTER the parking is paid for. Never inside
+                  checkout: a driver mid-purchase is trying to finish, and an
+                  add-on there is friction on the thing that makes money to sell
+                  a thing nobody has bought yet. Drivers only — a host looking
+                  at their own space is not the person whose car is here. */}
+              {b.status === 'paid' && !asHost && washSites[b.listing_id]?.wash_enabled && (
+                <WashAddOn listing={washSites[b.listing_id]} bookingId={b.id} vrn={b.vehicle_reg}/>
               )}
               {b.status === 'paid' && <MessageThread bookingId={b.id}/>}
               {cancellable && (
@@ -6558,6 +6828,49 @@ const AdminOverlay = ({ onClose }) => {
                   <SyncPartners/>
                 </div>
               )}
+              <WashWeek/>
+              {d.hotspots && (
+                <div>
+                  <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Hotspots</h3>
+                  <div className="grid grid-cols-4 gap-2">
+                    <Tile label="Verified" value={d.hotspots.verified} accent="#6BEFB9"/>
+                    <Tile label="This week" value={d.hotspots.submittedThisWeek}/>
+                    <Tile label="Awaiting review" value={d.hotspots.pendingReview} accent={d.hotspots.pendingReview > 0 ? '#FFD27A' : undefined}/>
+                    <Tile label="Open reports" value={d.hotspots.openReports} accent={d.hotspots.openReports > 0 ? '#FFD27A' : undefined}/>
+                  </div>
+                  {/* THE ACQUISITION LIST. A dense cluster of free spots with
+                      nothing bookable inside it is drivers already circling
+                      somewhere ParkEasy has nothing to sell them. Sorted so
+                      that is what you see first: no listing nearby, biggest
+                      clusters at the top. */}
+                  {d.hotspots.clusters?.length > 0 && (
+                    <div className="glass rounded-2xl p-4 mt-2">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#5BE7DA]">Demand with no supply signed</p>
+                      <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] mt-1 mb-2 leading-relaxed">
+                        Clusters of free spots with nothing bookable within a kilometre. This is the list of who to go and sign.
+                      </p>
+                      <div className="divide-y divide-white/5">
+                        {d.hotspots.clusters.slice(0, 12).map((c, i) => (
+                          <div key={i} className="flex items-center justify-between gap-3 py-2">
+                            <span className="min-w-0">
+                              <span className="block text-[13px] font-semibold text-[#EAF1F8] truncate">{c.area || 'Unnamed area'}</span>
+                              <span className="block text-[11px] text-[rgba(234,241,248,0.45)]">
+                                {c.spot_count} free spot{c.spot_count === 1 ? '' : 's'}
+                              </span>
+                            </span>
+                            <span className="flex-shrink-0 text-[11px] font-bold px-2 py-1 rounded-lg"
+                              style={c.listings_nearby === 0
+                                ? {color:'#FFD27A', background:'rgba(255,210,122,0.12)', border:'1px solid rgba(255,210,122,0.3)'}
+                                : {color:'#6BEFB9', background:'rgba(107,239,185,0.10)', border:'1px solid rgba(107,239,185,0.28)'}}>
+                              {c.listings_nearby === 0 ? 'nothing to sell' : `${c.listings_nearby} listing${c.listings_nearby === 1 ? '' : 's'}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {d.bookings && (
                 <div>
                   <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Bookings &amp; payouts</h3>
@@ -6566,6 +6879,30 @@ const AdminOverlay = ({ onClose }) => {
                     <Tile label="Gross" value={`£${((d.bookings.grossPence||0)/100).toFixed(0)}`}/>
                     <Tile label="Our fees" value={`£${((d.bookings.feePence||0)/100).toFixed(0)}`} accent="#5BE7DA"/>
                     <Tile label="Hosts paid-ready" value={d.bookings.hostsOnboarded}/>
+                  </div>
+                  {/* THE FREE → PAID CONVERSION. The number that says whether
+                      745 hand-checked free spots are the top of the funnel or
+                      are competing with the only thing that makes money.
+                      Read from bookings.from_hotspot, not from an analytics
+                      event — an event fired after the Stripe redirect is lost
+                      whenever somebody closes the receipt tab. */}
+                  <div className="glass rounded-2xl p-4 mt-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#5BE7DA]">Free spot → booking</p>
+                    {d.bookings.fromHotspotPct == null ? (
+                      <p className="text-[12.5px] text-[rgba(234,241,248,0.55)] mt-1.5 leading-relaxed">
+                        No paid bookings yet, so there is no rate to report. Not 0% &mdash; nothing to divide by.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="font-display font-extrabold text-[22px] text-[#EAF1F8] mt-1 leading-none">
+                          {d.bookings.fromHotspotPct}%
+                        </p>
+                        <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-1.5 leading-relaxed">
+                          {d.bookings.fromHotspot} of {d.bookings.paid} paid booking{d.bookings.paid === 1 ? '' : 's'} started
+                          at a free spot &mdash; £{((d.bookings.fromHotspotGrossPence||0)/100).toFixed(2)} gross.
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -6954,6 +7291,7 @@ const INFO_PAGES = {
           ['What are season passes?', 'Some hosts sell a bundle (e.g. 10 bookings) at a discount. You pay once, then each booking just uses a credit — no checkout. Unused credits aren’t refunded after the pass expires.'],
           ['Who is responsible if something happens to my car?', 'Parking arrangements are directly between you and the host. You park at your own risk — hosts aren’t liable for loss, theft or damage except where caused by their own negligence, and neither is ParkEasy. Check your own motor insurance covers you. Full detail in our Terms.'],
           ['Is my payment safe?', 'All payments are processed by Stripe — the same provider used by Amazon and Deliveroo. ParkEasy never sees or stores your card details.'],
+          ['How do I cancel Premium?', 'In the app: tap your initial in the top corner, then Cancel subscription. Two taps, no phone call and nothing to email us about. You keep Premium until the end of the period you have already paid for, and we tell you the exact date on screen and by email. If your subscription is annual we also send a reminder a week before it renews, so the charge is never a surprise.'],
         ].map(([q, a], i) => (
           <div key={i} className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
             <p className="font-display font-bold text-[14px] text-[#EAF1F8]">{q}</p>
@@ -7146,6 +7484,71 @@ const INFO_PAGES = {
   },
 };
 
+// The week's washes, with the plates — the list Marty hands to the valeter.
+//
+// This is the whole "operations" side of the car wash in v1, and deliberately
+// so: no valeter accounts, no scheduling engine, no job assignment. A person
+// reads a list of registrations and washes those cars.
+const WashWeek = () => {
+  const [data, setData] = useState(null);
+  const [from, setFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      setErr('');
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const r = await fetch(`/api/wash?from=${from}`, {
+          headers: { Authorization: `Bearer ${sess?.session?.access_token}` },
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!live) return;
+        if (!r.ok) { setErr(d.error || 'Could not load the wash list'); setData(null); return; }
+        setData(d);
+      } catch (e) { if (live) setErr(String(e.message || e)); }
+    })();
+    return () => { live = false; };
+  }, [from]);
+
+  if (err) return null;              // the table may not exist until the migration runs
+  if (!data) return null;
+
+  const TIER = { standard: 'Standard', large: 'Large/SUV', van: 'Van/7-seat' };
+  return (
+    <div>
+      <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Car washes this week</h3>
+      <div className="glass rounded-2xl p-4">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <input type="date" value={from} onChange={e=>setFrom(e.target.value)} aria-label="Week starting"
+            className="bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2 text-[12.5px] text-[#EAF1F8] focus:outline-none"/>
+          <span className="text-[12px] font-bold text-[#5BE7DA]">£{((data.total_pence||0)/100).toFixed(2)}</span>
+        </div>
+        {data.washes.length === 0 ? (
+          <p className="text-[12.5px] text-[rgba(234,241,248,0.5)]">No washes booked for this week.</p>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {data.washes.map(w => (
+              <div key={w.id} className="py-2 flex items-center justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block font-mono font-bold text-[13px] text-[#EAF1F8] tracking-widest">{w.vrn}</span>
+                  <span className="block text-[11px] text-[rgba(234,241,248,0.45)] truncate">
+                    {new Date(`${w.date}T00:00:00`).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})} · {w.site || '—'}{w.notes ? ` · ${w.notes}` : ''}
+                  </span>
+                </span>
+                <span className="flex-shrink-0 text-right">
+                  <span className="block text-[12px] font-bold text-[#5BE7DA]">£{((w.price_pence||0)/100).toFixed(0)}</span>
+                  <span className="block text-[10.5px] text-[rgba(234,241,248,0.4)]">{TIER[w.tier] || w.tier}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const InfoOverlay = ({ page, onClose }) => {
   const p = INFO_PAGES[page];
   if (!p) return null;
@@ -7167,15 +7570,85 @@ const InfoOverlay = ({ page, onClose }) => {
   );
 };
 
+// ── The two ways somebody can be on the other side of ParkEasy ───────────────
+//
+// WHY THIS EXISTS AS A SECTION. Both routes were already in the app and both
+// were easy to miss: a one-line strip near the top of the search page for
+// clubs, a matching strip at the very end of the results list for businesses,
+// and two text links in a footer row of nine. Three different places, none of
+// them announcing that ParkEasy has a supply side at all. A club treasurer and
+// a barber are looking for the same thing — "what do I do about this?" — and
+// they were being answered in two separate corners of the screen, neither
+// labelled.
+//
+// AT THE BOTTOM, AND ON EVERY TAB. A driver opening this app wants parking, so
+// this cannot compete with the search box. Somebody who has scrolled to the
+// bottom has already had their answer, and that is the moment the ask is fair
+// rather than in the way. Sitting above the footer means it is in the same
+// place whichever tab you are on, which is what makes it findable a second
+// time — the thing a scattered link can never be.
+//
+// The claims here are the ones the pages behind them make and can stand over:
+// 85% to the host and no listing fee (see /hosts), a results card and a page
+// of your own (see /partners). Nothing about how many drivers see it.
+const WORK_WITH_US = [
+  {
+    href: '/hosts', Icon: Building2, label: 'For clubs, churches, schools & driveways',
+    title: 'List your car park',
+    blurb: 'You set the price and the hours, you keep 85%, and it costs nothing to list. Drivers pay by card before they arrive.',
+    cta: 'See what it could raise',
+  },
+  {
+    href: '/partners', Icon: Store, label: 'For local businesses',
+    title: 'Feature your business',
+    blurb: 'A card in the results near you and a page of your own — your photos, your links, and a map of the parking around your door.',
+    cta: 'See what you get',
+  },
+];
+
+const WorkWithUs = () => (
+  <section className="px-4 pt-6" aria-labelledby="pe-work-with-us">
+    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5BE7DA]">Work with ParkEasy</p>
+    <h2 id="pe-work-with-us" className="font-display font-extrabold text-[19px] text-[#EAF1F8] leading-tight mt-1">
+      Got a space, or a business beside one?
+    </h2>
+    {/* Two columns from 640px, stacked on a phone. Same breakpoint the
+        category grid uses, so the page changes shape in one place. */}
+    <div className="pe-work-grid mt-3">
+      {WORK_WITH_US.map(({ href, Icon, label, title, blurb, cta }) => (
+        // A real <a> to a real URL, not an overlay. A treasurer needs something
+        // they can be sent in an email, bookmark and forward to the rest of the
+        // committee — which is exactly what /list-your-space failed to be while
+        // it silently served the homepage.
+        <a key={href} href={href}
+          className="flex flex-col rounded-2xl p-4 active:scale-[0.99] transition"
+          style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.10)'}}>
+          <span className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center"
+              style={{background:'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
+              <Icon size={16} className="text-[#06231f]"/>
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[rgba(234,241,248,0.5)]">{label}</span>
+          </span>
+          <span className="font-display font-extrabold text-[16px] text-[#EAF1F8] leading-tight mt-2.5">{title}</span>
+          <span className="text-[12.5px] text-[#cdd9e8] leading-relaxed mt-1.5 flex-1">{blurb}</span>
+          <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#5BE7DA] mt-3">
+            {cta}<ChevronRight size={14}/>
+          </span>
+        </a>
+      ))}
+    </div>
+  </section>
+);
+
 const Footer = ({ onOpen }) => (
   <footer className="px-4 pt-2 pb-6 text-center">
     <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-[rgba(234,241,248,0.5)]">
-      {/* A real <a> to a real URL, not an overlay. A club treasurer needs
-          something they can be sent in an email, bookmark and forward to the
-          rest of the committee — which is exactly what /list-your-space failed
-          to be while it silently served the homepage. */}
-      <a href="/hosts" className="hover:text-[#5BE7DA] transition font-bold text-[#5BE7DA]">List your car park</a>
-      <a href="/partners" className="hover:text-[#5BE7DA] transition font-bold text-[#5BE7DA]">Feature your business</a>
+      {/* "List your car park" and "Feature your business" used to sit here, as
+          two bold links in a row of nine. They are now the WorkWithUs section
+          directly above this, with room to say what each one actually offers.
+          Repeating them here would put the same two links twice within about
+          a hundred pixels, which reads as clutter rather than emphasis. */}
       {[['howitworks','How it works'],['faq','FAQ'],['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
         <button key={id} onClick={()=>onOpen(id)} className="hover:text-[#5BE7DA] transition font-medium">{label}</button>
       ))}
@@ -7203,7 +7676,17 @@ export default function App() {
   // Every route into the spot sheet goes through here — list tap, map pin,
   // event overlay, partner card, deep link — so the open is counted once and
   // in one place. Closing passes null and is deliberately not an open.
-  const openSpot = useCallback((sp) => { if (sp) trackSpotOpen(sp.badge); setDetailSpot(sp); }, []);
+  const openSpot = useCallback((sp) => {
+    if (sp) {
+      trackSpotOpen(sp.badge);
+      // The top of the free → paid funnel. Only free spots are in it; a paid
+      // council car park is already somebody's paid choice.
+      if (['free', 'hidden_gem'].includes(sp.badge)) {
+        trackHotspotViewed(sp.badge, claimState(sp).atCapacity);
+      }
+    }
+    setDetailSpot(sp);
+  }, []);
   const [showUserMenu,  setShowUserMenu]  = useState(false);
   const [showBizModal,  setShowBizModal]  = useState(false);
   // Premium is either lifetime/subscription (pe_premium) or time-limited
@@ -7215,6 +7698,24 @@ export default function App() {
   const [cookieChoice,  setCookieChoice]  = useState(()=>ls.get('pe_cookie', null));
   const [detailSpot,    setDetailSpot]    = useState(null);
   const [detailPartner, setDetailPartner] = useState(null);
+  // ParkEasy for Business. `hasCorporate` is a single cheap query per signed-in
+  // session — RLS returns this user's own active membership rows and nothing
+  // else, so a null answer is genuinely "you have no work permits" rather than
+  // "we could not tell".
+  const [showCorporate, setShowCorporate] = useState(false);
+  const [hasCorporate,  setHasCorporate]  = useState(false);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!isSupabaseEnabled || !user?.id) { setHasCorporate(false); return; }
+      try {
+        const { data } = await supabase.from('corporate_members')
+          .select('id').eq('user_id', user.id).eq('status', 'active').limit(1);
+        if (live) setHasCorporate(Boolean(data?.length));
+      } catch { if (live) setHasCorporate(false); }
+    })();
+    return () => { live = false; };
+  }, [user?.id]);
 
   // Deep links: #s=<id> opens that spot; the hash tracks the open detail sheet.
   // Gated spots can't be opened via a shared link on the free tier — show the
@@ -7288,6 +7789,14 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisible);
     return () => { live = false; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
+
+  // Open "this is wrong now" reports, by spot id. Counts only — the view behind
+  // this exposes no reporter and no note. Loaded once and refreshed after a
+  // report, rather than polled: a flag that is a few minutes stale is fine, and
+  // a poll for a warning banner is not worth the requests.
+  const [reportCounts, setReportCounts] = useState({});
+  const loadReportCounts = useCallback(() => { fetchReportCounts().then(setReportCounts); }, []);
+  useEffect(() => { loadReportCounts(); }, [loadReportCounts]);
 
   const [rentalSpots, setRentalSpots] = useState([]);
   useEffect(() => {
@@ -7437,6 +7946,7 @@ export default function App() {
     [showBizModal,   () => setShowBizModal(false)],
     [showIOSGuide,   () => setShowIOSGuide(false)],
     [infoPage,       () => setInfoPage(null)],
+    [showCorporate,  () => setShowCorporate(false)],
     [showAdmin,      () => setShowAdmin(false)],
     [showEvents,     () => setShowEvents(false)],
     [showEvent,      () => setShowEvent(false)],
@@ -7578,10 +8088,25 @@ export default function App() {
       // before they travel, not at the gate. Read from the value we stored on
       // the way to Stripe, so there's no round-trip on the return leg.
       const reg = ls.get('pe_vehicle_reg', '') || '';
+      // Close the free → paid funnel. bookings.from_hotspot is the number
+      // anybody decides on; this is the analytics counterpart, and it is
+      // cleared either way so one comparison card cannot claim a second
+      // booking made later in the same tab.
+      if (cameFromHotspot()) trackBookingFromHotspot();
+      clearHotspotOrigin();
       setFlash({ tone: 'ok', msg: `✅ Booking confirmed — your payment went through.${reg ? ` Vehicle ${reg} — check it's right in Your bookings.` : ''}` });
       window.history.replaceState({}, '', window.location.pathname);
     } else if (booking === 'cancelled') {
       setFlash({ tone: 'warn', msg: 'Booking cancelled — you weren’t charged.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // Car wash checkout return.
+    const wash = p.get('wash');
+    if (wash === 'success') {
+      setFlash({ tone: 'ok', msg: '✨ Wash booked — we’ll have your registration on the valeter’s list.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (wash === 'cancelled') {
+      setFlash({ tone: 'warn', msg: 'Wash not booked — you weren’t charged.' });
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -7817,9 +8342,16 @@ export default function App() {
         ...(typeof detailSpot.spaces !== 'number' && capacity[String(detailSpot.id)]
           ? { spaces: capacity[String(detailSpot.id)], spacesEstimated: true } : {}),
       }} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
-        onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}/>}
+        onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}
+        bookableSpots={rentalSpots} onOpenSpot={openSpot}
+        reportFlagged={reportFlag(reportCounts, detailSpot.id)} onReported={loadReportCounts}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
+      {showCorporate && (
+        <React.Suspense fallback={null}>
+          <CorporateScreen onClose={()=>setShowCorporate(false)}/>
+        </React.Suspense>
+      )}
       {flash && (
         <div className="fixed top-3 inset-x-3 z-[220] flex items-start gap-2.5 rounded-2xl px-4 py-3 shadow-xl"
           style={{ background: flash.tone==='ok' ? 'rgba(52,224,160,0.14)' : 'rgba(255,194,75,0.14)', border: `1px solid ${flash.tone==='ok' ? 'rgba(52,224,160,0.4)' : 'rgba(255,194,75,0.4)'}`, backdropFilter:'blur(8px)' }}
@@ -7872,6 +8404,7 @@ export default function App() {
           onSignOut={handleSignOut}
           onUpgrade={()=>{setShowUserMenu(false);setShowPricing(true);}}
           onAdmin={isAdminUser(user) ? ()=>{setShowUserMenu(false);setShowAdmin(true);} : undefined}
+          onCorporate={hasCorporate ? ()=>{setShowUserMenu(false);setShowCorporate(true);} : undefined}
           onClose={()=>setShowUserMenu(false)}/>
       )}
 
@@ -7960,6 +8493,10 @@ export default function App() {
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
+        {/* Every tab except Search, which now carries its own copy near the top
+            of the results. Two on one screen would be the clutter the single
+            section was meant to replace. */}
+        {tab !== 'search' && <WorkWithUs/>}
         <Footer onOpen={setInfoPage}/>
       </main>
 
