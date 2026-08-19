@@ -27,11 +27,15 @@ end $$;
 
 grant usage on schema public to anon, authenticated, service_role;
 
--- Enough of rental_listings for the FK and the settlement view's join. The real
--- table has ~30 more columns and none of them matter here.
+-- Enough of rental_listings for the FKs, the settlement view's join and the
+-- cluster view's distance test. The real table has ~30 more columns and none of
+-- them matter here — but lat/lng do, and leaving them out made
+-- hotspot_clusters fail on a column the real table has had since June.
 create table if not exists public.rental_listings (
   id      uuid primary key default gen_random_uuid(),
   title   text not null,
   address text,
+  lat     float,
+  lng     float,
   status  text not null default 'active'
 );

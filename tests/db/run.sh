@@ -6,9 +6,18 @@
 # Exists because the one rule this feature cannot get wrong — never issue more
 # permits for a date than the block holds — is a CONCURRENCY rule, and a
 # concurrency rule asserted in prose is a concurrency rule nobody has tested.
+#   tests/db/run.sh a.sql b.sql c.sql tests/db/x.test.sql
+#
+# Every argument but the last is a migration, applied in order; the last is the
+# test. Several because a migration that ALTERs a table needs the migration that
+# created it, and applying the real chain is the only way to find out that an
+# ALTER references a column somebody renamed two files ago.
 set -euo pipefail
-MIGRATION="${1:?usage: run.sh <migration.sql> <test.sql>}"
-TEST="${2:?usage: run.sh <migration.sql> <test.sql>}"
+if [ "$#" -lt 2 ]; then
+  echo "usage: run.sh <migration.sql> [more.sql ...] <test.sql>" >&2; exit 2
+fi
+MIGRATIONS=("${@:1:$#-1}")
+TEST="${!#}"
 
 PGBIN="${PGBIN:-/usr/lib/postgresql/16/bin}"
 PGDATA="${PGDATA:-/var/tmp/pe-pg-test}"
@@ -33,5 +42,11 @@ psql -q -c "create database $DB;"
 trap 'psql -q -c "drop database if exists $DB;" >/dev/null 2>&1 || true' EXIT
 
 psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$(dirname "$0")/harness.sql"
-psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$MIGRATION"
+for m in "${MIGRATIONS[@]}"; do
+  psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$m"
+  # Re-applied after each migration: known-drift can only add a column to a
+  # table once that table exists, and the tables arrive part-way through the
+  # chain. Idempotent, so running it repeatedly costs nothing.
+  psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$(dirname "$0")/known-drift.sql"
+done
 psql    -d "$DB" -v ON_ERROR_STOP=1 -f "$TEST"

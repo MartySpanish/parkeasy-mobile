@@ -25,6 +25,7 @@ import { claimState, canClaim } from './data/spotClaims';
 import { networkPartner, networkSites, nearestSiteDistance } from './data/networkPartners';
 import { holdCopy } from './data/spaceHold';
 import { paidAlternativeFor } from './data/hotspotFunnel';
+import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
 import ComparisonCard from './components/funnel/ComparisonCard';
 // Lazily loaded: ParkEasy for Business is a whole screen that almost every
 // driver will never open, and it has no business in the first paint of a
@@ -1147,7 +1148,17 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
             <Star size={28} fill="currentColor" className="text-[#FFD27A]"/>
           </div>
           <h2 className="text-white font-extrabold text-xl">ParkEasy Premium</h2>
-          <p className="text-[#5BE7DA] text-sm mt-1">Unlock the spots only locals know — hand-picked free hidden gems + EV chargers across NI</p>
+          {/* THE COUNT, HERE, because this is where somebody decides whether to
+              pay. It is the number that is actually growing and the one thing a
+              competitor cannot copy in an afternoon: 745 spots is months of
+              standing on streets. Derived from the same data the map draws, so
+              it can never disagree with what they are about to see, and it
+              includes community spots the moment they are approved. */}
+          <p className="text-white/90 text-[13px] mt-1.5">
+            <strong className="text-white">{ALL_SPOTS_STATS.length} parking spots across Northern Ireland</strong>,
+            every one checked before it goes on the map.
+          </p>
+          <p className="text-[#5BE7DA] text-sm mt-1.5">Unlock the spots only locals know — hand-picked free hidden gems + EV chargers across NI</p>
         </div>
         <div className="p-6 space-y-4">
           <div className="space-y-2">
@@ -1464,7 +1475,67 @@ const CapacityPrompt = ({ spot }) => {
   );
 };
 
-const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot }) => {
+// One tap to say a spot is wrong, four reasons, an optional line of detail.
+//
+// It replaces a mailto: link, which is a report nobody files: it leaves the app,
+// opens a mail client that may not be configured, and asks somebody standing on
+// a wet street to compose a paragraph.
+const ReportSheet = ({ spot, onClose, onDone }) => {
+  const [reason, setReason] = useState(null);
+  const [note, setNote] = useState('');
+  const [state, setState] = useState('idle');
+  const submit = async () => {
+    if (!reason) return;
+    setState('sending');
+    const ok = await reportSpot(spot.id, reason, note);
+    setState(ok ? 'done' : 'error');
+    if (ok) { onDone?.(); setTimeout(onClose, 1400); }
+  };
+  return (
+    <div className="fixed inset-0 z-[120] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.7)'}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] px-5 pt-4 pb-8 animate-fade-in-up"
+        style={{maxWidth:680,width:'100%',margin:'0 auto',background:'var(--sheet)',borderTop:'1px solid var(--hairline)'}}>
+        <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
+        {state === 'done' ? (
+          <div className="py-6 text-center">
+            <p className="font-display font-extrabold text-[17px] text-[#EAF1F8]">Thanks — that helps.</p>
+            <p className="text-[13px] text-[#cdd9e8] mt-1.5 leading-relaxed">
+              It&rsquo;s queued for a check, and other drivers will see the flag straight away.
+            </p>
+          </div>
+        ) : (
+          <>
+            <h3 className="font-display font-extrabold text-[17px] text-[#EAF1F8]">What&rsquo;s wrong with {spot.name}?</h3>
+            <p className="text-[12.5px] text-[rgba(234,241,248,0.55)] mt-1 leading-relaxed">
+              We&rsquo;ll check it. Other drivers see a flag on this spot straight away.
+            </p>
+            <div className="mt-3 space-y-2">
+              {REPORT_REASONS.map(r => (
+                <button key={r.id} onClick={()=>setReason(r.id)}
+                  className={`w-full text-left px-3.5 py-3 rounded-xl transition ${
+                    reason === r.id ? 'bg-[#2ED3C6]/12 border border-[#5BE7DA]/45' : 'bg-white/[0.04] border border-white/10'}`}>
+                  <span className="block text-[13.5px] font-bold text-[#EAF1F8]">{r.label}</span>
+                  <span className="block text-[11.5px] text-[rgba(234,241,248,0.5)] mt-0.5">{r.hint}</span>
+                </button>
+              ))}
+            </div>
+            <input value={note} onChange={e=>setNote(e.target.value)} maxLength={500}
+              placeholder="Anything else? (optional)" aria-label="More detail, optional"
+              className="w-full mt-2.5 bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2.5 text-[13px] text-[#EAF1F8] placeholder-[rgba(234,241,248,0.4)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/50"/>
+            {state === 'error' && <p className="text-[12px] text-[#FFD27A] mt-2">Couldn&rsquo;t send that — try again in a moment.</p>}
+            <button onClick={submit} disabled={!reason || state === 'sending'}
+              className="w-full mt-3 py-3.5 rounded-2xl font-display font-bold text-[15px] text-[#06231f] btn-teal active:scale-95 transition disabled:opacity-50">
+              {state === 'sending' ? 'Sending…' : 'Send report'}
+            </button>
+            <button onClick={onClose} className="w-full mt-2 py-3 rounded-2xl font-bold text-[13px] text-[rgba(234,241,248,0.6)]">Cancel</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot, reportFlagged, onReported }) => {
   // Featured Partner: a local business within its radius of this spot. Same
   // contextual placement as on bookable listings — community spots are where
   // the traffic is, so the partner is visible while supply is still growing.
@@ -1490,6 +1561,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
     return () => { live = false; };
   }, [spot.id]);
   const [shareDone,setShareDone]=useState(false);
+  const [reporting,setReporting]=useState(false);
   // When a submitter supplied a photo of the space, that is far more useful at
   // the top than a map: it answers "will I recognise this when I get there".
   // The map stays one tap away rather than being replaced.
@@ -1694,6 +1766,21 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               </>
             );
           })()}
+          {/* WHAT OTHER DRIVERS SAID, before the notes rather than after them.
+              A spot whose details are out of date is a spot whose notes are
+              also out of date, so this has to come first or it is a correction
+              nobody reaches.
+
+              Never "this spot is wrong" — one person saying so is one person
+              saying so, and a spot pulled on two taps is a spot anybody can
+              vandalise off the map. It says what it knows and lets the driver
+              decide. */}
+          {reportFlagged && (
+            <p className="text-[12px] mt-3 px-3 py-2.5 rounded-xl leading-relaxed"
+              style={{color:'#FFD27A',border:'1px solid rgba(255,210,122,0.32)',background:'rgba(255,210,122,0.08)'}}>
+              <strong>Recently reported.</strong> {reportFlagged.text}
+            </p>
+          )}
           {/* THE FREE → PAID CARD, AFTER the free spot has had its say and not
               before. A driver opening a free space came for that space; putting
               a paid alternative above the thing they asked for is how a useful
@@ -1728,15 +1815,28 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
                 className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${rating==='changed'?'bg-[#FFC24B]/15 border-[#FFC24B]/50 text-[#FFD27A]':'border-white/15 text-[#cdd9e8] hover:border-[#FFC24B]/40'}`}>
                 👎 Changed
               </button>
-              <a href={reportHref}
-                className="flex items-center justify-center text-xs font-semibold py-2.5 px-3 rounded-xl border border-white/15 text-[rgba(234,241,248,0.6)] hover:text-red-300 hover:border-red-400/40 transition">
-                Report
-              </a>
+              {/* One tap, in the app. This was a mailto: link, which is a
+                  report nobody files — it leaves the app, needs a configured
+                  mail client, and asks somebody on a wet street to write a
+                  paragraph. The old link is kept as the fallback for a build
+                  with no database behind it. */}
+              {isSupabaseEnabled ? (
+                <button onClick={()=>setReporting(true)}
+                  className="flex items-center justify-center text-xs font-semibold py-2.5 px-3 rounded-xl border border-white/15 text-[rgba(234,241,248,0.6)] hover:text-red-300 hover:border-red-400/40 transition">
+                  Report
+                </button>
+              ) : (
+                <a href={reportHref}
+                  className="flex items-center justify-center text-xs font-semibold py-2.5 px-3 rounded-xl border border-white/15 text-[rgba(234,241,248,0.6)] hover:text-red-300 hover:border-red-400/40 transition">
+                  Report
+                </a>
+              )}
             </div>
           </div>
           {partner && <PartnerCard partner={partner} listingId={null}/>}
         </div>
       </div>
+      {reporting && <ReportSheet spot={spot} onClose={()=>setReporting(false)} onDone={onReported}/>}
     </div>
   );
 };
@@ -6693,6 +6793,48 @@ const AdminOverlay = ({ onClose }) => {
                   <SyncPartners/>
                 </div>
               )}
+              {d.hotspots && (
+                <div>
+                  <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Hotspots</h3>
+                  <div className="grid grid-cols-4 gap-2">
+                    <Tile label="Verified" value={d.hotspots.verified} accent="#6BEFB9"/>
+                    <Tile label="This week" value={d.hotspots.submittedThisWeek}/>
+                    <Tile label="Awaiting review" value={d.hotspots.pendingReview} accent={d.hotspots.pendingReview > 0 ? '#FFD27A' : undefined}/>
+                    <Tile label="Open reports" value={d.hotspots.openReports} accent={d.hotspots.openReports > 0 ? '#FFD27A' : undefined}/>
+                  </div>
+                  {/* THE ACQUISITION LIST. A dense cluster of free spots with
+                      nothing bookable inside it is drivers already circling
+                      somewhere ParkEasy has nothing to sell them. Sorted so
+                      that is what you see first: no listing nearby, biggest
+                      clusters at the top. */}
+                  {d.hotspots.clusters?.length > 0 && (
+                    <div className="glass rounded-2xl p-4 mt-2">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#5BE7DA]">Demand with no supply signed</p>
+                      <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] mt-1 mb-2 leading-relaxed">
+                        Clusters of free spots with nothing bookable within a kilometre. This is the list of who to go and sign.
+                      </p>
+                      <div className="divide-y divide-white/5">
+                        {d.hotspots.clusters.slice(0, 12).map((c, i) => (
+                          <div key={i} className="flex items-center justify-between gap-3 py-2">
+                            <span className="min-w-0">
+                              <span className="block text-[13px] font-semibold text-[#EAF1F8] truncate">{c.area || 'Unnamed area'}</span>
+                              <span className="block text-[11px] text-[rgba(234,241,248,0.45)]">
+                                {c.spot_count} free spot{c.spot_count === 1 ? '' : 's'}
+                              </span>
+                            </span>
+                            <span className="flex-shrink-0 text-[11px] font-bold px-2 py-1 rounded-lg"
+                              style={c.listings_nearby === 0
+                                ? {color:'#FFD27A', background:'rgba(255,210,122,0.12)', border:'1px solid rgba(255,210,122,0.3)'}
+                                : {color:'#6BEFB9', background:'rgba(107,239,185,0.10)', border:'1px solid rgba(107,239,185,0.28)'}}>
+                              {c.listings_nearby === 0 ? 'nothing to sell' : `${c.listings_nearby} listing${c.listings_nearby === 1 ? '' : 's'}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {d.bookings && (
                 <div>
                   <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Bookings &amp; payouts</h3>
@@ -7546,6 +7688,14 @@ export default function App() {
     return () => { live = false; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
+  // Open "this is wrong now" reports, by spot id. Counts only — the view behind
+  // this exposes no reporter and no note. Loaded once and refreshed after a
+  // report, rather than polled: a flag that is a few minutes stale is fine, and
+  // a poll for a warning banner is not worth the requests.
+  const [reportCounts, setReportCounts] = useState({});
+  const loadReportCounts = useCallback(() => { fetchReportCounts().then(setReportCounts); }, []);
+  useEffect(() => { loadReportCounts(); }, [loadReportCounts]);
+
   const [rentalSpots, setRentalSpots] = useState([]);
   useEffect(() => {
     let live = true;
@@ -8082,7 +8232,8 @@ export default function App() {
           ? { spaces: capacity[String(detailSpot.id)], spacesEstimated: true } : {}),
       }} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
         onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}
-        bookableSpots={rentalSpots} onOpenSpot={openSpot}/>}
+        bookableSpots={rentalSpots} onOpenSpot={openSpot}
+        reportFlagged={reportFlag(reportCounts, detailSpot.id)} onReported={loadReportCounts}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
       {showCorporate && (

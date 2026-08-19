@@ -564,9 +564,44 @@ export default async function handler(req, res) {
       }
     } catch { /* tables may not exist yet */ }
 
+    // ── Hotspots: the count, the queue, and the acquisition list ────────────
+    //
+    // The clusters are the valuable half. A dense cluster of free spots with no
+    // bookable ParkEasy listing inside it is a place where drivers are already
+    // circling and there is nothing to sell them — which is the list of hosts
+    // and operators to go and sign, in priority order, falling out of data that
+    // already exists. Sorted so that list is what you see first.
+    let hotspots = { verified: 0, pendingReview: 0, submittedThisWeek: 0, openReports: 0, clusters: [] };
+    try {
+      const countOf = async (query) => {
+        const r = await fetch(`${URL_}/rest/v1/${query}`, { headers: { ...svc, Prefer: 'count=exact' } });
+        if (!r.ok) return 0;
+        const range = r.headers.get('content-range');
+        return range?.includes('/') ? (parseInt(range.split('/')[1], 10) || 0) : (await r.json()).length;
+      };
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const [verified, pendingReview, submittedThisWeek, openReports] = await Promise.all([
+        countOf('spot_submissions?status=eq.approved&select=id'),
+        countOf('spot_submissions?status=eq.new&select=id'),
+        countOf(`spot_submissions?created_at=gte.${weekAgo}&select=id`),
+        countOf('spot_reports?resolved_at=is.null&select=id'),
+      ]);
+      Object.assign(hotspots, { verified, pendingReview, submittedThisWeek, openReports });
+
+      // listings_nearby ascending first, then the biggest clusters: "lots of
+      // demand, no supply signed" sorts straight to the top.
+      const cr = await fetch(
+        `${URL_}/rest/v1/hotspot_clusters?select=area,spot_count,lat,lng,listings_nearby`
+        + `&order=listings_nearby.asc,spot_count.desc&limit=25`,
+        { headers: svc },
+      );
+      if (cr.ok) hotspots.clusters = await cr.json();
+    } catch { /* views may not exist until the migration runs */ }
+
     return res.status(200).json({
       ok: true, configured: true,
       env,
+      hotspots,
       pending,
       promos,
       spots,
