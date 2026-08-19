@@ -47,7 +47,16 @@ create policy "parking_requests_public_insert" on public.parking_requests
 -- The view Marty actually wants: demand grouped by where people looked, so a
 -- club can be shown its own number. Rounded to ~1km so "Botanic Gardens" and
 -- "Botanic Avenue" land in the same bucket instead of looking like two markets.
-create or replace view public.parking_demand as
+--
+-- security_invoker = true is NOT optional here. A Postgres 15+ view runs as its
+-- OWNER by default, which means it reads straight through the RLS above and
+-- hands the aggregate to whoever can select the view. That would break the
+-- promise made four lines up. With security_invoker the view runs as the
+-- CALLER, so anon hits the same no-read policy and gets nothing; service_role
+-- reads it fine, because service_role bypasses RLS anyway. The revoke below is
+-- the belt to that pair of braces — Supabase grants anon SELECT on new objects
+-- in public by default, and this takes it straight back off.
+create or replace view public.parking_demand with (security_invoker = true) as
 select
   round(lat::numeric, 2) as lat_bucket,
   round(lng::numeric, 2) as lng_bucket,
@@ -59,3 +68,21 @@ from public.parking_requests
 where lat is not null and lng is not null
 group by 1, 2
 order by requests desc;
+
+revoke all on public.parking_demand from anon, authenticated;
+
+-- ── WHAT THIS COLLIDED WITH, 19 Aug ───────────────────────────────────────
+-- This did not apply cleanly, and it was not the Supabase outage that stopped
+-- it. public.parking_demand already existed as a TABLE — a second, untracked
+-- attempt at this same feature, with columns postcode/near_text/occasion/
+-- max_price_pence/source. Postgres will not replace a table with a view, so
+-- the last statement here failed every time regardless of connectivity.
+--
+-- That table had no writer: the app inserts into parking_requests and always
+-- has. It held 0 rows. It was dropped, and this view now owns the name.
+-- See 20260819_parking_requests_repoint.sql. Against the live database that
+-- one had to run FIRST, because founder_dashboard depended on the table and
+-- Postgres refuses to drop out from under a view. It is named to sort SECOND
+-- here, because a replay onto an empty database needs parking_requests to
+-- exist before anything can point at it. Same two files, opposite orders, and
+-- both are correct for the situation they run in.
