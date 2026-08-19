@@ -93,7 +93,9 @@ ${FROM_PRICE ? '<li><strong style="color:#EAF1F8">Book a space in advance</stron
 <h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">Parking by town</h2>
 ${townNav}
 <h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">Community-powered, not corporate</h2>
-<p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:8px">Listings cover official council and private car parks, on-street bays, free spots and local recommendations people have shared. Prices, hours and restrictions change, and we don't have live availability — always check the signs and local restrictions when you arrive.</p>
+<p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:8px">Listings cover official council and private car parks, on-street bays, free spots and local recommendations people have shared.</p>
+<p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:10px"><strong style="color:#6BEFB9">Spaces you book are held for you.</strong> Pay in advance and the bay is yours for the hours you booked &mdash; we never sell more spaces than a site has, and if a host closes the site we refund in full.</p>
+<p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:10px"><strong style="color:#FFD27A">Everything else is local information.</strong> Free spots, hidden gems and on-street bays are not reserved and cannot be. Prices, hours and restrictions change, and we don't have live availability &mdash; always check the signs when you arrive.</p>
 <p style="color:rgba(234,241,248,.5);margin-top:28px;font-size:14px">Loading the live map… If it doesn't appear, enable JavaScript or visit <a href="https://parkeasy.uk/" style="color:#5BE7DA">parkeasy.uk</a>.</p>
 </div>`;
 

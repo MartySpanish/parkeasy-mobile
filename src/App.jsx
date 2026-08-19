@@ -2362,11 +2362,20 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
 
 // What ParkEasy actually is, said plainly and below the fold.
 //
-// The wording is deliberately careful. We do not have live availability — the
-// occupancy figure on a spot is described in the app's own words as a
-// "community estimate" — so this says information can change and tells people
-// to trust the signs over us. A parking app that implies certainty it does not
-// have is how someone gets a ticket.
+// TWO PRODUCTS, TWO PROMISES, AND THEY ARE NOT THE SAME.
+//
+// This panel used to carry one disclaimer — "we don't have live availability,
+// always check the signs" — sitting under everything on the app. For the 741
+// free spots that is exactly right and it is the reason this app is trusted.
+// For a BOOKED space it is false and it costs money: a booked space is one
+// named host holding one specific bay, paid for in advance, and the checkout
+// will not sell more spaces than a site has. Telling a driver who just paid
+// £23 to "check the signs on arrival" undoes the only thing they bought.
+//
+// So the two are now said separately, in the order a driver meets them: the
+// guarantee for what is booked, the caveat for what is not. Neither is
+// softened — the caveat is the same sentence it always was, it just no longer
+// hangs over a product it was never about.
 const TrustPanel = ({ onAddSpot }) => (
   <section aria-labelledby="pe-trust-heading"
     className="mt-6 rounded-2xl px-4 py-4"
@@ -2379,10 +2388,27 @@ const TrustPanel = ({ onAddSpot }) => (
       council and private car parks, on-street bays, free spots and local recommendations
       people have shared.
     </p>
-    <p className="text-[13px] text-[rgba(234,241,248,0.62)] leading-relaxed mt-2">
-      Prices, hours and restrictions change, and we don&rsquo;t have live availability.
-      <strong className="text-[#EAF1F8]"> Always check the signs and local restrictions when you arrive.</strong>
-    </p>
+    <div className="mt-3 rounded-xl px-3.5 py-3"
+      style={{ background:'rgba(52,224,160,0.09)', border:'1px solid rgba(52,224,160,0.28)' }}>
+      <p className="text-[12.5px] font-bold text-[#6BEFB9] flex items-center gap-1.5">
+        <Key size={13} className="flex-shrink-0"/>Spaces you book are held for you
+      </p>
+      <p className="text-[12.5px] text-[rgba(234,241,248,0.66)] leading-relaxed mt-1">
+        Pay in advance and the bay is yours for the hours you booked. We never sell more
+        spaces than a site has. If a host closes the site, we refund you in full.
+      </p>
+    </div>
+    <div className="mt-2 rounded-xl px-3.5 py-3"
+      style={{ background:'rgba(255,194,75,0.08)', border:'1px solid rgba(255,194,75,0.25)' }}>
+      <p className="text-[12.5px] font-bold text-[#FFD27A] flex items-center gap-1.5">
+        <Info size={13} className="flex-shrink-0"/>Everything else is local information
+      </p>
+      <p className="text-[12.5px] text-[rgba(234,241,248,0.66)] leading-relaxed mt-1">
+        Free spots, hidden gems and on-street bays are not reserved and cannot be. Prices,
+        hours and restrictions change, and we don&rsquo;t have live availability.
+        <strong className="text-[#EAF1F8]"> Always check the signs when you arrive.</strong>
+      </p>
+    </div>
     {onAddSpot && (
       <button onClick={onAddSpot}
         className="mt-3.5 min-h-[44px] w-full rounded-xl text-[13px] font-bold text-[#06231f] btn-teal active:scale-[0.985] transition">
