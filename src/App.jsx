@@ -2421,10 +2421,10 @@ const TrustPanel = ({ onAddSpot }) => (
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 // Positions in the results list where a featured partner card appears. One
-// slot per partner we can show — eight now that Aaron Quinn Hair is on.
+// slot per partner we can show — nine now that Paul's Barbers is on.
 // Slots and the slice below both derive from this array's length, so adding a
 // partner without adding a slot silently drops them off the end. That has now
-// happened at four, five, six and seven partners: never an error, just
+// happened at four, five, six, seven and eight partners: never an error, just
 // a business quietly missing from the app it was promised a place in. Add the
 // slot in the same commit as the partner, every time.
 //
@@ -2434,9 +2434,19 @@ const TrustPanel = ({ onAddSpot }) => (
 // nothing looked wrong; they were simply never reached, which is the same
 // outcome for the business.
 //
-// Gaps widen early and tighten late (7,7,6,5,4,4,4) rather than spreading
+// Gaps widen early and tighten late (7,6,5,5,4,4,3,3) rather than spreading
 // evenly. Attention decays down a list, so the space is worth more at the top;
-// four cards between adverts at position 35 costs less than it would at 5.
+// three cards between adverts at position 36 costs less than it would at 5.
+//
+// The ninth slot had to come out of the SAME 40, not out of a longer tail. The
+// ceiling is the page and it does not move because another business signed, so
+// every gap below the second tightens by one rather than the last slot sliding
+// past 39 and quietly costing the bottom partner its placement — which is the
+// exact failure the paragraph above describes.
+//
+// There is not much left to give. A tenth partner cannot be absorbed this way
+// without the end of the list reading as advert, advert, advert; at that point
+// the honest fix is a bigger PAGE or fewer slots, not thinner gaps.
 // "Nothing bookable near here yet — want us to tell you when there is?"
 //
 // THE PROBLEM IT ANSWERS. ParkEasy has ONE active bookable site, a GAA club car
@@ -2530,7 +2540,7 @@ const RequestParking = ({ geo, cityName }) => {
   );
 };
 
-const PARTNER_SLOTS = [2, 9, 16, 22, 27, 31, 35, 39];
+const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
