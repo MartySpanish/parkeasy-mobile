@@ -5,6 +5,14 @@
 //
 //   GET  /api/messages?bookingId=…            → the thread (both parties)
 //   POST /api/messages { bookingId, body }    → send, notifies the other party
+//
+// The bcc below does NOT weaken that promise: it is blind, so neither party
+// sees a third address, and neither of them learns anything about the other.
+// It does mean Marty can read the thread, which is a different thing and a
+// deliberate one — an unanswered "which gate do I use?" is a driver standing
+// at a locked barrier, and he can only step in if he knows it was asked.
+import { bccFor } from './_bcc.js';
+
 const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
 function applyCors(req, res) {
   const origin = req.headers.origin || '';
@@ -82,7 +90,7 @@ export default async function handler(req, res) {
         await fetch('https://api.resend.com/emails', {
           method: 'POST', headers: { Authorization: `Bearer ${KEYR}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            from: FROM, to: [toEmail],
+            from: FROM, to: [toEmail], bcc: bccFor([toEmail]),
             subject: `💬 Message about your ParkEasy booking`,
             html: `<p>You have a new message from ${who} about your booking:</p>
                    <blockquote style="border-left:3px solid #2ED3C6;padding-left:12px;margin:12px 0;color:#334155">${text.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])).replace(/\n/g, '<br>')}</blockquote>
