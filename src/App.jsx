@@ -3404,32 +3404,11 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               {premiumTeaser}
             </>
           )}
-          {/* THE OTHER HALF OF THE SUPPLY SIDE, AT THE BOTTOM.
-              There is a route to clubs and churches near the top of this page
-              ("Got a car park sitting empty?"), and there has been a route to
-              businesses only in the footer, as one link among six. A barber or
-              a gym who wants to be featured had nowhere obvious to press.
-
-              At the BOTTOM on purpose, and not paired with the hosts card at
-              the top. A driver opening this page wants parking; two adverts
-              for two different B2B audiences before the first result is how a
-              home screen stops being useful. Somebody who has scrolled the
-              whole list has already had their answer, and that is the moment
-              the ask is fair rather than in the way.
-
-              Shown on the landing state only, same rule as TrustPanel above:
-              once a driver has searched, the page belongs to their results. */}
-          {!isSearching && (
-            <a href="/partners"
-              className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 active:scale-[0.99] transition"
-              style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.10)'}}>
-              <Store size={15} className="text-[#5BE7DA] flex-shrink-0"/>
-              <span className="text-[12.5px] leading-snug text-[#cdd9e8] flex-1 min-w-0">
-                Run a business near parking? <strong className="text-[#EAF1F8]">Get featured on ParkEasy.</strong>
-              </span>
-              <ChevronRight size={15} className="text-[rgba(234,241,248,0.4)] flex-shrink-0"/>
-            </a>
-          )}
+          {/* The "Run a business near parking?" strip that used to end this list
+              is now the WorkWithUs section, which renders a few pixels below it
+              on this very page — the same link to the same page, twice in a
+              row. The section says more and says it beside the hosts route,
+              which is the half this strip never had. */}
         </div>
         </div>
         </div>
@@ -7283,15 +7262,85 @@ const InfoOverlay = ({ page, onClose }) => {
   );
 };
 
+// ── The two ways somebody can be on the other side of ParkEasy ───────────────
+//
+// WHY THIS EXISTS AS A SECTION. Both routes were already in the app and both
+// were easy to miss: a one-line strip near the top of the search page for
+// clubs, a matching strip at the very end of the results list for businesses,
+// and two text links in a footer row of nine. Three different places, none of
+// them announcing that ParkEasy has a supply side at all. A club treasurer and
+// a barber are looking for the same thing — "what do I do about this?" — and
+// they were being answered in two separate corners of the screen, neither
+// labelled.
+//
+// AT THE BOTTOM, AND ON EVERY TAB. A driver opening this app wants parking, so
+// this cannot compete with the search box. Somebody who has scrolled to the
+// bottom has already had their answer, and that is the moment the ask is fair
+// rather than in the way. Sitting above the footer means it is in the same
+// place whichever tab you are on, which is what makes it findable a second
+// time — the thing a scattered link can never be.
+//
+// The claims here are the ones the pages behind them make and can stand over:
+// 85% to the host and no listing fee (see /hosts), a results card and a page
+// of your own (see /partners). Nothing about how many drivers see it.
+const WORK_WITH_US = [
+  {
+    href: '/hosts', Icon: Building2, label: 'For clubs, churches, schools & driveways',
+    title: 'List your car park',
+    blurb: 'You set the price and the hours, you keep 85%, and it costs nothing to list. Drivers pay by card before they arrive.',
+    cta: 'See what it could raise',
+  },
+  {
+    href: '/partners', Icon: Store, label: 'For local businesses',
+    title: 'Feature your business',
+    blurb: 'A card in the results near you and a page of your own — your photos, your links, and a map of the parking around your door.',
+    cta: 'See what you get',
+  },
+];
+
+const WorkWithUs = () => (
+  <section className="px-4 pt-6" aria-labelledby="pe-work-with-us">
+    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5BE7DA]">Work with ParkEasy</p>
+    <h2 id="pe-work-with-us" className="font-display font-extrabold text-[19px] text-[#EAF1F8] leading-tight mt-1">
+      Got a space, or a business beside one?
+    </h2>
+    {/* Two columns from 640px, stacked on a phone. Same breakpoint the
+        category grid uses, so the page changes shape in one place. */}
+    <div className="pe-work-grid mt-3">
+      {WORK_WITH_US.map(({ href, Icon, label, title, blurb, cta }) => (
+        // A real <a> to a real URL, not an overlay. A treasurer needs something
+        // they can be sent in an email, bookmark and forward to the rest of the
+        // committee — which is exactly what /list-your-space failed to be while
+        // it silently served the homepage.
+        <a key={href} href={href}
+          className="flex flex-col rounded-2xl p-4 active:scale-[0.99] transition"
+          style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.10)'}}>
+          <span className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center"
+              style={{background:'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
+              <Icon size={16} className="text-[#06231f]"/>
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[rgba(234,241,248,0.5)]">{label}</span>
+          </span>
+          <span className="font-display font-extrabold text-[16px] text-[#EAF1F8] leading-tight mt-2.5">{title}</span>
+          <span className="text-[12.5px] text-[#cdd9e8] leading-relaxed mt-1.5 flex-1">{blurb}</span>
+          <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#5BE7DA] mt-3">
+            {cta}<ChevronRight size={14}/>
+          </span>
+        </a>
+      ))}
+    </div>
+  </section>
+);
+
 const Footer = ({ onOpen }) => (
   <footer className="px-4 pt-2 pb-6 text-center">
     <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-[rgba(234,241,248,0.5)]">
-      {/* A real <a> to a real URL, not an overlay. A club treasurer needs
-          something they can be sent in an email, bookmark and forward to the
-          rest of the committee — which is exactly what /list-your-space failed
-          to be while it silently served the homepage. */}
-      <a href="/hosts" className="hover:text-[#5BE7DA] transition font-bold text-[#5BE7DA]">List your car park</a>
-      <a href="/partners" className="hover:text-[#5BE7DA] transition font-bold text-[#5BE7DA]">Feature your business</a>
+      {/* "List your car park" and "Feature your business" used to sit here, as
+          two bold links in a row of nine. They are now the WorkWithUs section
+          directly above this, with room to say what each one actually offers.
+          Repeating them here would put the same two links twice within about
+          a hundred pixels, which reads as clutter rather than emphasis. */}
       {[['howitworks','How it works'],['faq','FAQ'],['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
         <button key={id} onClick={()=>onOpen(id)} className="hover:text-[#5BE7DA] transition font-medium">{label}</button>
       ))}
@@ -8076,6 +8125,7 @@ export default function App() {
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
+        <WorkWithUs/>
         <Footer onOpen={setInfoPage}/>
       </main>
 
