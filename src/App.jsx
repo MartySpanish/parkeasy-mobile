@@ -3049,22 +3049,56 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         if (!live) return;
         if (error) { setPartnerDiag(`partners: ERROR ${error.message}`); return; }
         if (!data?.length) { setPartnerDiag('partners: 0 rows visible (inactive or out of window?)'); return; }
-        const near = data
-          .map(p => ({ ...p, d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000) }))
-          .filter(p => p.d < 8000)
-          .sort((a, b) => b.priority - a.priority || a.d - b.d);
+        // ── WHY THIS IS TWO TIERS AND NOT ONE FILTER ──────────────────────
+        // It used to be `.filter(d < 8000)` and nothing else. Every partner we
+        // have is in Belfast, and cityCenter follows whichever town the app
+        // detects — so the moment a driver was anywhere else, the filter matched
+        // nothing and EVERY partner vanished at once. Not one dropped off the
+        // end: all of them, silently, with the page looking perfectly normal.
+        //
+        // It does not take a long drive. Measured against the real rows:
+        // Newtownabbey (9km) already returns zero. Bangor, Carrickfergus,
+        // Ballymena, Newry and Derry return zero. Lisburn returns two of nine.
+        // Belfast returns nine, which is why it never showed up in testing.
+        //
+        // NEAR (8km) still means near, and still earns the "· <city>" label.
+        // What is new is the floor: if nothing is near, fall back to the region
+        // rather than to nothing, because a business promised a placement gets
+        // one. 30km is the honest edge of that — Bangor and Carrickfergus are
+        // inside it and those drivers do come into Belfast; Derry at 97km is
+        // not, and a barber there helps nobody, so beyond it we still show
+        // none. `regional` marks the fallback so the card stops claiming to be
+        // near the driver, which would be the same lie in a friendlier font.
+        const REGION_M = 30000;
+        const withD = data.map(p => ({
+          ...p,
+          d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000),
+        }));
+        const byRank = (a, b) => b.priority - a.priority || a.d - b.d;
+        const trulyNear = withD.filter(p => p.d < 8000);
+        const near = (trulyNear.length ? trulyNear : withD.filter(p => p.d < REGION_M))
+          .map(p => ({ ...p, regional: !trulyNear.length }))
+          .sort(byRank);
         // Keep ALL of them, sorted. The slice used to happen here, which meant
         // the global slot count decided who could lead a category: with six
         // partners and five slots, the sixth was cut before the fitness split
         // even ran — so the most relevant business on a fitness page could be
         // dropped for being sixth overall. Whoever is relevant leads; the cap
         // now applies only to the interleaved leftovers, where it belongs.
-        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near.length ? ` → ${near.map(p=>p.name).join(', ')}` : ''}`);
+        setPartnerDiag(`partners: ${data.length} row(s), ${trulyNear.length} within 8km, showing ${near.length}${near[0]?.regional ? ` (REGIONAL fallback, nearest ${Math.round(Math.min(...withD.map(p=>p.d))/1000)}km)` : ''}${near.length ? ` → ${near.map(p=>p.name).join(', ')}` : ''}`);
         setCityPartners(near);
       } catch (e) { if (live) setPartnerDiag(`partners: FETCH FAILED ${e?.message || e}`); }
     })();
     return () => { live = false; };
   }, [cityCenter?.[0], cityCenter?.[1]]);
+
+  // A partner reached by the regional fallback is NOT near this driver, so its
+  // card must not say so. Same card, honest label: "Featured partner" without
+  // the place name, rather than "Featured · Bangor" on a Belfast barber.
+  const partnerEyebrow = (p, place) =>
+    p?.regional ? 'Featured partner' : `Featured partner · ${place}`;
+  const partnerEyebrowShort = (p, place) =>
+    p?.regional ? 'Featured' : `Featured · ${place}`;
 
   // Partners split by whether they belong to the category being shown. The
   // matching ones lead the page; everyone else keeps the normal interleaved
@@ -3243,7 +3277,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         {featuredPartner && (
           <div className="px-4 pt-3">
             <PartnerCard partner={featuredPartner} listingId={null}
-              eyebrow={`Featured partner · ${cityName}`}
+              eyebrow={partnerEyebrow(featuredPartner, cityName)}
               onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
           </div>
         )}
@@ -3307,7 +3341,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                   feature is not an interruption — it is the answer. */}
               {leadPartners.map(p => (
                 <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
-                  eyebrow={`Featured · ${activeCatTitle || (geo ? geo.label.split(',')[0] : cityName)}`}
+                  eyebrow={partnerEyebrowShort(p, activeCatTitle || (geo ? geo.label.split(',')[0] : cityName))}
                   onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
               ))}
               {visibleSpots.map((s,i)=>(
@@ -3332,7 +3366,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                       the top must not appear a second time further down. */}
                   {PARTNER_SLOTS.includes(i) && restPartners[PARTNER_SLOTS.indexOf(i)] && (
                     <PartnerCard partner={restPartners[PARTNER_SLOTS.indexOf(i)]} listingId={null}
-                      eyebrow={`Featured · ${cityName}`} onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
+                      eyebrow={partnerEyebrowShort(restPartners[PARTNER_SLOTS.indexOf(i)], cityName)} onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
                   )}
                 </React.Fragment>
               ))}
@@ -3443,7 +3477,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               <div className="space-y-2.5 mb-3">
                 {leadPartners.map(p => (
                   <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
-                    eyebrow={`Featured · ${activeCatTitle || (geo ? geo.label.split(',')[0] : cityName)}`}
+                    eyebrow={partnerEyebrowShort(p, activeCatTitle || (geo ? geo.label.split(',')[0] : cityName))}
                     onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
                 ))}
               </div>
