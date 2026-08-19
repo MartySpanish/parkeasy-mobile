@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/partners",
+      "destination": "/partners.html"
+    },
+    {
+      "source": "/advertise",
+      "destination": "/partners.html"
+    },
+    {
       "source": "/host-agreement",
       "destination": "/host-agreement.html"
     },
