@@ -216,7 +216,49 @@ export default async function handler(req, res) {
         active: true,
       }, { Prefer: 'resolution=merge-duplicates' });
 
-      // 2. Jack Daniels Fitness — 20260817_jack_daniels_pin.sql. Conway Mill,
+      // 2. APCOA — 20260819_apcoa_partner.sql.
+      //
+      //    NOTHING HERE MAY CLAIM A BOOKING OR A DISCOUNT. The Heads of Terms
+      //    is a DRAFT dated 17 August 2026, marked "subject to contract, not
+      //    legally binding", and has not come back signed. The two Belfast
+      //    rental_listings are still status='draft' with no agreed price and no
+      //    Stripe account, and the discounted booking link has not arrived. The
+      //    prices the app shows are APCOA's own published barrier tariffs,
+      //    presented as information. If a signed contract arrives with a rate
+      //    attached, that is a new migration and a deliberate edit here.
+      //
+      //    geo_verified false, deliberately: the coordinate is Lanyon Place
+      //    approximated from its postcode, and APCOA has no single front door
+      //    anyway — the app measures a network partner from its nearest car
+      //    park (src/data/networkPartners.js), which is what makes this one row
+      //    reach Newry and Craigavon as well as Belfast.
+      //
+      //    NO PRIORITY, same rule as above: order lives in the database.
+      await run('apcoa', `${URL_}/rest/v1/partners?on_conflict=slug`, 'POST', {
+        slug: 'apcoa',
+        name: 'APCOA',
+        tagline: 'The operator behind several of the paid car parks ParkEasy already lists — Lanyon Place and Oxford Street in Belfast, and the hospital car parks at Daisy Hill and Craigavon.',
+        description: 'APCOA runs car parks across the UK and Europe, and is the operator behind several of the paid car parks ParkEasy already lists in Northern Ireland: the multi-storeys at Lanyon Place and Oxford Street in Belfast, and the pay-and-display parking at Daisy Hill Hospital in Newry and Craigavon Area Hospital.\n\n'
+          + 'The Belfast sites are barrierless ANPR — you drive in and pay online or in the APCOA Connect app rather than at a machine — and Lanyon Place has EV charging bays. The hospital car parks are pay and display, managed and enforced by APCOA for the Southern Health and Social Care Trust.\n\n'
+          + 'Prices shown on ParkEasy are APCOA’s own published tariffs and you pay APCOA directly. These are not ParkEasy bookings, so check the current rate on site or in the app before you park.',
+        // APCOA's own brand assets, supplied by Marty. The photo is CROPPED:
+        // the original is a still from an APCOA marketing video whose top band
+        // reads "Heathrow VALET PARKING", and not one of the four Northern
+        // Irish sites listed under this card offers valet. See
+        // 20260820_apcoa_images.sql. The number plate is blurred for the same
+        // reason VRNs are masked in the logs.
+        logo_url: 'https://parkeasy.uk/apcoa/logo.jpg',
+        photo_url: 'https://parkeasy.uk/apcoa/1-carpark.jpg',
+        photo_urls: ['https://parkeasy.uk/apcoa/1-carpark.jpg'],
+        link_url: 'https://www.apcoa.co.uk/',
+        links: [{ label: 'Visit APCOA', url: 'https://www.apcoa.co.uk/' }],
+        is_online: false,
+        lat: 54.5978, lng: -5.9161, geo_verified: false,
+        radius_m: 800,
+        active: true,
+      }, { Prefer: 'resolution=merge-duplicates' });
+
+      // 3. Jack Daniels Fitness — 20260817_jack_daniels_pin.sql. Conway Mill,
       //    from Apple Maps' own place card for Atlas Gym Belfast.
       await run('jack-daniels-fitness', `${URL_}/rest/v1/partners?slug=eq.jack-daniels-fitness`, 'PATCH', {
         lat: 54.599499, lng: -5.951222, geo_verified: true,
@@ -224,7 +266,7 @@ export default async function handler(req, res) {
         postcode: 'BT13 2DE',
       });
 
-      // 3. Read back what is actually in the table, so the dashboard reports
+      // 4. Read back what is actually in the table, so the dashboard reports
       //    the database's answer rather than this function's optimism.
       let partners = null;
       try {
@@ -495,9 +537,10 @@ export default async function handler(req, res) {
     } catch { /* tables may not exist yet */ }
 
     // Bookings summary (Stripe Checkout marketplace). Gross paid + our fees.
-    let bookings = { total: 0, paid: 0, grossPence: 0, feePence: 0, hostsOnboarded: 0 };
+    let bookings = { total: 0, paid: 0, grossPence: 0, feePence: 0, hostsOnboarded: 0,
+                     fromHotspot: 0, fromHotspotGrossPence: 0 };
     try {
-      const brr = await fetch(`${URL_}/rest/v1/bookings?select=status,amount_total_pence,application_fee_pence&order=created_at.desc&limit=1000`, { headers: svc });
+      const brr = await fetch(`${URL_}/rest/v1/bookings?select=status,amount_total_pence,application_fee_pence,from_hotspot&order=created_at.desc&limit=1000`, { headers: svc });
       if (brr.ok) {
         const rows = await brr.json();
         bookings.total = rows.length;
@@ -506,8 +549,22 @@ export default async function handler(req, res) {
             bookings.paid += 1;
             bookings.grossPence += b.amount_total_pence || 0;
             bookings.feePence += b.application_fee_pence || 0;
+            // THE NUMBER THAT DECIDES WHAT THE FREE SPOTS ARE FOR. Paid
+            // bookings that started at a free spot, via the comparison card. If
+            // this stays at zero the 745 hand-checked free spots are not
+            // feeding the marketplace and something has to change; if it grows,
+            // every hour spent on them pays for itself.
+            if (b.from_hotspot) {
+              bookings.fromHotspot += 1;
+              bookings.fromHotspotGrossPence += b.amount_total_pence || 0;
+            }
           }
         }
+        // Share of paid bookings that came out of a free spot. Null rather than
+        // 0 when there are no paid bookings at all — "0%" of nothing reads as a
+        // failing funnel rather than an empty one.
+        bookings.fromHotspotPct = bookings.paid
+          ? Math.round((bookings.fromHotspot / bookings.paid) * 100) : null;
       }
       const har = await fetch(`${URL_}/rest/v1/host_accounts?transfers_active=is.true&select=host_id`, { headers: { ...svc, Prefer: 'count=exact' } });
       if (har.ok) {
@@ -516,9 +573,44 @@ export default async function handler(req, res) {
       }
     } catch { /* tables may not exist yet */ }
 
+    // ── Hotspots: the count, the queue, and the acquisition list ────────────
+    //
+    // The clusters are the valuable half. A dense cluster of free spots with no
+    // bookable ParkEasy listing inside it is a place where drivers are already
+    // circling and there is nothing to sell them — which is the list of hosts
+    // and operators to go and sign, in priority order, falling out of data that
+    // already exists. Sorted so that list is what you see first.
+    let hotspots = { verified: 0, pendingReview: 0, submittedThisWeek: 0, openReports: 0, clusters: [] };
+    try {
+      const countOf = async (query) => {
+        const r = await fetch(`${URL_}/rest/v1/${query}`, { headers: { ...svc, Prefer: 'count=exact' } });
+        if (!r.ok) return 0;
+        const range = r.headers.get('content-range');
+        return range?.includes('/') ? (parseInt(range.split('/')[1], 10) || 0) : (await r.json()).length;
+      };
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const [verified, pendingReview, submittedThisWeek, openReports] = await Promise.all([
+        countOf('spot_submissions?status=eq.approved&select=id'),
+        countOf('spot_submissions?status=eq.new&select=id'),
+        countOf(`spot_submissions?created_at=gte.${weekAgo}&select=id`),
+        countOf('spot_reports?resolved_at=is.null&select=id'),
+      ]);
+      Object.assign(hotspots, { verified, pendingReview, submittedThisWeek, openReports });
+
+      // listings_nearby ascending first, then the biggest clusters: "lots of
+      // demand, no supply signed" sorts straight to the top.
+      const cr = await fetch(
+        `${URL_}/rest/v1/hotspot_clusters?select=area,spot_count,lat,lng,listings_nearby`
+        + `&order=listings_nearby.asc,spot_count.desc&limit=25`,
+        { headers: svc },
+      );
+      if (cr.ok) hotspots.clusters = await cr.json();
+    } catch { /* views may not exist until the migration runs */ }
+
     return res.status(200).json({
       ok: true, configured: true,
       env,
+      hotspots,
       pending,
       promos,
       spots,
