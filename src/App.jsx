@@ -3530,6 +3530,21 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                       the free spots ARE real before being asked about the
                       thing we cannot offer yet. */}
                   {i===1 && !bookableNearby && <RequestParking geo={geo} cityName={cityName}/>}
+                  {/* WORK WITH PARKEASY, MOVED UP TO HERE.
+                      It used to sit above the footer, which on this screen is
+                      below all forty results, the "show more" button and the
+                      Premium teaser. It rendered correctly and nobody ever
+                      reached it — Marty looked for it twice and concluded it
+                      had not shipped, which is the only verdict that matters.
+                      "At the bottom, where the ask is fair" was right in
+                      principle and wrong about where the bottom is on a list of
+                      745 spots.
+                      Same slot as the Premium promo and the demand card above:
+                      about one screen down, after the driver has had a real
+                      answer, and before the scroll gets long enough to give up
+                      on. Landing state only — once somebody is searching, the
+                      page belongs to their results. */}
+                  {i===1 && !isSearching && <WorkWithUs/>}
                   {/* Spaced out so they read as "while you're here" rather than
                       a block of adverts. Index maths, not a filter, so a second
                       or third partner simply doesn't render on a short list.
@@ -8478,7 +8493,10 @@ export default function App() {
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
-        <WorkWithUs/>
+        {/* Every tab except Search, which now carries its own copy near the top
+            of the results. Two on one screen would be the clutter the single
+            section was meant to replace. */}
+        {tab !== 'search' && <WorkWithUs/>}
         <Footer onOpen={setInfoPage}/>
       </main>
 
