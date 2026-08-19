@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Everything, in one command.
+#
+#   tests/run-all.sh
+#
+# The database tests need a Postgres binary (they spin up a throwaway cluster on
+# a socket in /var/tmp and drop it again). Where there isn't one they SKIP loudly
+# rather than passing quietly — a suite that silently tests nothing is worse than
+# no suite.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+fail=0
+
+echo "── Unit ─────────────────────────────────────────────────────────────"
+for t in tests/unit/*.test.mjs; do
+  node "$t" || fail=1
+done
+
+echo "── Database ─────────────────────────────────────────────────────────"
+if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
+  tests/db/run.sh supabase/migrations/20260820_corporate_permits.sql \
+                  tests/db/corporate_permits.test.sql              > /tmp/pe-t1.log 2>&1 \
+    && echo "  corporate permits      $(grep -c 'PASS  ' /tmp/pe-t1.log) checks" \
+    || { fail=1; echo "  corporate permits      FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t1.log; }
+
+  tests/db/run.sh supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260728_public_approved_spots.sql \
+                  supabase/migrations/20260820_hotspot_moderation.sql \
+                  tests/db/hotspot_moderation.test.sql              > /tmp/pe-t2.log 2>&1 \
+    && echo "  hotspot moderation     $(grep -c 'PASS  ' /tmp/pe-t2.log) checks" \
+    || { fail=1; echo "  hotspot moderation     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t2.log; }
+
+  tests/db/run.sh supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260820_corporate_permits.sql \
+                  supabase/migrations/20260820_car_wash.sql \
+                  tests/db/car_wash.test.sql                        > /tmp/pe-t3.log 2>&1 \
+    && echo "  car wash               $(grep -c 'PASS  ' /tmp/pe-t3.log) checks" \
+    || { fail=1; echo "  car wash               FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t3.log; }
+
+  echo "── Concurrency ──────────────────────────────────────────────────────"
+  tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
+else
+  echo "  SKIPPED — no Postgres at ${PGBIN:-/usr/lib/postgresql/16/bin}."
+  echo "  The permit quota and the moderation rules are NOT covered by this run."
+fi
+
+echo ""
+[ "$fail" = 0 ] && echo "ALL SUITES PASSED" || echo "SOMETHING FAILED"
+exit "$fail"

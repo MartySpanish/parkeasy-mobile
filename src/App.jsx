@@ -28,6 +28,7 @@ import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
 import ComparisonCard from './components/funnel/ComparisonCard';
 import WashAddOn from './components/wash/WashAddOn';
+import CancelSubscription from './components/account/CancelSubscription';
 // Lazily loaded: ParkEasy for Business is a whole screen that almost every
 // driver will never open, and it has no business in the first paint of a
 // parking search.
@@ -1288,6 +1289,10 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             📊 Admin dashboard
           </button>
         )}
+        {/* Self-serve cancellation, right here in the account menu. It used to
+            be "contact ParkEasy", which is a liability and a slow one. Renders
+            nothing at all for somebody with no subscription. */}
+        {isPremium && <CancelSubscription/>}
         <div className="border-t border-white/10 pt-2">
           <button onClick={onSignOut} className="w-full flex items-center gap-2 text-sm text-red-300 hover:text-red-300 font-medium py-1 transition-colors">
             <LogOut size={15}/> Sign out
@@ -7271,6 +7276,7 @@ const INFO_PAGES = {
           ['What are season passes?', 'Some hosts sell a bundle (e.g. 10 bookings) at a discount. You pay once, then each booking just uses a credit — no checkout. Unused credits aren’t refunded after the pass expires.'],
           ['Who is responsible if something happens to my car?', 'Parking arrangements are directly between you and the host. You park at your own risk — hosts aren’t liable for loss, theft or damage except where caused by their own negligence, and neither is ParkEasy. Check your own motor insurance covers you. Full detail in our Terms.'],
           ['Is my payment safe?', 'All payments are processed by Stripe — the same provider used by Amazon and Deliveroo. ParkEasy never sees or stores your card details.'],
+          ['How do I cancel Premium?', 'In the app: tap your initial in the top corner, then Cancel subscription. Two taps, no phone call and nothing to email us about. You keep Premium until the end of the period you have already paid for, and we tell you the exact date on screen and by email. If your subscription is annual we also send a reminder a week before it renews, so the charge is never a surprise.'],
         ].map(([q, a], i) => (
           <div key={i} className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
             <p className="font-display font-bold text-[14px] text-[#EAF1F8]">{q}</p>
