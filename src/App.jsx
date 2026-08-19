@@ -27,6 +27,7 @@ import { holdCopy } from './data/spaceHold';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
 import ComparisonCard from './components/funnel/ComparisonCard';
+import WashAddOn from './components/wash/WashAddOn';
 // Lazily loaded: ParkEasy for Business is a whole screen that almost every
 // driver will never open, and it has no business in the first paint of a
 // parking search.
@@ -5966,6 +5967,7 @@ const MessageThread = ({ bookingId }) => {
 const BookingsPanel = ({ user }) => {
   const [rows, setRows] = useState(undefined);
   const [titles, setTitles] = useState({});
+  const [washSites, setWashSites] = useState({});
   const [offers, setOffers] = useState({});
   const [pendingRatings, setPendingRatings] = useState([]);
   const [busyId, setBusyId] = useState(null);
@@ -5981,8 +5983,13 @@ const BookingsPanel = ({ user }) => {
     setRows(list);
     const ids = [...new Set(list.map(b => b.listing_id).filter(Boolean))];
     if (ids.length) {
-      const { data: ls } = await supabase.from('rental_listings').select('id,title').in('id', ids);
+      // wash_enabled / wash_days come back with the title so the confirmation
+      // can offer a wash without a second round trip. Sites that don't wash
+      // simply render nothing.
+      const { data: ls } = await supabase.from('rental_listings')
+        .select('id,title,wash_enabled,wash_days').in('id', ids);
       setTitles(Object.fromEntries((ls || []).map(l => [l.id, l.title])));
+      setWashSites(Object.fromEntries((ls || []).map(l => [l.id, l])));
       // Local offers for these listings (RLS already limits to active+in-window).
       const { data: os } = await supabase.from('local_offers').select('listing_id,business_name,description,offer_code').in('listing_id', ids);
       if (os) setOffers(Object.fromEntries(os.map(o => [o.listing_id, o])));
@@ -6093,6 +6100,14 @@ const BookingsPanel = ({ user }) => {
                   📍 While you're there: {offers[b.listing_id].description} — <strong>{offers[b.listing_id].business_name}</strong>
                   {offers[b.listing_id].offer_code ? <> · code <strong>{offers[b.listing_id].offer_code}</strong></> : null}
                 </p>
+              )}
+              {/* The wash offer, AFTER the parking is paid for. Never inside
+                  checkout: a driver mid-purchase is trying to finish, and an
+                  add-on there is friction on the thing that makes money to sell
+                  a thing nobody has bought yet. Drivers only — a host looking
+                  at their own space is not the person whose car is here. */}
+              {b.status === 'paid' && !asHost && washSites[b.listing_id]?.wash_enabled && (
+                <WashAddOn listing={washSites[b.listing_id]} bookingId={b.id} vrn={b.vehicle_reg}/>
               )}
               {b.status === 'paid' && <MessageThread bookingId={b.id}/>}
               {cancellable && (
@@ -6793,6 +6808,7 @@ const AdminOverlay = ({ onClose }) => {
                   <SyncPartners/>
                 </div>
               )}
+              <WashWeek/>
               {d.hotspots && (
                 <div>
                   <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Hotspots</h3>
@@ -7447,6 +7463,71 @@ const INFO_PAGES = {
   },
 };
 
+// The week's washes, with the plates — the list Marty hands to the valeter.
+//
+// This is the whole "operations" side of the car wash in v1, and deliberately
+// so: no valeter accounts, no scheduling engine, no job assignment. A person
+// reads a list of registrations and washes those cars.
+const WashWeek = () => {
+  const [data, setData] = useState(null);
+  const [from, setFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      setErr('');
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const r = await fetch(`/api/wash?from=${from}`, {
+          headers: { Authorization: `Bearer ${sess?.session?.access_token}` },
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!live) return;
+        if (!r.ok) { setErr(d.error || 'Could not load the wash list'); setData(null); return; }
+        setData(d);
+      } catch (e) { if (live) setErr(String(e.message || e)); }
+    })();
+    return () => { live = false; };
+  }, [from]);
+
+  if (err) return null;              // the table may not exist until the migration runs
+  if (!data) return null;
+
+  const TIER = { standard: 'Standard', large: 'Large/SUV', van: 'Van/7-seat' };
+  return (
+    <div>
+      <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Car washes this week</h3>
+      <div className="glass rounded-2xl p-4">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <input type="date" value={from} onChange={e=>setFrom(e.target.value)} aria-label="Week starting"
+            className="bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2 text-[12.5px] text-[#EAF1F8] focus:outline-none"/>
+          <span className="text-[12px] font-bold text-[#5BE7DA]">£{((data.total_pence||0)/100).toFixed(2)}</span>
+        </div>
+        {data.washes.length === 0 ? (
+          <p className="text-[12.5px] text-[rgba(234,241,248,0.5)]">No washes booked for this week.</p>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {data.washes.map(w => (
+              <div key={w.id} className="py-2 flex items-center justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block font-mono font-bold text-[13px] text-[#EAF1F8] tracking-widest">{w.vrn}</span>
+                  <span className="block text-[11px] text-[rgba(234,241,248,0.45)] truncate">
+                    {new Date(`${w.date}T00:00:00`).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})} · {w.site || '—'}{w.notes ? ` · ${w.notes}` : ''}
+                  </span>
+                </span>
+                <span className="flex-shrink-0 text-right">
+                  <span className="block text-[12px] font-bold text-[#5BE7DA]">£{((w.price_pence||0)/100).toFixed(0)}</span>
+                  <span className="block text-[10.5px] text-[rgba(234,241,248,0.4)]">{TIER[w.tier] || w.tier}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const InfoOverlay = ({ page, onClose }) => {
   const p = INFO_PAGES[page];
   if (!p) return null;
@@ -7996,6 +8077,15 @@ export default function App() {
       window.history.replaceState({}, '', window.location.pathname);
     } else if (booking === 'cancelled') {
       setFlash({ tone: 'warn', msg: 'Booking cancelled — you weren’t charged.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // Car wash checkout return.
+    const wash = p.get('wash');
+    if (wash === 'success') {
+      setFlash({ tone: 'ok', msg: '✨ Wash booked — we’ll have your registration on the valeter’s list.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (wash === 'cancelled') {
+      setFlash({ tone: 'warn', msg: 'Wash not booked — you weren’t charged.' });
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);

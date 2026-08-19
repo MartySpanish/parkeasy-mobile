@@ -1,6 +1,8 @@
 // POST /api/webhooks/stripe — Stripe's server-to-server notifications.
 // Verifies the signature against the raw body, then syncs state into Supabase:
 //   • checkout.session.completed / async_payment_succeeded  → booking paid
+//     (or, when metadata.kind is car_wash, the wash request is confirmed —
+//      checked first, because a wash has no bookings row to mark)
 //   • checkout.session.async_payment_failed / expired        → booking failed
 //   • account.updated / capability.updated                   → host_accounts state
 //   • payout.paid / payout.failed                            → logged (future host UI)
@@ -237,7 +239,7 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     if (!b) return;
     let listing = null;
     if (b.listing_id) {
-      const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${b.listing_id}&select=title,address,contact_email,owner_email,instructions,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,overnight_fee_pence`, { headers: svc });
+      const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${b.listing_id}&select=title,address,contact_email,owner_email,instructions,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,overnight_fee_pence,wash_enabled,wash_days`, { headers: svc });
       listing = (await lr.json())?.[0] || null;
     }
     const gbp = (p) => `£${(p / 100).toFixed(2)}`;
@@ -298,6 +300,30 @@ async function sendBookingEmails(svc, URL_, sessionId) {
       const offer = ofr.ok ? (await ofr.json())?.[0] : null;
       if (offer) offerHtml = `<div style="font-family:system-ui;margin-top:14px;padding:12px 14px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa"><strong>📍 While you're there:</strong> ${esc(offer.description)} — ${esc(offer.business_name)}${offer.offer_code ? ` · code <strong>${esc(offer.offer_code)}</strong>` : ''}</div>`;
     } catch { /* no offers table yet */ }
+
+    // The wash offer, in the confirmation email as well as on the confirmation
+    // screen. Not a second product being pushed: somebody who has just paid for
+    // parking on a Monday is exactly the person for whom "while it's sitting
+    // there anyway" is a good idea, and the email is what they still have open
+    // when they think of it.
+    //
+    // ParkEasy is a booking AGENT for this — the wash is carried out by an
+    // independent contractor and the contract is with them. That sentence goes
+    // in the email too, not just in the app.
+    let washHtml = '';
+    try {
+      if (listing?.wash_enabled) {
+        const days = Array.isArray(listing.wash_days) && listing.wash_days.length ? listing.wash_days : [1];
+        const NAMES = ['', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
+        const dayText = days.map(d => NAMES[d]).filter(Boolean).join(' and ') || 'selected days';
+        washHtml = `<div style="font-family:system-ui;margin-top:14px;padding:12px 14px;border:1px solid #99f6e4;border-radius:10px;background:#f0fdfa">
+            <strong>✨ Want your car washed while it's parked?</strong>
+            <div style="margin-top:4px">Standard car £30 · Large/SUV/4×4 £40 · Van/7-seater £50. ${dayText} at ${title}, and requests close 24 hours before.</div>
+            <div style="margin-top:6px"><a href="https://parkeasy.uk/" style="color:#0f766e;font-weight:700">Add a wash in the app →</a></div>
+            <div style="margin-top:8px;color:#64748b;font-size:12px">ParkEasy arranges the wash with an independent contractor. The wash itself is a contract between you and them — ParkEasy is booking it, not carrying it out.</div>
+          </div>`;
+      }
+    } catch { /* wash columns may not exist until the migration runs */ }
     // `.catch(() => {})` used to swallow everything here, including a 4xx from
     // Resend. When the club said they never knew about the 8 August bookings
     // there was no way to tell from the logs whether the email had gone out at
@@ -324,7 +350,7 @@ async function sendBookingEmails(svc, URL_, sessionId) {
     if (b.driver_email) jobs.push(send(b.driver_email, `✅ Parking booked — ${title}`,
       `<h2 style="font-family:system-ui">Booking confirmed</h2>${findIt}${gateWarning}`
       + `<h3 style="font-family:system-ui;margin:18px 0 4px;font-size:15px">Your booking</h3>${bookingRows('')}`
-      + `${receiptRows()}${offerHtml}`
+      + `${receiptRows()}${offerHtml}${washHtml}`
       + `<p style="font-family:system-ui;color:#64748b;font-size:12px">Cancel 24h+ before the start for a full refund of the parking price (the driver service fee is non-refundable); after that it's non-refundable. You park at your own risk — see our Terms.</p>`));
     // The host's email is what a volunteer marshal actually stands in the car
     // park holding, so the registration goes at the TOP, big — not buried in a
@@ -388,6 +414,20 @@ export default async function handler(req, res) {
           await grantPremiumFromPaymentLink(svc, URL_, s).catch(e => console.error('premium link', e));
           break;
         }
+        // A car wash. Not a booking and not a pass: 100% ParkEasy, no host
+        // share, so it must not fall into markBooking below — which would look
+        // for a bookings row that does not exist and silently do nothing.
+        if (s.metadata?.kind === 'car_wash') {
+          await fetch(`${URL_}/rest/v1/wash_requests?stripe_session_id=eq.${encodeURIComponent(s.id)}`, {
+            method: 'PATCH', headers: svc,
+            body: JSON.stringify({
+              status: 'confirmed',
+              stripe_payment_intent: s.payment_intent || null,
+              updated_at: new Date().toISOString(),
+            }),
+          }).catch(e => console.error('wash confirm', e));
+          break;
+        }
         if (s.metadata?.pass_id) {
           // Season-pass purchase → credit the pass (idempotent on session id).
           await fetch(`${URL_}/rest/v1/pass_purchases?on_conflict=stripe_session_id`, {
@@ -407,6 +447,13 @@ export default async function handler(req, res) {
       case 'checkout.session.async_payment_failed':
       case 'checkout.session.expired': {
         const s = event.data.object;
+        if (s.metadata?.kind === 'car_wash') {
+          await fetch(`${URL_}/rest/v1/wash_requests?stripe_session_id=eq.${encodeURIComponent(s.id)}`, {
+            method: 'PATCH', headers: svc,
+            body: JSON.stringify({ status: 'cancelled', updated_at: new Date().toISOString() }),
+          }).catch(() => {});
+          break;
+        }
         await markBooking(svc, URL_, s.id, { status: 'failed' });
         break;
       }
