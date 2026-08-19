@@ -216,7 +216,40 @@ export default async function handler(req, res) {
         active: true,
       }, { Prefer: 'resolution=merge-duplicates' });
 
-      // 2. Jack Daniels Fitness — 20260817_jack_daniels_pin.sql. Conway Mill,
+      // 2. APCOA — 20260819_apcoa_partner.sql.
+      //
+      //    NOTHING HERE MAY CLAIM A BOOKING OR A DISCOUNT. The Heads of Terms
+      //    is a DRAFT dated 17 August 2026, marked "subject to contract, not
+      //    legally binding", and has not come back signed. The two Belfast
+      //    rental_listings are still status='draft' with no agreed price and no
+      //    Stripe account, and the discounted booking link has not arrived. The
+      //    prices the app shows are APCOA's own published barrier tariffs,
+      //    presented as information. If a signed contract arrives with a rate
+      //    attached, that is a new migration and a deliberate edit here.
+      //
+      //    geo_verified false, deliberately: the coordinate is Lanyon Place
+      //    approximated from its postcode, and APCOA has no single front door
+      //    anyway — the app measures a network partner from its nearest car
+      //    park (src/data/networkPartners.js), which is what makes this one row
+      //    reach Newry and Craigavon as well as Belfast.
+      //
+      //    NO PRIORITY, same rule as above: order lives in the database.
+      await run('apcoa', `${URL_}/rest/v1/partners?on_conflict=slug`, 'POST', {
+        slug: 'apcoa',
+        name: 'APCOA',
+        tagline: 'The operator behind several of the paid car parks ParkEasy already lists — Lanyon Place and Oxford Street in Belfast, and the hospital car parks at Daisy Hill and Craigavon.',
+        description: 'APCOA runs car parks across the UK and Europe, and is the operator behind several of the paid car parks ParkEasy already lists in Northern Ireland: the multi-storeys at Lanyon Place and Oxford Street in Belfast, and the pay-and-display parking at Daisy Hill Hospital in Newry and Craigavon Area Hospital.\n\n'
+          + 'The Belfast sites are barrierless ANPR — you drive in and pay online or in the APCOA Connect app rather than at a machine — and Lanyon Place has EV charging bays. The hospital car parks are pay and display, managed and enforced by APCOA for the Southern Health and Social Care Trust.\n\n'
+          + 'Prices shown on ParkEasy are APCOA’s own published tariffs and you pay APCOA directly. These are not ParkEasy bookings, so check the current rate on site or in the app before you park.',
+        link_url: 'https://www.apcoa.co.uk/',
+        links: [{ label: 'Visit APCOA', url: 'https://www.apcoa.co.uk/' }],
+        is_online: false,
+        lat: 54.5978, lng: -5.9161, geo_verified: false,
+        radius_m: 800,
+        active: true,
+      }, { Prefer: 'resolution=merge-duplicates' });
+
+      // 3. Jack Daniels Fitness — 20260817_jack_daniels_pin.sql. Conway Mill,
       //    from Apple Maps' own place card for Atlas Gym Belfast.
       await run('jack-daniels-fitness', `${URL_}/rest/v1/partners?slug=eq.jack-daniels-fitness`, 'PATCH', {
         lat: 54.599499, lng: -5.951222, geo_verified: true,
@@ -224,7 +257,7 @@ export default async function handler(req, res) {
         postcode: 'BT13 2DE',
       });
 
-      // 3. Read back what is actually in the table, so the dashboard reports
+      // 4. Read back what is actually in the table, so the dashboard reports
       //    the database's answer rather than this function's optimism.
       let partners = null;
       try {

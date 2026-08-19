@@ -22,6 +22,7 @@ import { paymentError } from './errors';
 import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
 import { splitPartnersByCategory } from './data/partnerCategories';
 import { claimState, canClaim } from './data/spotClaims';
+import { networkPartner, networkSites, nearestSiteDistance } from './data/networkPartners';
 import useBackButton from './useBackButton';
 import EventsScreen from './components/events/EventsScreen';
 
@@ -2450,9 +2451,18 @@ const TrustPanel = ({ onAddSpot }) => (
 // past 39 and quietly costing the bottom partner its placement — which is the
 // exact failure the paragraph above describes.
 //
-// There is not much left to give. A tenth partner cannot be absorbed this way
-// without the end of the list reading as advert, advert, advert; at that point
-// the honest fix is a bigger PAGE or fewer slots, not thinner gaps.
+// THE TENTH SLOT (44) TOOK THE OTHER OPTION. The paragraph that used to sit
+// here said a tenth partner could not be absorbed by tightening gaps again,
+// and that the honest fix was a bigger PAGE or fewer slots. APCOA made it a
+// tenth partner, so PAGE went from 40 to 48 and slot 44 sits five cards after
+// slot 39 — every gap above it is exactly what it was, and the end of the list
+// does not read as advert, advert, advert. The ceiling moved; the spacing did
+// not. That is the version of this change that costs the reader nothing.
+//
+// Note the arithmetic that means TEN partners fit TEN positions: on the landing
+// screen the top-priority partner is lifted out into the featured block, so
+// nine go in slots. During a search there is no featured block, and all ten
+// need a slot of their own — which is the case this tenth one exists for.
 // "Nothing bookable near here yet — want us to tell you when there is?"
 //
 // THE PROBLEM IT ANSWERS. ParkEasy has ONE active bookable site, a GAA club car
@@ -2546,7 +2556,7 @@ const RequestParking = ({ geo, cityName }) => {
   );
 };
 
-const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39];
+const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39, 44];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
@@ -2680,7 +2690,13 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // grows in blocks instead. The COUNT is always the real total; only how many
   // cards are painted is paged, which is why there's a "Show more" rather than
   // a silently truncated list.
-  const PAGE = 40;
+  // 48, not 40. The tenth partner needed a tenth slot, and the paragraph above
+  // PARTNER_SLOTS says what to do at that point: a bigger page, not thinner
+  // gaps. Every existing gap is untouched and the new slot sits at 44, five
+  // cards after the ninth — so the end of the list still reads as a list with
+  // adverts in it rather than a column of adverts. Eight more cards before
+  // "show more" costs nothing; three-in-a-row would have cost the format.
+  const PAGE = 48;
   const [shown, setShown] = useState(PAGE);
   useEffect(() => { setShown(PAGE); }, [geo, query, badgeFilter, sortBy, evOnly, cityName]);
   const visibleSpots = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
@@ -3070,10 +3086,19 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         // none. `regional` marks the fallback so the card stops claiming to be
         // near the driver, which would be the same lie in a friendlier font.
         const REGION_M = 30000;
-        const withD = data.map(p => ({
-          ...p,
-          d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000),
-        }));
+        const withD = data.map(p => {
+          // A NETWORK partner is measured from its nearest car park, not from
+          // its row's pin. APCOA runs sites in Belfast, Newry and Craigavon;
+          // stored as a single coordinate at Lanyon Place it would read as
+          // 55km from Newry and vanish from a town it actually operates in,
+          // while a driver stood in that town looks at one of its car parks in
+          // the results. See data/networkPartners.js.
+          const np = networkPartner(p);
+          const d = np
+            ? nearestSiteDistance(np, ALL_SPOTS, cityCenter[0], cityCenter[1])
+            : Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000);
+          return { ...p, d };
+        });
         const byRank = (a, b) => b.priority - a.priority || a.d - b.d;
         const trulyNear = withD.filter(p => p.d < 8000);
         const near = (trulyNear.length ? trulyNear : withD.filter(p => p.d < REGION_M))
@@ -4622,9 +4647,16 @@ const bizPin = (label) => L.divIcon({
 // map of the parking around it. The card can only ever show a teaser — this is
 // where "where do I actually put the car for this place" gets answered.
 const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
+  const np = networkPartner(partner);
   const nearby = useMemo(
     () => nearestSpotsTo(partner.lat, partner.lng, 8, Math.max(900, partner.radius_m || 900)),
     [partner.lat, partner.lng, partner.radius_m],
+  );
+  // A network's own sites, nearest its head pin first. Empty for every
+  // ordinary business, which never reaches the branch that uses it.
+  const sites = useMemo(
+    () => (np ? networkSites(np, ALL_SPOTS, partner.lat, partner.lng) : []),
+    [np, partner.lat, partner.lng],
   );
   const photos = partner.photo_urls?.length ? partner.photo_urls : (partner.photo_url ? [partner.photo_url] : []);
   useEffect(() => {
@@ -4654,12 +4686,17 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
       <button onClick={onClose} aria-label="Close" style={{top:'calc(env(safe-area-inset-top) + 10px)'}}
         className="fixed left-3 z-[600] w-11 h-11 rounded-full bg-black/60 border border-white/25 flex items-center justify-center text-white backdrop-blur active:scale-90 transition"><X size={20}/></button>
 
-      <div className="relative -mt-6 rounded-t-[28px] px-5 pt-3 pb-10 flex-1"
+      {/* pt-3 assumes a photo above it. APCOA is the first partner with none —
+          we have no licensed imagery for them and are not inventing any — and
+          without one the sheet starts at the top of the screen, putting the
+          fixed close button straight over the eyebrow and the business name.
+          Room for the button when there is nothing else to sit under. */}
+      <div className={`relative -mt-6 rounded-t-[28px] px-5 pb-10 flex-1 ${photos.length ? 'pt-3' : 'pt-16'}`}
         style={{background:'var(--sheet)', border:'1px solid var(--hairline)', borderBottom:'none', maxWidth:680, width:'100%', margin:'-24px auto 0'}}>
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
         <div className="flex items-center gap-2">
           {partner.logo_url && <img src={partner.logo_url} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0"/>}
-          <p className="font-display text-[11px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">Featured local business</p>
+          <p className="font-display text-[11px] font-bold tracking-[0.18em] text-[#5BE7DA] uppercase">{np?.eyebrow || 'Featured local business'}</p>
         </div>
         <h2 className="font-display font-extrabold text-2xl text-[#EAF1F8] mt-1 leading-tight">{partner.name}</h2>
         {partner.name_irish && <p className="text-[12px] font-semibold tracking-[0.12em] text-[#5BE7DA] mt-0.5">{partner.name_irish}</p>}
@@ -4683,7 +4720,56 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
             question with no answer. Show what it actually wants — the ways to
             get in touch — instead of a map of a street it has nothing to do
             with. */}
-        {partner.is_online ? (
+        {np ? (
+          // THE NETWORK BRANCH. Everything below this in the ordinary case is
+          // "here is the free parking around their door", which on a car park
+          // operator's page would be a list of reasons not to use them. What a
+          // driver came here for is their car parks, so that is what this is:
+          // every APCOA site ParkEasy knows about, on one map, each one opening
+          // the same spot card it opens from the results list.
+          <>
+          <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2">{np.heading}</h3>
+          {sites.length > 0 && (
+            <div className="rounded-2xl overflow-hidden border border-white/10" style={{height:230}}>
+              {/* FITTED TO THE PINS, not centred at a guessed zoom. A network's
+                  sites are wherever they are — four across three towns today,
+                  a different spread the moment one is added — so any fixed
+                  zoom is right until it isn't. bounds lets Leaflet work it out.
+                  Two sites 500m apart still overlap at a scale that also has to
+                  show Newry; the list underneath is the unambiguous version,
+                  and pinch-zoom separates them. */}
+              <MapContainer
+                bounds={sites.map(s => [s.lat, s.lng])}
+                boundsOptions={{ padding: [34, 34], maxZoom: 13 }}
+                style={{width:'100%',height:'100%'}}
+                scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
+                <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+                {sites.map(s => (
+                  <Marker key={s.id} position={[s.lat, s.lng]} icon={pricePin(s, false)}
+                    eventHandlers={{ click: () => onOpenSpot?.(s) }}/>
+                ))}
+              </MapContainer>
+            </div>
+          )}
+          <div className="mt-2.5 divide-y divide-white/5">
+            {sites.map(s => (
+              <button key={s.id} onClick={()=>onOpenSpot?.(s)} className="w-full text-left py-2.5 flex items-center justify-between gap-3 active:opacity-70">
+                <span className="min-w-0">
+                  <span className="block text-[13.5px] font-semibold text-[#EAF1F8] truncate">{s.name}</span>
+                  <span className="block text-[11.5px] text-[rgba(234,241,248,0.5)] truncate">{s.near}</span>
+                </span>
+                {s.price && <span className="flex-shrink-0 text-[12px] font-bold text-[#5BE7DA]">{s.price}</span>}
+              </button>
+            ))}
+          </div>
+          {/* The line that keeps this page honest. Read it against the file it
+              points at before changing a word of it. */}
+          <p className="text-[12px] text-[#8da2bd] leading-relaxed mt-3.5 rounded-2xl px-4 py-3"
+            style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.12)'}}>
+            {np.note}
+          </p>
+          </>
+        ) : partner.is_online ? (
           <div className="mt-5 rounded-2xl px-4 py-3.5" style={{background:'rgba(46,211,198,0.10)', border:'1px solid rgba(91,231,218,0.30)'}}>
             <p className="font-display font-bold text-[14px] text-[#EAF1F8]">Online — coached from anywhere</p>
             <p className="text-[12.5px] text-[#cdd9e8] mt-1 leading-relaxed">
@@ -4770,6 +4856,10 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
 const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSpot, onOpenPartner }) => {
   const ref = useRef(null);
   const seen = useRef(false);
+  // Null for every ordinary business, which is all this card has ever had to
+  // handle. Set only for a partner that IS a parking network — see
+  // data/networkPartners.js for why that changes two things and nothing else.
+  const np = networkPartner(partner);
   useEffect(() => {
     const node = ref.current;
     if (!node || seen.current) return;
@@ -4843,7 +4933,8 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
                 gets "map coming shortly" on the page this link opens — the
                 same gate the map and the nearby list already use, so all three
                 tell a driver the same story. */}
-            {(partner.is_online || !partner.geo_verified)
+            {np ? <>{np.cardLink}</>
+              : (partner.is_online || !partner.geo_verified)
               ? <>See photos &amp; details</>
               : <>See photos &amp; parking nearby</>}
             <ChevronRight size={14}/>
@@ -4857,6 +4948,31 @@ const PartnerCard = ({ partner, listingId, eyebrow = 'Near this space', onOpenSp
           </a>
         )}
         {(() => {
+          // A NETWORK PARTNER LISTS ITS OWN CAR PARKS. The block below this one
+          // draws the free kerbside around a business's front door, which is
+          // the right answer for a barber and precisely the wrong one for a car
+          // park operator: it would put the free alternatives to APCOA on
+          // APCOA's own card. Same shape, same taps, different list.
+          if (np) {
+            const sites = networkSites(np, ALL_SPOTS, partner.lat, partner.lng).slice(0, 3);
+            if (!sites.length) return null;
+            return (
+              <div className="mt-3.5 pt-3 border-t border-white/10">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[rgba(234,241,248,0.5)] mb-1.5">🅿 {np.heading}</p>
+                {sites.map(s => {
+                  const row = (
+                    <span className="flex items-center justify-between gap-2 w-full">
+                      <span className="text-[12.5px] text-[#cdd9e8] truncate">{s.name}</span>
+                      {s.price && <span className="flex-shrink-0 text-[11px] text-[#5BE7DA] font-semibold">{String(s.price).split('/')[0]}</span>}
+                    </span>
+                  );
+                  return onOpenSpot
+                    ? <button key={s.id} onClick={(e)=>{ e.stopPropagation(); onOpenSpot(s); }} className="w-full text-left py-1 hover:opacity-80">{row}</button>
+                    : <div key={s.id} className="py-1">{row}</div>;
+                })}
+              </div>
+            );
+          }
           // Same rule as the detail map, and the same correction: it is the
           // PIN that has to be trusted, not the address. A nearby-spots list
           // computed from an unverified coordinate is a list of the wrong
