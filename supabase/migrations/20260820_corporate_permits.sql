@@ -1,6 +1,6 @@
 -- ParkEasy for Business — corporate pooled permits.
 --
--- NOT YET APPLIED to production. Run this against project bbgqregyogtjzaustbng
+-- APPLIED to production project bbgqregyogtjzaustbng on 19 Aug 2026. Run this against project bbgqregyogtjzaustbng
 -- before deploying the /api/corporate endpoints; they will 500 until it exists.
 --
 --------------------------------------------------------------------------------

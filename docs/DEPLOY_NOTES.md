@@ -4,7 +4,11 @@ Five features were built as five commits. None of the database-backed ones do
 anything until their migration has run, and every money-moving path is in Stripe
 test mode until it has been reconciled by hand.
 
-## 1. Migrations, in this order
+## 1. Migrations — DONE
+
+All five were applied to production on 19 August 2026, in this order, before the
+code merged. Kept here as the record of what ran and what each one is load-bearing
+for.
 
 | File | Feature | Breaks without it |
 |---|---|---|
@@ -15,6 +19,17 @@ test mode until it has been reconciled by hand.
 | `20260820_car_wash.sql` | 4 | `/api/wash` 500s |
 
 Feature 5 needs no migration.
+
+**One of them nearly took the site down, and the reason is worth keeping.**
+`20260820_operator_site_terminology.sql` recreates `listings_public`, and the
+first draft copied the column list out of the migration that created that view.
+Production's version had **nine more columns** — gate hours, the overnight fee,
+availability windows, the featured flag — added by later migrations. Since
+`create or replace view` replaces rather than merges, applying that draft would
+have silently dropped all nine and broken gate hours and booking windows across
+the app, with nothing erroring. The list was read back off production with
+`pg_get_viewdef` instead. Do the same next time: **the migration files in this
+repo are not a complete record of this database.**
 
 ## 2. Environment variables
 

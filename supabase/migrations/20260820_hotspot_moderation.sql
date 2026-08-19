@@ -1,7 +1,7 @@
 -- Hotspot moderation: restrictions required, private land refused, and a
 -- one-tap way for a driver to say "this is wrong now".
 --
--- NOT YET APPLIED to production.
+-- APPLIED to production project bbgqregyogtjzaustbng on 19 Aug 2026.
 --
 -- Review-before-publish is unchanged. Every submission is still read by a human
 -- before it goes on the map, and nothing here adds auto-publish — the accuracy

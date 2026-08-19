@@ -1,6 +1,6 @@
 -- Car wash add-on, manual v1.
 --
--- NOT YET APPLIED to production.
+-- APPLIED to production project bbgqregyogtjzaustbng on 19 Aug 2026.
 --
 -- DELIBERATELY NOT AUTOMATED. No valeter accounts, no scheduling engine, no
 -- payment split. A driver ticks a box, ParkEasy takes the money, and Marty

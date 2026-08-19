@@ -1,6 +1,6 @@
 -- Did a booking start at a free spot?
 --
--- NOT YET APPLIED to production.
+-- APPLIED to production project bbgqregyogtjzaustbng on 19 Aug 2026.
 --
 -- THE QUESTION THIS COLUMN EXISTS TO ANSWER, and it is the one that decides
 -- what ParkEasy does next: are the 745 hand-checked free spots the top of the
