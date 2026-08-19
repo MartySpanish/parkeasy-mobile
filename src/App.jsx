@@ -26,6 +26,7 @@ import { networkPartner, networkSites, nearestSiteDistance } from './data/networ
 import { holdCopy } from './data/spaceHold';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
+import { fetchGems, fetchGemStats } from './data/hiddenGems';
 import ComparisonCard from './components/funnel/ComparisonCard';
 import WashAddOn from './components/wash/WashAddOn';
 import CancelSubscription from './components/account/CancelSubscription';
@@ -1094,7 +1095,7 @@ const BusinessModal = ({ onClose }) => {
 };
 
 // ── Pricing / Premium Modal ───────────────────────────────────────────────────
-const PricingModal = ({ isPremium, onClose, onRedeem }) => {
+const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
   const [showCodeBox, setShowCodeBox] = useState(false);
   const [code,        setCode]        = useState('');
   const [codeError,   setCodeError]   = useState(false);
@@ -1160,6 +1161,16 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
             <strong className="text-white">{ALL_SPOTS_STATS.length} parking spots across Northern Ireland</strong>,
             every one checked before it goes on the map.
           </p>
+          {/* The gem count, queried rather than hardcoded, so it moves the day
+              Marty publishes one instead of the next time somebody deploys.
+              Hidden entirely when the query has not answered — a missing number
+              is better than a stale one on the screen where somebody decides
+              whether to pay. */}
+          {gemCount != null && (
+            <p className="text-[#5BE7DA] text-[12.5px] mt-1">
+              Including <strong className="text-white">{gemCount} hidden gems</strong> you only see with Premium.
+            </p>
+          )}
           <p className="text-[#5BE7DA] text-sm mt-1.5">Unlock the spots only locals know — hand-picked free hidden gems + EV chargers across NI</p>
         </div>
         <div className="p-6 space-y-4">
@@ -2434,7 +2445,10 @@ const walkFromMiles = (mi) => {
 // exact location or notes.
 const isGated = (spot) => {
   if (spot.mine) return false;                                         // community submissions
-  if (TASTER_GEM_IDS.has(spot.id)) return false;                       // 5 free taster gems, app-wide
+  // is_taster comes off the database row now; TASTER_GEM_IDS is the fallback
+  // for the bundled list, and for a session where the gem query failed.
+  if (spot.isTaster === true) return false;                            // taster, per the database
+  if (spot.isTaster === undefined && TASTER_GEM_IDS.has(spot.id)) return false;  // bundled fallback
   if (spot.badge === 'hidden_gem') return true;                        // every other hidden gem is Premium
   if (spot.price) return false;                                        // paid to park → free to view
   if (['official','timed','paid'].includes(spot.badge)) return false;  // car parks, P&R, on-street
@@ -7783,6 +7797,40 @@ export default function App() {
   const loadReportCounts = useCallback(() => { fetchReportCounts().then(setReportCounts); }, []);
   useEffect(() => { loadReportCounts(); }, [loadReportCounts]);
 
+  // ── HIDDEN GEMS, FROM THE DATABASE ───────────────────────────────────────
+  // The 89 curated free spots now live in public.hidden_gems, so they can be
+  // published, retired, counted and joined without a deploy — and so RLS, not
+  // the UI, decides who sees a kerb-accurate coordinate.
+  //
+  // `gemSource` says where the list on screen came from, and is not cosmetic:
+  //   'db'      a subscriber read the real rows
+  //   'teaser'  a free user read areas and the five tasters
+  //   'none'    the query failed, and the HARDCODED list is standing in
+  //
+  // The fallback exists because gems are the paid product on a live app. A
+  // failed request must not silently remove 89 spots from a subscriber's map.
+  // It is temporary: once this path has proven itself the hardcoded copies come
+  // out of the bundle, which is what actually stops a non-subscriber reading
+  // every gem's exact location out of devtools.
+  const [dbGems,    setDbGems]    = useState(null);   // null = not loaded yet
+  const [gemSource, setGemSource] = useState('loading');
+  const [gemStats,  setGemStats]  = useState(null);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const { spots, source, error } = await fetchGems();
+      if (!live) return;
+      if (source === 'none' || !spots.length) {
+        if (error) console.warn('hidden gems: falling back to the bundled list —', error);
+        setDbGems(null); setGemSource('none');
+      } else {
+        setDbGems(spots); setGemSource(source);
+      }
+    })();
+    fetchGemStats().then(st => { if (live && st) setGemStats(st); });
+    return () => { live = false; };
+  }, [isPremium]);   // re-read on upgrade, so a new subscriber gets real pins
+
   const [rentalSpots, setRentalSpots] = useState([]);
   useEffect(() => {
     let live = true;
@@ -7864,6 +7912,19 @@ export default function App() {
     return () => { live = false; };
   }, []);
 
+  // Bundled spots with the hardcoded gems swapped out for the database ones.
+  // ONE place does the substitution, so citySpots and networkSpots can never
+  // disagree about which gems exist — the failure that would show a gem on the
+  // map and not in the list.
+  const withDbGems = useCallback((bundled) => {
+    if (!dbGems) return bundled;                       // fallback: bundle as-is
+    const ids = new Set(dbGems.map(g => String(g.id)));
+    return [
+      ...bundled.filter(s => s.badge !== 'hidden_gem' || !ids.has(String(s.id))),
+      ...dbGems,
+    ];
+  }, [dbGems]);
+
   const citySpots   = useMemo(
     () => {
       // A submitter's own copy is kept locally so their spot shows immediately
@@ -7874,7 +7935,8 @@ export default function App() {
         ...userSpots.filter(s => s.city === currentCity.id && !approvedKeys.has(`${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`)),
         ...approvedSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
         ...rentalSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
-        ...getCitySpots(currentCity.id),
+        ...withDbGems(getCitySpots(currentCity.id))
+            .filter(s => s.badge !== 'hidden_gem' || !s.town || s.town === currentCity.id),
       ];
       // Attach the live count here rather than threading a prop through every
       // card, row, pin and sheet — they all already receive the spot.
@@ -7890,10 +7952,16 @@ export default function App() {
           : s;
       });
     },
-    [userSpots, approvedSpots, rentalSpots, currentCity.id, occupancy, heading, capacity]
+    [userSpots, approvedSpots, rentalSpots, currentCity.id, occupancy, heading, capacity, withDbGems]
   );
   // Everything addressable by id (used by Saved, which can hold community spots too).
-  const allSpots    = useMemo(() => [...userSpots, ...Object.values(CITY_SPOTS).flat()], [userSpots]);
+  // Saved spots resolve by id through this, so the database gems have to be in
+  // it too — otherwise a subscriber's saved gem quietly stops resolving the day
+  // the source switches.
+  const allSpots    = useMemo(
+    () => withDbGems([...userSpots, ...Object.values(CITY_SPOTS).flat()]),
+    [userSpots, withDbGems],
+  );
 
   // The whole network — every town, same enrichment citySpots gets. Search runs
   // off this rather than one town's slice. The coverage IS the product, and
@@ -7905,7 +7973,7 @@ export default function App() {
       ...userSpots.filter(s => !approvedKeys.has(`${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`)),
       ...approvedSpots,
       ...rentalSpots,
-      ...ALL_SPOTS,
+      ...withDbGems(ALL_SPOTS),
     ];
     return all.map(s => {
       const n = occupancy[String(s.id)] || 0;
@@ -7916,7 +7984,7 @@ export default function App() {
             ...(c ? { spaces: c, spacesEstimated: true } : {}) }
         : s;
     });
-  }, [userSpots, approvedSpots, rentalSpots, occupancy, heading, capacity]);
+  }, [userSpots, approvedSpots, rentalSpots, occupancy, heading, capacity, withDbGems]);
 
   // The phone's back button closes what's open instead of quitting the app.
   // Ordered outermost first: the LAST open one is the topmost on screen, and
@@ -8369,7 +8437,7 @@ export default function App() {
         </div>
       )}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
-      {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)} onRedeem={redeemVipCode}/>}
+      {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)} onRedeem={redeemVipCode} gemCount={gemStats?.published ?? null}/>}
       {rewardUntil && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[210] flex items-center justify-center p-4" onClick={()=>setRewardUntil(null)}>
           <div onClick={e=>e.stopPropagation()} className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">
