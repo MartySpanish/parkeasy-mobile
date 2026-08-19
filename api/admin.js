@@ -528,9 +528,10 @@ export default async function handler(req, res) {
     } catch { /* tables may not exist yet */ }
 
     // Bookings summary (Stripe Checkout marketplace). Gross paid + our fees.
-    let bookings = { total: 0, paid: 0, grossPence: 0, feePence: 0, hostsOnboarded: 0 };
+    let bookings = { total: 0, paid: 0, grossPence: 0, feePence: 0, hostsOnboarded: 0,
+                     fromHotspot: 0, fromHotspotGrossPence: 0 };
     try {
-      const brr = await fetch(`${URL_}/rest/v1/bookings?select=status,amount_total_pence,application_fee_pence&order=created_at.desc&limit=1000`, { headers: svc });
+      const brr = await fetch(`${URL_}/rest/v1/bookings?select=status,amount_total_pence,application_fee_pence,from_hotspot&order=created_at.desc&limit=1000`, { headers: svc });
       if (brr.ok) {
         const rows = await brr.json();
         bookings.total = rows.length;
@@ -539,8 +540,22 @@ export default async function handler(req, res) {
             bookings.paid += 1;
             bookings.grossPence += b.amount_total_pence || 0;
             bookings.feePence += b.application_fee_pence || 0;
+            // THE NUMBER THAT DECIDES WHAT THE FREE SPOTS ARE FOR. Paid
+            // bookings that started at a free spot, via the comparison card. If
+            // this stays at zero the 745 hand-checked free spots are not
+            // feeding the marketplace and something has to change; if it grows,
+            // every hour spent on them pays for itself.
+            if (b.from_hotspot) {
+              bookings.fromHotspot += 1;
+              bookings.fromHotspotGrossPence += b.amount_total_pence || 0;
+            }
           }
         }
+        // Share of paid bookings that came out of a free spot. Null rather than
+        // 0 when there are no paid bookings at all — "0%" of nothing reads as a
+        // failing funnel rather than an empty one.
+        bookings.fromHotspotPct = bookings.paid
+          ? Math.round((bookings.fromHotspot / bookings.paid) * 100) : null;
       }
       const har = await fetch(`${URL_}/rest/v1/host_accounts?transfers_active=is.true&select=host_id`, { headers: { ...svc, Prefer: 'count=exact' } });
       if (har.ok) {

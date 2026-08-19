@@ -1,3 +1,4 @@
+import { cameFromHotspot } from './funnel';
 // API helper. The serverless functions (/api/notify, /api/admin) only run on
 // Vercel hosting. parkeasy.uk currently serves the static build from GitHub
 // Pages, where those paths 404 — so every API call tries same-origin first
@@ -74,7 +75,14 @@ export async function createBookingSession({ listingId, durationHours, startsAt,
   const r = await apiFetch('/api/checkout/create-session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ listingId, durationHours, startsAt, marketingOptIn: !!marketingOptIn, repeatWeeks: repeatWeeks || 1, vehicleReg: vehicleReg || null }),
+    body: JSON.stringify({
+      listingId, durationHours, startsAt, marketingOptIn: !!marketingOptIn,
+      repeatWeeks: repeatWeeks || 1, vehicleReg: vehicleReg || null,
+      // Whether this booking started at a free spot, so bookings.from_hotspot
+      // records it server-side. A client analytics event fired after the Stripe
+      // redirect is lost whenever somebody closes the tab on the receipt page.
+      fromHotspot: cameFromHotspot(),
+    }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok || !d.url) throw new Error(d.error || 'Could not start checkout');

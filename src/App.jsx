@@ -17,13 +17,15 @@ import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
-import { trackSearch, trackSpotOpen, trackDirections, trackSignup } from './funnel';
+import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
 import { paymentError } from './errors';
 import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
 import { splitPartnersByCategory } from './data/partnerCategories';
 import { claimState, canClaim } from './data/spotClaims';
 import { networkPartner, networkSites, nearestSiteDistance } from './data/networkPartners';
 import { holdCopy } from './data/spaceHold';
+import { paidAlternativeFor } from './data/hotspotFunnel';
+import ComparisonCard from './components/funnel/ComparisonCard';
 // Lazily loaded: ParkEasy for Business is a whole screen that almost every
 // driver will never open, and it has no business in the first paint of a
 // parking search.
@@ -1462,7 +1464,7 @@ const CapacityPrompt = ({ spot }) => {
   );
 };
 
-const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine }) => {
+const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot }) => {
   // Featured Partner: a local business within its radius of this spot. Same
   // contextual placement as on bookable listings — community spots are where
   // the traffic is, so the partner is visible while supply is still growing.
@@ -1505,6 +1507,12 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   const ring = spot.available!=null && spot.total ? spot.available/spot.total : occ.pct;
   const C = 2*Math.PI*26; const off = C*(1-Math.max(0.05,Math.min(1,ring)));
   const amen = amenitiesOf(spot);
+  // The paid space to offer beside this one, or null when there is no genuine
+  // decision to make. Recomputed only when the spot or the claim counts move.
+  const paidAlt = useMemo(
+    () => paidAlternativeFor(spot, bookableSpots, claimState(spot, headingMine), sellableNow, allInFrom),
+    [spot?.id, spot?.inUse, spot?.onWay, spot?.spaces, headingMine, bookableSpots],
+  );
   const share=async()=>{ const url=location.origin+location.pathname+'#s='+spot.id; const text=`${spot.name} — ${(spot.notes||'').slice(0,90)}`; if(navigator.share){try{await navigator.share({title:'ParkEasy',text,url});}catch{}}else{navigator.clipboard?.writeText(url);setShareDone(true);setTimeout(()=>setShareDone(false),2000);} };
   return (
     <div className="fixed inset-0 z-[70] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.6)'}} onClick={onClose}>
@@ -1686,6 +1694,21 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               </>
             );
           })()}
+          {/* THE FREE → PAID CARD, AFTER the free spot has had its say and not
+              before. A driver opening a free space came for that space; putting
+              a paid alternative above the thing they asked for is how a useful
+              page becomes an advert. By this point they have read the walk, the
+              restrictions and whether anyone else is heading there, so the
+              comparison is a decision rather than an interruption.
+
+              It only appears when there is a real decision — see
+              data/hotspotFunnel.js. On a quiet free spot with nothing wrong
+              with it, there is no card at all. */}
+          {paidAlt && (
+            <ComparisonCard spot={spot} paid={paidAlt} reason={paidAlt.reason}
+              claim={claimState(spot, headingMine)}
+              onOpenPaid={(p) => { onClose?.(); onOpenSpot?.(p.spot); }}/>
+          )}
           {onStartTimer && (
             <button onClick={()=>onStartTimer(spot)} className="w-full mt-3 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
               <Timer size={17} className="text-[#5BE7DA]"/>Start parking timer
@@ -6679,6 +6702,30 @@ const AdminOverlay = ({ onClose }) => {
                     <Tile label="Our fees" value={`£${((d.bookings.feePence||0)/100).toFixed(0)}`} accent="#5BE7DA"/>
                     <Tile label="Hosts paid-ready" value={d.bookings.hostsOnboarded}/>
                   </div>
+                  {/* THE FREE → PAID CONVERSION. The number that says whether
+                      745 hand-checked free spots are the top of the funnel or
+                      are competing with the only thing that makes money.
+                      Read from bookings.from_hotspot, not from an analytics
+                      event — an event fired after the Stripe redirect is lost
+                      whenever somebody closes the receipt tab. */}
+                  <div className="glass rounded-2xl p-4 mt-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#5BE7DA]">Free spot → booking</p>
+                    {d.bookings.fromHotspotPct == null ? (
+                      <p className="text-[12.5px] text-[rgba(234,241,248,0.55)] mt-1.5 leading-relaxed">
+                        No paid bookings yet, so there is no rate to report. Not 0% &mdash; nothing to divide by.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="font-display font-extrabold text-[22px] text-[#EAF1F8] mt-1 leading-none">
+                          {d.bookings.fromHotspotPct}%
+                        </p>
+                        <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-1.5 leading-relaxed">
+                          {d.bookings.fromHotspot} of {d.bookings.paid} paid booking{d.bookings.paid === 1 ? '' : 's'} started
+                          at a free spot &mdash; £{((d.bookings.fromHotspotGrossPence||0)/100).toFixed(2)} gross.
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
               {d.partners?.length > 0 && (
@@ -7385,7 +7432,17 @@ export default function App() {
   // Every route into the spot sheet goes through here — list tap, map pin,
   // event overlay, partner card, deep link — so the open is counted once and
   // in one place. Closing passes null and is deliberately not an open.
-  const openSpot = useCallback((sp) => { if (sp) trackSpotOpen(sp.badge); setDetailSpot(sp); }, []);
+  const openSpot = useCallback((sp) => {
+    if (sp) {
+      trackSpotOpen(sp.badge);
+      // The top of the free → paid funnel. Only free spots are in it; a paid
+      // council car park is already somebody's paid choice.
+      if (['free', 'hidden_gem'].includes(sp.badge)) {
+        trackHotspotViewed(sp.badge, claimState(sp).atCapacity);
+      }
+    }
+    setDetailSpot(sp);
+  }, []);
   const [showUserMenu,  setShowUserMenu]  = useState(false);
   const [showBizModal,  setShowBizModal]  = useState(false);
   // Premium is either lifetime/subscription (pe_premium) or time-limited
@@ -7779,6 +7836,12 @@ export default function App() {
       // before they travel, not at the gate. Read from the value we stored on
       // the way to Stripe, so there's no round-trip on the return leg.
       const reg = ls.get('pe_vehicle_reg', '') || '';
+      // Close the free → paid funnel. bookings.from_hotspot is the number
+      // anybody decides on; this is the analytics counterpart, and it is
+      // cleared either way so one comparison card cannot claim a second
+      // booking made later in the same tab.
+      if (cameFromHotspot()) trackBookingFromHotspot();
+      clearHotspotOrigin();
       setFlash({ tone: 'ok', msg: `✅ Booking confirmed — your payment went through.${reg ? ` Vehicle ${reg} — check it's right in Your bookings.` : ''}` });
       window.history.replaceState({}, '', window.location.pathname);
     } else if (booking === 'cancelled') {
@@ -8018,7 +8081,8 @@ export default function App() {
         ...(typeof detailSpot.spaces !== 'number' && capacity[String(detailSpot.id)]
           ? { spaces: capacity[String(detailSpot.id)], spacesEstimated: true } : {}),
       }} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
-        onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}/>}
+        onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}
+        bookableSpots={rentalSpots} onOpenSpot={openSpot}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
       {showCorporate && (
