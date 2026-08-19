@@ -7,6 +7,7 @@ import {
   Bookmark, Camera, Check, X, ChevronRight, ChevronLeft, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon, Sparkles,
+  Store,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -3344,7 +3345,32 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               {premiumTeaser}
             </>
           )}
-          {!isSearching && <TrustPanel onAddSpot={onAddSpot}/>}
+          {/* THE OTHER HALF OF THE SUPPLY SIDE, AT THE BOTTOM.
+              There is a route to clubs and churches near the top of this page
+              ("Got a car park sitting empty?"), and there has been a route to
+              businesses only in the footer, as one link among six. A barber or
+              a gym who wants to be featured had nowhere obvious to press.
+
+              At the BOTTOM on purpose, and not paired with the hosts card at
+              the top. A driver opening this page wants parking; two adverts
+              for two different B2B audiences before the first result is how a
+              home screen stops being useful. Somebody who has scrolled the
+              whole list has already had their answer, and that is the moment
+              the ask is fair rather than in the way.
+
+              Shown on the landing state only, same rule as TrustPanel above:
+              once a driver has searched, the page belongs to their results. */}
+          {!isSearching && (
+            <a href="/partners"
+              className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 active:scale-[0.99] transition"
+              style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.10)'}}>
+              <Store size={15} className="text-[#5BE7DA] flex-shrink-0"/>
+              <span className="text-[12.5px] leading-snug text-[#cdd9e8] flex-1 min-w-0">
+                Run a business near parking? <strong className="text-[#EAF1F8]">Get featured on ParkEasy.</strong>
+              </span>
+              <ChevronRight size={15} className="text-[rgba(234,241,248,0.4)] flex-shrink-0"/>
+            </a>
+          )}
         </div>
         </div>
         </div>
