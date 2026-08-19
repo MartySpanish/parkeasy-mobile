@@ -1456,8 +1456,13 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   // BookingSheet uses, so the button can't appear on something that would then
   // be refused.
   const [booking, setBooking] = useState(false);
-  const bookableListing = (spot.rental && spot.listing
-    && (Number(spot.listing.price_per_hour) > 0 || Number(spot.listing.price_per_day) > 0))
+  // sellableNow adds the availability window to the price test. Without it the
+  // button appeared on a listing whose window had closed, and checkout then
+  // refused it with "this car park isn't taking bookings after ..." — which is
+  // precisely the refusal this gate exists to make impossible. Same rule both
+  // sides of the wire: api/checkout/create-session.js compares the booking day
+  // against available_from / available_until, inclusive.
+  const bookableListing = (spot.rental && spot.listing && sellableNow(spot.listing))
     ? spot.listing : null;
   const bookableAllIn = bookableListing
     ? allInFrom(bookableListing.price_per_hour, bookableListing.price_per_day) : null;
@@ -4113,6 +4118,43 @@ const driverServiceFee = (bookingGbp) =>
 // Applies ONLY to bookable rental listings. Community spots are informational —
 // the driver pays the council or operator directly and ParkEasy takes nothing,
 // so there is no fee to fold in and no total for us to state.
+// Can a driver actually buy this listing TODAY?
+//
+// Two conditions, and both are already enforced server-side in
+// api/checkout/create-session.js — this is the client saying the same thing so
+// the driver never meets a refusal it could have predicted:
+//
+//   a price above zero      → checkout: "This listing has no price set"
+//   inside its date window  → checkout: "isn't taking bookings until/after ..."
+//
+// The window bounds are INCLUSIVE, matching the server's `day < from` /
+// `day > until` comparison, and the day is taken in Europe/London rather than
+// UTC — a booking at 00:30 BST is still today to the person making it, and the
+// server resolves the date the same way.
+//
+// WHY IT EXISTS. The gate below used to test price alone, so a listing whose
+// window had closed still showed "Reserve & pay". The driver pressed it, filled
+// in the sheet, and got refused at the last step by a rule that was knowable
+// before they started. Belfast Royal Academy is deliberately in that state —
+// live on the app, not selling — so this stopped being hypothetical.
+//
+// The listing stays VISIBLE either way. Not sellable is not the same as not
+// worth knowing about: the space is real, the address is useful, and a driver
+// who sees it exists is a driver who might ask for it.
+const londonDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(d);
+
+const sellableNow = (listing) => {
+  if (!listing) return false;
+  const priced = Number(listing.price_per_hour) > 0 || Number(listing.price_per_day) > 0;
+  if (!priced) return false;
+  const today = londonDay();
+  if (listing.available_from  && today < listing.available_from)  return false;
+  if (listing.available_until && today > listing.available_until) return false;
+  return true;
+};
+
 const allInFrom = (pricePerHour, pricePerDay) => {
   const rate = Number(pricePerHour) || 0;
   const day  = Number(pricePerDay) || 0;
@@ -7193,7 +7235,7 @@ export default function App() {
     (async () => {
       if (!isSupabaseEnabled) return;
       const { data } = await supabase.from('rental_listings')
-        .select('id,title,address,lat,lng,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,featured,spaces,space_type,photos,instructions,is_verified,verified_org_type,average_rating,ratings_count,completed_bookings_count')
+        .select('id,title,address,lat,lng,price_per_hour,price_per_day,available_from,available_until,gate_opens_at,gate_closes_at,featured,spaces,space_type,photos,instructions,is_verified,verified_org_type,average_rating,ratings_count,completed_bookings_count')
         .eq('status', 'active').limit(200);
       if (!live || !data) return;
       setRentalSpots(data.filter(l => l.lat != null && l.lng != null).map(l => ({
@@ -7203,10 +7245,20 @@ export default function App() {
         name: l.title || 'Private space',
         near: l.address || '',
         tags: [String(l.title||''), String(l.address||'')].join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2),
-        badge: 'paid',
-        dist: 0, walk: 'Bookable',
-        restriction: 'Private space — book in advance',
-        notes: l.instructions || 'A private space you can book in advance through ParkEasy.',
+        // A listing can be live and NOT sellable — outside its availability
+        // window, or with no price set. Saying "Bookable · book in advance" on
+        // one of those is the same lie in three places: the badge, the walk
+        // label and the restriction line. The card has to match what the
+        // Reserve button will actually do, and what checkout will actually
+        // accept, or a driver reads "book in advance" and finds nothing to press.
+        badge: sellableNow(l) ? 'paid' : 'free',
+        dist: 0, walk: sellableNow(l) ? 'Bookable' : 'Not booking',
+        restriction: sellableNow(l)
+          ? 'Private space — book in advance'
+          : 'Listed, but not taking bookings at the moment',
+        notes: l.instructions || (sellableNow(l)
+          ? 'A private space you can book in advance through ParkEasy.'
+          : 'This space is on ParkEasy but is not taking bookings right now.'),
         lat: l.lat, lng: l.lng,
         by: 'ParkEasy host', votes: 0,
         photo: l.photos?.[0] || null,
@@ -7216,7 +7268,7 @@ export default function App() {
         // Day-priced sites pass price_per_day too. Without it allInFrom returned
         // null and Davitt's — a live, bookable listing — showed no price at all
         // on the map or in search, which reads as "not for sale".
-        price: allInFrom(l.price_per_hour, l.price_per_day)
+        price: sellableNow(l) && allInFrom(l.price_per_hour, l.price_per_day)
           ? `£${allInFrom(l.price_per_hour, l.price_per_day).total.toFixed(2)}/all-in` : null,
         spaces: l.spaces || 1,
         listing: l,
