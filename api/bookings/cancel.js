@@ -6,6 +6,7 @@
 // Refunds use reverse_transfer (claws the host's share back) + refund the
 // application fee, so the accounting stays clean. Amounts in integer pence.
 import Stripe from 'stripe';
+import { hostEmails } from '../_hostEmails.js';
 
 const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
 function applyCors(req, res) {
@@ -56,6 +57,19 @@ export default async function handler(req, res) {
     const booking = (await br.json())?.[0];
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
+    // The listing, purely so the cancellation email can reach the right people.
+    // hostEmails() needs contact_email AND owner_email — the secretary and the
+    // treasurer are different people at a club, and only one of them can see
+    // Stripe. Fetched here rather than inside the notify block so a failure to
+    // load it can never sit between the driver and their refund.
+    let listing = null;
+    try {
+      const lr = await fetch(
+        `${URL_}/rest/v1/rental_listings?id=eq.${encodeURIComponent(booking.listing_id)}&select=title,contact_email,owner_email`,
+        { headers: svc });
+      if (lr.ok) listing = (await lr.json())?.[0] || null;
+    } catch { /* the refund matters more than the email */ }
+
     const isDriver = booking.driver_id === caller.id;
     const isHost = booking.host_id === caller.id;
     if (!isDriver && !isHost) return res.status(403).json({ error: 'Not your booking' });
@@ -100,6 +114,56 @@ export default async function handler(req, res) {
         updated_at: new Date().toISOString(),
       }),
     });
+
+    // ── TELL THE HOST ────────────────────────────────────────────────────
+    // Until now a cancellation refunded the driver, updated the row and told
+    // NOBODY. A club expecting four cars on Saturday had no way to learn that
+    // two of them were no longer coming — and the whole reason Davitt Park's
+    // gates were locked on 8 August is a host acting on information the app
+    // had not given them. A booking appearing and a booking disappearing are
+    // the same class of fact.
+    //
+    // Both addresses on the listing, same rule as a new booking: the secretary
+    // takes the day-to-day and the treasurer reconciles the money, and only one
+    // of them can see Stripe.
+    //
+    // Sent AFTER the refund and the status write, and never allowed to fail the
+    // request — a driver whose refund succeeded must not see an error because
+    // an email bounced.
+    try {
+      const KEY_R = process.env.RESEND_API_KEY;
+      const TO_ADMIN = process.env.CONTACT_EMAIL;
+      const FROM = process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>';
+      if (KEY_R) {
+        const when = booking.starts_at
+          ? new Date(booking.starts_at).toLocaleString('en-GB',
+              { weekday:'long', day:'numeric', month:'long', hour:'2-digit', minute:'2-digit', timeZone:'Europe/London' })
+          : 'an unspecified time';
+        const who = isHost ? 'the host' : 'the driver';
+        const money = refundPence > 0
+          ? `The driver has been refunded £${(refundPence / 100).toFixed(2)}.`
+          : 'No refund was due — the cancellation was after the deadline, so your share is unchanged.';
+        const subject = `Booking cancelled — ${listing?.title || 'your space'}, ${when}`;
+        const html = `<div style="font-family:system-ui,sans-serif;max-width:520px">
+          <h2 style="margin:0 0 12px">A booking has been cancelled</h2>
+          <p style="margin:0 0 10px"><strong>${listing?.title || 'Your space'}</strong><br>${when}</p>
+          <p style="margin:0 0 10px">Cancelled by ${who}. ${money}</p>
+          ${booking.vehicle_reg ? `<p style="margin:0 0 10px">Vehicle: <strong>${booking.vehicle_reg}</strong> — this car is no longer expected.</p>` : ''}
+          <p style="margin:16px 0 0;color:#555;font-size:13px">You don't need to do anything. This is just so the space isn't held for a car that isn't coming.</p>
+        </div>`;
+        const send = (to) => fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${KEY_R}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+        }).catch(() => {});
+        const targets = hostEmails(listing);
+        if (TO_ADMIN) targets.push(TO_ADMIN);
+        await Promise.all(targets.map(send));
+      }
+    } catch (e) {
+      // Logged, never surfaced. The cancellation itself already succeeded.
+      console.error('bookings/cancel: host notification failed', e);
+    }
 
     return res.status(200).json({ ok: true, refundPence, refundStatus });
   } catch (e) {
