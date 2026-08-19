@@ -7,7 +7,7 @@ import {
   Bookmark, Camera, Check, X, ChevronRight, ChevronLeft, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon, Sparkles,
-  Store,
+  Store, Briefcase,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -23,6 +23,11 @@ import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
 import { splitPartnersByCategory } from './data/partnerCategories';
 import { claimState, canClaim } from './data/spotClaims';
 import { networkPartner, networkSites, nearestSiteDistance } from './data/networkPartners';
+import { holdCopy } from './data/spaceHold';
+// Lazily loaded: ParkEasy for Business is a whole screen that almost every
+// driver will never open, and it has no business in the first paint of a
+// parking search.
+const CorporateScreen = React.lazy(() => import('./components/corporate/CorporateScreen'));
 import useBackButton from './useBackButton';
 import EventsScreen from './components/events/EventsScreen';
 
@@ -1224,7 +1229,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
 };
 
 // ── User Menu ─────────────────────────────────────────────────────────────────
-const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin }) => (
+const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin, onCorporate }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
     <div className="absolute top-16 right-3 bg-[#0e1a2c] rounded-2xl shadow-2xl border border-white/10 w-64 overflow-hidden" onClick={e=>e.stopPropagation()}>
       <div style={{background:'var(--surface-solid)'}} className="p-4 flex items-center gap-3">
@@ -1253,6 +1258,15 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
         {!isPremium && (
           <button onClick={onUpgrade} className="w-full bg-yellow-400 text-[#FFD27A] py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
             ★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr
+          </button>
+        )}
+        {/* Only for somebody who actually has work permits. Shown to the 
+            handful of people it means something to and invisible to everyone
+            else, rather than a permanent menu item advertising a product most
+            drivers cannot buy. */}
+        {onCorporate && (
+          <button onClick={onCorporate} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-xs text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+            <Briefcase size={14} className="text-[#5BE7DA]"/> Work parking
           </button>
         )}
         {onAdmin && (
@@ -2002,8 +2016,11 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
         {bookable.length > 0 ? (
           <>
             <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-1">Book a space for the Fleadh</h3>
+            {/* "Held for you" only where ParkEasy actually holds it. See
+                data/spaceHold.js — an operator's car park is oversold by
+                design and is not ours to hold. */}
             <p className="text-[12.5px] text-[rgba(234,241,248,0.55)] mb-2.5">
-              Reserved in advance and held for you — outside the closed zone.
+              {holdCopy(bookable)} Outside the closed zone.
             </p>
             <div className="space-y-3">
               {bookable.map(s=>(
@@ -7380,6 +7397,24 @@ export default function App() {
   const [cookieChoice,  setCookieChoice]  = useState(()=>ls.get('pe_cookie', null));
   const [detailSpot,    setDetailSpot]    = useState(null);
   const [detailPartner, setDetailPartner] = useState(null);
+  // ParkEasy for Business. `hasCorporate` is a single cheap query per signed-in
+  // session — RLS returns this user's own active membership rows and nothing
+  // else, so a null answer is genuinely "you have no work permits" rather than
+  // "we could not tell".
+  const [showCorporate, setShowCorporate] = useState(false);
+  const [hasCorporate,  setHasCorporate]  = useState(false);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!isSupabaseEnabled || !user?.id) { setHasCorporate(false); return; }
+      try {
+        const { data } = await supabase.from('corporate_members')
+          .select('id').eq('user_id', user.id).eq('status', 'active').limit(1);
+        if (live) setHasCorporate(Boolean(data?.length));
+      } catch { if (live) setHasCorporate(false); }
+    })();
+    return () => { live = false; };
+  }, [user?.id]);
 
   // Deep links: #s=<id> opens that spot; the hash tracks the open detail sheet.
   // Gated spots can't be opened via a shared link on the free tier — show the
@@ -7602,6 +7637,7 @@ export default function App() {
     [showBizModal,   () => setShowBizModal(false)],
     [showIOSGuide,   () => setShowIOSGuide(false)],
     [infoPage,       () => setInfoPage(null)],
+    [showCorporate,  () => setShowCorporate(false)],
     [showAdmin,      () => setShowAdmin(false)],
     [showEvents,     () => setShowEvents(false)],
     [showEvent,      () => setShowEvent(false)],
@@ -7985,6 +8021,11 @@ export default function App() {
         onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
+      {showCorporate && (
+        <React.Suspense fallback={null}>
+          <CorporateScreen onClose={()=>setShowCorporate(false)}/>
+        </React.Suspense>
+      )}
       {flash && (
         <div className="fixed top-3 inset-x-3 z-[220] flex items-start gap-2.5 rounded-2xl px-4 py-3 shadow-xl"
           style={{ background: flash.tone==='ok' ? 'rgba(52,224,160,0.14)' : 'rgba(255,194,75,0.14)', border: `1px solid ${flash.tone==='ok' ? 'rgba(52,224,160,0.4)' : 'rgba(255,194,75,0.4)'}`, backdropFilter:'blur(8px)' }}
@@ -8037,6 +8078,7 @@ export default function App() {
           onSignOut={handleSignOut}
           onUpgrade={()=>{setShowUserMenu(false);setShowPricing(true);}}
           onAdmin={isAdminUser(user) ? ()=>{setShowUserMenu(false);setShowAdmin(true);} : undefined}
+          onCorporate={hasCorporate ? ()=>{setShowUserMenu(false);setShowCorporate(true);} : undefined}
           onClose={()=>setShowUserMenu(false)}/>
       )}
 

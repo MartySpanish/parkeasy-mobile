@@ -21,6 +21,7 @@ import React, { useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronDown, Clock, MapPin, AlertTriangle, Users, Calendar } from 'lucide-react';
 import { upcomingEvents, venueOf, startOf, endOf, formatWhen } from '../../data/events';
 import { parkingForEvent, TIER } from '../../data/eventParking';
+import { holdCopy } from '../../data/spaceHold';
 
 // Tag → accent. Colour carries the category faster than the word does when
 // you're scanning thirty rows for "the football one".
@@ -181,7 +182,9 @@ const TierSection = ({ group, renderSpot, isPremium, sole = false }) => {
       </div>
       {group.tier === TIER.BOOKABLE && (
         <p className="text-[12px] text-[rgba(234,241,248,0.55)] mb-2.5">
-          Reserved and paid in advance, held for you when you arrive.
+          {/* Not a fixed sentence: an operator's car park is oversold by design
+              and is not ParkEasy's to hold. See data/spaceHold.js. */}
+          {holdCopy(group.items)}
         </p>
       )}
       {group.tier === TIER.PREMIUM_GEM && !isPremium && (
