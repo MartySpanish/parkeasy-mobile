@@ -241,6 +241,15 @@ export default async function handler(req, res) {
         description: 'APCOA runs car parks across the UK and Europe, and is the operator behind several of the paid car parks ParkEasy already lists in Northern Ireland: the multi-storeys at Lanyon Place and Oxford Street in Belfast, and the pay-and-display parking at Daisy Hill Hospital in Newry and Craigavon Area Hospital.\n\n'
           + 'The Belfast sites are barrierless ANPR — you drive in and pay online or in the APCOA Connect app rather than at a machine — and Lanyon Place has EV charging bays. The hospital car parks are pay and display, managed and enforced by APCOA for the Southern Health and Social Care Trust.\n\n'
           + 'Prices shown on ParkEasy are APCOA’s own published tariffs and you pay APCOA directly. These are not ParkEasy bookings, so check the current rate on site or in the app before you park.',
+        // APCOA's own brand assets, supplied by Marty. The photo is CROPPED:
+        // the original is a still from an APCOA marketing video whose top band
+        // reads "Heathrow VALET PARKING", and not one of the four Northern
+        // Irish sites listed under this card offers valet. See
+        // 20260820_apcoa_images.sql. The number plate is blurred for the same
+        // reason VRNs are masked in the logs.
+        logo_url: 'https://parkeasy.uk/apcoa/logo.jpg',
+        photo_url: 'https://parkeasy.uk/apcoa/1-carpark.jpg',
+        photo_urls: ['https://parkeasy.uk/apcoa/1-carpark.jpg'],
         link_url: 'https://www.apcoa.co.uk/',
         links: [{ label: 'Visit APCOA', url: 'https://www.apcoa.co.uk/' }],
         is_online: false,
