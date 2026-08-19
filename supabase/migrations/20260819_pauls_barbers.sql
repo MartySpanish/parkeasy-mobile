@@ -63,3 +63,36 @@ on conflict (slug) do update set
   priority     = excluded.priority,
   geo_verified = excluded.geo_verified,
   active       = excluded.active;
+
+-- ── ADDENDUM, same day: the images, and a correction to a correction ────────
+--
+-- The logo and three photos above were described as impossible to write from
+-- chat. They were recoverable, and they are now in public/paulsbarbers/:
+-- logo squared to its circle, and three cuts cropped centred on the head
+-- because the card keeps the middle band of a portrait and a naive crop takes
+-- the top off the hair. One carried an iOS "Crop" button burnt into the
+-- corner; the crop window starts below it.
+--
+-- MORE IMPORTANTLY, A MISTAKE OF MINE, RECORDED SO IT IS NOT REPEATED.
+-- I saw Paul carrying Aaron Quinn Hair's exact coordinate with geo_verified
+-- true, concluded it was a copy-paste bug of the Gransha Grill kind, and reset
+-- it to the Belfast-centre placeholder with the flag off — which took away his
+-- map and his parking list.
+--
+-- It was not a bug. The two shops face each other across the Andersonstown
+-- Road, which Marty said first hand, and which the migration above explains in
+-- a paragraph beginning "READ THIS BEFORE FIXING IT". I checked the database
+-- before I checked whether anything explained it. Restored.
+--
+-- The tagline above is also kept over the one I wrote: it names the road, which
+-- I could not do without knowing where he was.
+update partners set
+  logo_url    = 'https://parkeasy.uk/paulsbarbers/logo.jpg',
+  photo_url   = 'https://parkeasy.uk/paulsbarbers/1-skin-fade.jpg',
+  photo_urls  = array[
+    'https://parkeasy.uk/paulsbarbers/1-skin-fade.jpg',
+    'https://parkeasy.uk/paulsbarbers/2-textured-crop.jpg',
+    'https://parkeasy.uk/paulsbarbers/3-back-taper.jpg'
+  ],
+  description = E'Paul''s Barbers on the Andersonstown Road, across the road from Aaron Quinn Hair. Skin fades, crops and beard work — the photos here are his own.\n\nFind them on Facebook and Instagram for opening hours and to get booked in.'
+where slug = 'pauls-barbers';
