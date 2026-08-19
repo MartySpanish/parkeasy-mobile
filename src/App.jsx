@@ -7,6 +7,7 @@ import {
   Bookmark, Camera, Check, X, ChevronRight, ChevronLeft, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon, Sparkles,
+  Store,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -1456,8 +1457,13 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   // BookingSheet uses, so the button can't appear on something that would then
   // be refused.
   const [booking, setBooking] = useState(false);
-  const bookableListing = (spot.rental && spot.listing
-    && (Number(spot.listing.price_per_hour) > 0 || Number(spot.listing.price_per_day) > 0))
+  // sellableNow adds the availability window to the price test. Without it the
+  // button appeared on a listing whose window had closed, and checkout then
+  // refused it with "this car park isn't taking bookings after ..." — which is
+  // precisely the refusal this gate exists to make impossible. Same rule both
+  // sides of the wire: api/checkout/create-session.js compares the booking day
+  // against available_from / available_until, inclusive.
+  const bookableListing = (spot.rental && spot.listing && sellableNow(spot.listing))
     ? spot.listing : null;
   const bookableAllIn = bookableListing
     ? allInFrom(bookableListing.price_per_hour, bookableListing.price_per_day) : null;
@@ -2421,10 +2427,10 @@ const TrustPanel = ({ onAddSpot }) => (
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 // Positions in the results list where a featured partner card appears. One
-// slot per partner we can show — eight now that Aaron Quinn Hair is on.
+// slot per partner we can show — nine now that Paul's Barbers is on.
 // Slots and the slice below both derive from this array's length, so adding a
 // partner without adding a slot silently drops them off the end. That has now
-// happened at four, five, six and seven partners: never an error, just
+// happened at four, five, six, seven and eight partners: never an error, just
 // a business quietly missing from the app it was promised a place in. Add the
 // slot in the same commit as the partner, every time.
 //
@@ -2434,9 +2440,19 @@ const TrustPanel = ({ onAddSpot }) => (
 // nothing looked wrong; they were simply never reached, which is the same
 // outcome for the business.
 //
-// Gaps widen early and tighten late (7,7,6,5,4,4,4) rather than spreading
+// Gaps widen early and tighten late (7,6,5,5,4,4,3,3) rather than spreading
 // evenly. Attention decays down a list, so the space is worth more at the top;
-// four cards between adverts at position 35 costs less than it would at 5.
+// three cards between adverts at position 36 costs less than it would at 5.
+//
+// The ninth slot had to come out of the SAME 40, not out of a longer tail. The
+// ceiling is the page and it does not move because another business signed, so
+// every gap below the second tightens by one rather than the last slot sliding
+// past 39 and quietly costing the bottom partner its placement — which is the
+// exact failure the paragraph above describes.
+//
+// There is not much left to give. A tenth partner cannot be absorbed this way
+// without the end of the list reading as advert, advert, advert; at that point
+// the honest fix is a bigger PAGE or fewer slots, not thinner gaps.
 // "Nothing bookable near here yet — want us to tell you when there is?"
 //
 // THE PROBLEM IT ANSWERS. ParkEasy has ONE active bookable site, a GAA club car
@@ -2530,7 +2546,7 @@ const RequestParking = ({ geo, cityName }) => {
   );
 };
 
-const PARTNER_SLOTS = [2, 9, 16, 22, 27, 31, 35, 39];
+const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
@@ -3033,22 +3049,56 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         if (!live) return;
         if (error) { setPartnerDiag(`partners: ERROR ${error.message}`); return; }
         if (!data?.length) { setPartnerDiag('partners: 0 rows visible (inactive or out of window?)'); return; }
-        const near = data
-          .map(p => ({ ...p, d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000) }))
-          .filter(p => p.d < 8000)
-          .sort((a, b) => b.priority - a.priority || a.d - b.d);
+        // ── WHY THIS IS TWO TIERS AND NOT ONE FILTER ──────────────────────
+        // It used to be `.filter(d < 8000)` and nothing else. Every partner we
+        // have is in Belfast, and cityCenter follows whichever town the app
+        // detects — so the moment a driver was anywhere else, the filter matched
+        // nothing and EVERY partner vanished at once. Not one dropped off the
+        // end: all of them, silently, with the page looking perfectly normal.
+        //
+        // It does not take a long drive. Measured against the real rows:
+        // Newtownabbey (9km) already returns zero. Bangor, Carrickfergus,
+        // Ballymena, Newry and Derry return zero. Lisburn returns two of nine.
+        // Belfast returns nine, which is why it never showed up in testing.
+        //
+        // NEAR (8km) still means near, and still earns the "· <city>" label.
+        // What is new is the floor: if nothing is near, fall back to the region
+        // rather than to nothing, because a business promised a placement gets
+        // one. 30km is the honest edge of that — Bangor and Carrickfergus are
+        // inside it and those drivers do come into Belfast; Derry at 97km is
+        // not, and a barber there helps nobody, so beyond it we still show
+        // none. `regional` marks the fallback so the card stops claiming to be
+        // near the driver, which would be the same lie in a friendlier font.
+        const REGION_M = 30000;
+        const withD = data.map(p => ({
+          ...p,
+          d: Math.hypot((p.lat - cityCenter[0]) * 111320, (p.lng - cityCenter[1]) * 65000),
+        }));
+        const byRank = (a, b) => b.priority - a.priority || a.d - b.d;
+        const trulyNear = withD.filter(p => p.d < 8000);
+        const near = (trulyNear.length ? trulyNear : withD.filter(p => p.d < REGION_M))
+          .map(p => ({ ...p, regional: !trulyNear.length }))
+          .sort(byRank);
         // Keep ALL of them, sorted. The slice used to happen here, which meant
         // the global slot count decided who could lead a category: with six
         // partners and five slots, the sixth was cut before the fitness split
         // even ran — so the most relevant business on a fitness page could be
         // dropped for being sixth overall. Whoever is relevant leads; the cap
         // now applies only to the interleaved leftovers, where it belongs.
-        setPartnerDiag(`partners: ${data.length} row(s), ${near.length} near this city${near.length ? ` → ${near.map(p=>p.name).join(', ')}` : ''}`);
+        setPartnerDiag(`partners: ${data.length} row(s), ${trulyNear.length} within 8km, showing ${near.length}${near[0]?.regional ? ` (REGIONAL fallback, nearest ${Math.round(Math.min(...withD.map(p=>p.d))/1000)}km)` : ''}${near.length ? ` → ${near.map(p=>p.name).join(', ')}` : ''}`);
         setCityPartners(near);
       } catch (e) { if (live) setPartnerDiag(`partners: FETCH FAILED ${e?.message || e}`); }
     })();
     return () => { live = false; };
   }, [cityCenter?.[0], cityCenter?.[1]]);
+
+  // A partner reached by the regional fallback is NOT near this driver, so its
+  // card must not say so. Same card, honest label: "Featured partner" without
+  // the place name, rather than "Featured · Bangor" on a Belfast barber.
+  const partnerEyebrow = (p, place) =>
+    p?.regional ? 'Featured partner' : `Featured partner · ${place}`;
+  const partnerEyebrowShort = (p, place) =>
+    p?.regional ? 'Featured' : `Featured · ${place}`;
 
   // Partners split by whether they belong to the category being shown. The
   // matching ones lead the page; everyone else keeps the normal interleaved
@@ -3227,7 +3277,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         {featuredPartner && (
           <div className="px-4 pt-3">
             <PartnerCard partner={featuredPartner} listingId={null}
-              eyebrow={`Featured partner · ${cityName}`}
+              eyebrow={partnerEyebrow(featuredPartner, cityName)}
               onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
           </div>
         )}
@@ -3291,7 +3341,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                   feature is not an interruption — it is the answer. */}
               {leadPartners.map(p => (
                 <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
-                  eyebrow={`Featured · ${activeCatTitle || (geo ? geo.label.split(',')[0] : cityName)}`}
+                  eyebrow={partnerEyebrowShort(p, activeCatTitle || (geo ? geo.label.split(',')[0] : cityName))}
                   onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
               ))}
               {visibleSpots.map((s,i)=>(
@@ -3316,7 +3366,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                       the top must not appear a second time further down. */}
                   {PARTNER_SLOTS.includes(i) && restPartners[PARTNER_SLOTS.indexOf(i)] && (
                     <PartnerCard partner={restPartners[PARTNER_SLOTS.indexOf(i)]} listingId={null}
-                      eyebrow={`Featured · ${cityName}`} onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
+                      eyebrow={partnerEyebrowShort(restPartners[PARTNER_SLOTS.indexOf(i)], cityName)} onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
                   )}
                 </React.Fragment>
               ))}
@@ -3329,7 +3379,32 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               {premiumTeaser}
             </>
           )}
-          {!isSearching && <TrustPanel onAddSpot={onAddSpot}/>}
+          {/* THE OTHER HALF OF THE SUPPLY SIDE, AT THE BOTTOM.
+              There is a route to clubs and churches near the top of this page
+              ("Got a car park sitting empty?"), and there has been a route to
+              businesses only in the footer, as one link among six. A barber or
+              a gym who wants to be featured had nowhere obvious to press.
+
+              At the BOTTOM on purpose, and not paired with the hosts card at
+              the top. A driver opening this page wants parking; two adverts
+              for two different B2B audiences before the first result is how a
+              home screen stops being useful. Somebody who has scrolled the
+              whole list has already had their answer, and that is the moment
+              the ask is fair rather than in the way.
+
+              Shown on the landing state only, same rule as TrustPanel above:
+              once a driver has searched, the page belongs to their results. */}
+          {!isSearching && (
+            <a href="/partners"
+              className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 active:scale-[0.99] transition"
+              style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.10)'}}>
+              <Store size={15} className="text-[#5BE7DA] flex-shrink-0"/>
+              <span className="text-[12.5px] leading-snug text-[#cdd9e8] flex-1 min-w-0">
+                Run a business near parking? <strong className="text-[#EAF1F8]">Get featured on ParkEasy.</strong>
+              </span>
+              <ChevronRight size={15} className="text-[rgba(234,241,248,0.4)] flex-shrink-0"/>
+            </a>
+          )}
         </div>
         </div>
         </div>
@@ -3402,7 +3477,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
               <div className="space-y-2.5 mb-3">
                 {leadPartners.map(p => (
                   <PartnerCard key={`lead-${p.id}`} partner={p} listingId={null}
-                    eyebrow={`Featured · ${activeCatTitle || (geo ? geo.label.split(',')[0] : cityName)}`}
+                    eyebrow={partnerEyebrowShort(p, activeCatTitle || (geo ? geo.label.split(',')[0] : cityName))}
                     onOpenSpot={onOpenSpot} onOpenPartner={onOpenPartner}/>
                 ))}
               </div>
@@ -4103,6 +4178,43 @@ const driverServiceFee = (bookingGbp) =>
 // Applies ONLY to bookable rental listings. Community spots are informational —
 // the driver pays the council or operator directly and ParkEasy takes nothing,
 // so there is no fee to fold in and no total for us to state.
+// Can a driver actually buy this listing TODAY?
+//
+// Two conditions, and both are already enforced server-side in
+// api/checkout/create-session.js — this is the client saying the same thing so
+// the driver never meets a refusal it could have predicted:
+//
+//   a price above zero      → checkout: "This listing has no price set"
+//   inside its date window  → checkout: "isn't taking bookings until/after ..."
+//
+// The window bounds are INCLUSIVE, matching the server's `day < from` /
+// `day > until` comparison, and the day is taken in Europe/London rather than
+// UTC — a booking at 00:30 BST is still today to the person making it, and the
+// server resolves the date the same way.
+//
+// WHY IT EXISTS. The gate below used to test price alone, so a listing whose
+// window had closed still showed "Reserve & pay". The driver pressed it, filled
+// in the sheet, and got refused at the last step by a rule that was knowable
+// before they started. Belfast Royal Academy is deliberately in that state —
+// live on the app, not selling — so this stopped being hypothetical.
+//
+// The listing stays VISIBLE either way. Not sellable is not the same as not
+// worth knowing about: the space is real, the address is useful, and a driver
+// who sees it exists is a driver who might ask for it.
+const londonDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(d);
+
+const sellableNow = (listing) => {
+  if (!listing) return false;
+  const priced = Number(listing.price_per_hour) > 0 || Number(listing.price_per_day) > 0;
+  if (!priced) return false;
+  const today = londonDay();
+  if (listing.available_from  && today < listing.available_from)  return false;
+  if (listing.available_until && today > listing.available_until) return false;
+  return true;
+};
+
 const allInFrom = (pricePerHour, pricePerDay) => {
   const rate = Number(pricePerHour) || 0;
   const day  = Number(pricePerDay) || 0;
@@ -7183,7 +7295,7 @@ export default function App() {
     (async () => {
       if (!isSupabaseEnabled) return;
       const { data } = await supabase.from('rental_listings')
-        .select('id,title,address,lat,lng,price_per_hour,price_per_day,gate_opens_at,gate_closes_at,featured,spaces,space_type,photos,instructions,is_verified,verified_org_type,average_rating,ratings_count,completed_bookings_count')
+        .select('id,title,address,lat,lng,price_per_hour,price_per_day,available_from,available_until,gate_opens_at,gate_closes_at,featured,spaces,space_type,photos,instructions,is_verified,verified_org_type,average_rating,ratings_count,completed_bookings_count')
         .eq('status', 'active').limit(200);
       if (!live || !data) return;
       setRentalSpots(data.filter(l => l.lat != null && l.lng != null).map(l => ({
@@ -7193,10 +7305,20 @@ export default function App() {
         name: l.title || 'Private space',
         near: l.address || '',
         tags: [String(l.title||''), String(l.address||'')].join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2),
-        badge: 'paid',
-        dist: 0, walk: 'Bookable',
-        restriction: 'Private space — book in advance',
-        notes: l.instructions || 'A private space you can book in advance through ParkEasy.',
+        // A listing can be live and NOT sellable — outside its availability
+        // window, or with no price set. Saying "Bookable · book in advance" on
+        // one of those is the same lie in three places: the badge, the walk
+        // label and the restriction line. The card has to match what the
+        // Reserve button will actually do, and what checkout will actually
+        // accept, or a driver reads "book in advance" and finds nothing to press.
+        badge: sellableNow(l) ? 'paid' : 'free',
+        dist: 0, walk: sellableNow(l) ? 'Bookable' : 'Not booking',
+        restriction: sellableNow(l)
+          ? 'Private space — book in advance'
+          : 'Listed, but not taking bookings at the moment',
+        notes: l.instructions || (sellableNow(l)
+          ? 'A private space you can book in advance through ParkEasy.'
+          : 'This space is on ParkEasy but is not taking bookings right now.'),
         lat: l.lat, lng: l.lng,
         by: 'ParkEasy host', votes: 0,
         photo: l.photos?.[0] || null,
@@ -7206,7 +7328,7 @@ export default function App() {
         // Day-priced sites pass price_per_day too. Without it allInFrom returned
         // null and Davitt's — a live, bookable listing — showed no price at all
         // on the map or in search, which reads as "not for sale".
-        price: allInFrom(l.price_per_hour, l.price_per_day)
+        price: sellableNow(l) && allInFrom(l.price_per_hour, l.price_per_day)
           ? `£${allInFrom(l.price_per_hour, l.price_per_day).total.toFixed(2)}/all-in` : null,
         spaces: l.spaces || 1,
         listing: l,

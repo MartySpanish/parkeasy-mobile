@@ -83,6 +83,22 @@ const ALL_SPACES = [
     // Off sale from 10 Aug, ahead of that date. The licence was a Fleadh
     // arrangement and the Fleadh is finished; the Academy has never taken a
     // booking, so nothing is lost by stopping now rather than on the 21st.
+    //
+    // KEEP THIS PAUSED EVEN THOUGH rental_listings.status IS NOW 'active'.
+    // The build warning below this file's rule says "Check rental_listings
+    // .status matches", and from 19 Aug it no longer does — deliberately. BRA
+    // was made active so it is VISIBLE in the app, and its availability window
+    // was closed (available_until 2026-08-18) so it CANNOT be booked. Live and
+    // sellable came apart, and the header rule above — "only ever list a space
+    // whose status is 'active'" — was written before that was possible.
+    //
+    // The rule that actually matters is the sentence after it: advertising a
+    // space that cannot be booked is worse than advertising nothing. Un-pausing
+    // this would put "£17.25 all-in" on an indexed page for a car park that
+    // refuses every booking date, which is the wasted click that rule forbids
+    // AND a price shown to a consumer for something not for sale. Un-pause it
+    // when the Academy agrees a real window, and set that window in
+    // rental_listings at the same time — not before.
     paused: true,
   },
   // 5 Manor Close is the third ACTIVE listing and is deliberately ABSENT.

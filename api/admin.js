@@ -12,6 +12,7 @@
 //   (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are reused from the app.)
 
 import { hostEmails } from './_hostEmails.js';
+import { bccFor } from './_bcc.js';
 
 const DEFAULT_ADMINS = 'martinrooney3@hotmail.com,parkeasyuk@gmail.com';
 
@@ -286,7 +287,7 @@ export default async function handler(req, res) {
         fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from: process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>', to: [sub.submitter_email], subject: subj, html }),
+          body: JSON.stringify({ from: process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>', to: [sub.submitter_email], bcc: bccFor([sub.submitter_email]), subject: subj, html }),
         }).catch(() => {});
       }
       return res.status(200).json({ ok: true, status: patch.status });
@@ -319,7 +320,7 @@ export default async function handler(req, res) {
       fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>', to: hostTo, subject: subj, html }),
+        body: JSON.stringify({ from: process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>', to: hostTo, bcc: bccFor(hostTo), subject: subj, html }),
       }).catch(() => {});
     }
     return res.status(200).json({ ok: true });

@@ -10,6 +10,7 @@
 import Stripe from 'stripe';
 import { hostEmails } from '../_hostEmails.js';
 import { hostBookingEmail } from '../_emails/hostBooking.js';
+import { bccFor } from '../_bcc.js';
 
 // Stripe needs the raw request body to verify the signature — disable parsing.
 export const config = { api: { bodyParser: false } };
@@ -240,7 +241,9 @@ async function sendBookingEmails(svc, URL_, sessionId) {
       try {
         const r = await fetch('https://api.resend.com/emails', {
           method: 'POST', headers: { Authorization: `Bearer ${KEYR}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+          // bccFor returns nothing when `to` is already the founder, so the
+          // summary below does not arrive twice.
+          body: JSON.stringify({ from: FROM, to: [to], bcc: bccFor([to]), subject, html }),
         });
         if (!r.ok) console.error('EMAIL FAILED', r.status, to, subject, await r.text().catch(() => ''));
         else console.log('email sent', to, subject);

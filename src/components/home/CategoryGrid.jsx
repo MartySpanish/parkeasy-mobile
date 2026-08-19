@@ -28,6 +28,17 @@ export const CATEGORIES = [
     Icon: Calendar, from: '#C9A7FF', to: '#8B5CF6', action: 'event',
   },
   {
+    // SECOND, not tenth. It sat at the end of the array, which put it behind
+    // "Show all 10" — the grid shows six and hides the rest, so the one tile
+    // that sells anything was the one nobody saw without tapping to expand.
+    // Marty asked for it near the front; second is as far forward as it goes
+    // without displacing Events, which is time-sensitive in a way this is not:
+    // a driver with a match on Saturday needs that tile today, whereas Premium
+    // is an offer that keeps.
+    id: 'premium', title: 'Premium Hotspots', blurb: 'The spots locals keep quiet',
+    Icon: Sparkles, from: '#C9A7FF', to: '#5BE7DA', action: 'premium', premium: true,
+  },
+  {
     id: 'airports', title: 'Airports', blurb: 'City & International, long stay',
     Icon: Plane, from: '#7CC4FF', to: '#3B82F6', action: 'search', query: 'Belfast City Airport',
   },
@@ -88,10 +99,6 @@ export const CATEGORIES = [
     // than a destination — the kind of thing somebody goes looking for.
     id: 'nights', title: 'Nights & Weekends', blurb: 'Free after hours, if you know where',
     Icon: Moon, from: '#8DA2BD', to: '#475569', action: 'filter', filter: 'free',
-  },
-  {
-    id: 'premium', title: 'Premium Hotspots', blurb: 'The spots locals keep quiet',
-    Icon: Sparkles, from: '#C9A7FF', to: '#5BE7DA', action: 'premium', premium: true,
   },
 ];
 
