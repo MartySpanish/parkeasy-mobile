@@ -2421,10 +2421,10 @@ const TrustPanel = ({ onAddSpot }) => (
 // Where featured partner cards sit in the results list. Spread out so drivers
 // meet one occasionally rather than three in a row.
 // Positions in the results list where a featured partner card appears. One
-// slot per partner we can show — eight now that Aaron Quinn Hair is on.
+// slot per partner we can show — nine now that Paul's Barbers is on.
 // Slots and the slice below both derive from this array's length, so adding a
 // partner without adding a slot silently drops them off the end. That has now
-// happened at four, five, six and seven partners: never an error, just
+// happened at four, five, six, seven and eight partners: never an error, just
 // a business quietly missing from the app it was promised a place in. Add the
 // slot in the same commit as the partner, every time.
 //
@@ -2530,7 +2530,7 @@ const RequestParking = ({ geo, cityName }) => {
   );
 };
 
-const PARTNER_SLOTS = [2, 9, 16, 22, 27, 31, 35, 39];
+const PARTNER_SLOTS = [2, 8, 14, 19, 24, 28, 32, 36, 39];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
