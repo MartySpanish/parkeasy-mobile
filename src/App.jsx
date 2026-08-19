@@ -2437,6 +2437,99 @@ const TrustPanel = ({ onAddSpot }) => (
 // Gaps widen early and tighten late (7,7,6,5,4,4,4) rather than spreading
 // evenly. Attention decays down a list, so the space is worth more at the top;
 // four cards between adverts at position 35 costs less than it would at 5.
+// "Nothing bookable near here yet — want us to tell you when there is?"
+//
+// THE PROBLEM IT ANSWERS. ParkEasy has ONE active bookable site, a GAA club car
+// park in west Belfast. Search anywhere else and the answer to "can I book a
+// space?" is silence — no message, no alternative, nothing. That demand is real
+// and it evaporates every single time.
+//
+// This catches it, and it does two jobs at once. The driver hears when
+// something opens near them. And Marty gets the sentence that makes a
+// treasurer say yes: "eleven people looked for parking near your club last
+// month." That sentence cannot be said today because nobody is counting.
+//
+// DELIBERATELY NOT AN EMPTY STATE. The search is not empty — there are 741 free
+// spots and the driver is looking at them. Blanking that out to beg for an
+// email would take away a working answer to sell one that does not exist. This
+// sits among the results as one card and can be dismissed.
+const RequestParking = ({ geo, cityName }) => {
+  const [email, setEmail] = useState('');
+  const [when, setWhen] = useState('');
+  const [state, setState] = useState('idle');   // idle | sending | done | gone
+  if (state === 'gone') return null;
+
+  const where = geo?.label?.split(',')[0] || cityName;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const addr = email.trim();
+    if (!/.+@.+\..+/.test(addr)) { setState('bad'); return; }
+    setState('sending');
+    // Straight to Supabase — the table allows an anonymous insert precisely so
+    // this works signed out, which is how most of the app is used. The email to
+    // Marty is a separate best-effort ping so a lead is visible immediately
+    // rather than only when somebody runs a query.
+    try {
+      if (isSupabaseEnabled) {
+        await supabase.from('parking_requests').insert({
+          email: addr, destination: where || 'unknown',
+          lat: geo?.lat ?? null, lng: geo?.lng ?? null,
+          wanted_on: when || null,
+        });
+      }
+    } catch { /* the notify below is the backstop */ }
+    notify('parking_request', { email: addr, destination: where, wanted: when || 'not given' });
+    setState('done');
+  };
+
+  if (state === 'done') return (
+    <div className="mt-3 rounded-2xl px-4 py-3.5"
+      style={{background:'rgba(52,224,160,0.10)', border:'1px solid rgba(52,224,160,0.30)'}}>
+      <p className="text-[13px] font-bold text-[#6BEFB9]">Thanks — we&rsquo;ll email you.</p>
+      <p className="text-[12.5px] text-[rgba(234,241,248,0.6)] mt-1 leading-relaxed">
+        The more people who ask about {where}, the easier it is to talk a club or church
+        near there into opening their car park. You have just made that argument stronger.
+      </p>
+    </div>
+  );
+
+  return (
+    <div className="mt-3 rounded-2xl px-4 py-3.5"
+      style={{background:'var(--surface-solid)', border:'1px solid rgba(91,231,218,0.28)'}}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[13.5px] font-bold text-[#EAF1F8] leading-snug">
+          Nothing bookable near {where} yet
+        </p>
+        <button aria-label="No thanks" onClick={()=>setState('gone')}
+          className="text-[rgba(234,241,248,0.4)] flex-shrink-0 -mt-0.5"><X size={14}/></button>
+      </div>
+      <p className="text-[12.5px] text-[rgba(234,241,248,0.6)] mt-1 leading-relaxed">
+        The spots above are free and on-street &mdash; real, but first come first served.
+        Want us to tell you when there&rsquo;s a space here you can actually book and hold?
+      </p>
+      <form onSubmit={submit} className="mt-2.5 flex flex-col gap-2">
+        <div className="flex gap-2">
+          <input type="email" value={email} onChange={e=>{setEmail(e.target.value); if(state==='bad') setState('idle');}}
+            placeholder="you@email.com" aria-label="Your email"
+            className="flex-1 min-w-0 bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2.5 text-[13px] text-[#EAF1F8] placeholder-[rgba(234,241,248,0.4)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/50"/>
+          <input type="date" value={when} onChange={e=>setWhen(e.target.value)}
+            aria-label="Date you need it (optional)"
+            className="w-[132px] flex-shrink-0 bg-white/[0.06] border border-white/12 rounded-xl px-2.5 py-2.5 text-[12.5px] text-[#EAF1F8] focus:outline-none"/>
+        </div>
+        {state === 'bad' && <p className="text-[11.5px] text-[#FFD27A]">That email does not look right.</p>}
+        <button type="submit" disabled={state==='sending'}
+          className="min-h-[42px] rounded-xl text-[13px] font-bold text-[#06231f] btn-teal active:scale-[0.985] transition disabled:opacity-60">
+          {state==='sending' ? 'Sending…' : 'Tell me when there is'}
+        </button>
+      </form>
+      <p className="text-[11px] text-[rgba(234,241,248,0.4)] mt-2 leading-relaxed">
+        Just for this. No newsletter, and we won&rsquo;t pass it on.
+      </p>
+    </div>
+  );
+};
+
 const PARTNER_SLOTS = [2, 9, 16, 22, 27, 31, 35, 39];
 
 
@@ -2770,6 +2863,19 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     () => (networkSpots || []).filter(s => s.rental && s.listing?.featured).slice(0, 2),
     [networkSpots],
   );
+
+  // Is there anything a driver could actually BOOK near where they searched?
+  // 3km, because a bookable space is worth a short drive in a way a free
+  // kerbside bay is not — somebody who wants a held space will take one two
+  // miles away over circling. Only computed once they have searched: on the
+  // landing screen there is no "here" to be near.
+  const bookableNearby = useMemo(() => {
+    if (!geo) return true;                    // nothing searched — say nothing
+    return (networkSpots || []).some(s =>
+      s.rental && s.listing
+      && (Number(s.listing.price_per_hour) > 0 || Number(s.listing.price_per_day) > 0)
+      && Math.hypot((s.lat - geo.lat) * 111320, (s.lng - geo.lng) * 65000) < 3000);
+  }, [networkSpots, geo?.lat, geo?.lng]);
 
   const freeCount = citySpots.filter(s => ['free','hidden_gem'].includes(s.badge)).length;
 
@@ -3199,6 +3305,10 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                       single result. Moved to just after the first two, beside
                       the locked cards it is actually talking about. */}
                   {i===1 && premiumPromo}
+                  {/* After the first two results, so the driver has seen that
+                      the free spots ARE real before being asked about the
+                      thing we cannot offer yet. */}
+                  {i===1 && !bookableNearby && <RequestParking geo={geo} cityName={cityName}/>}
                   {/* Spaced out so they read as "while you're here" rather than
                       a block of adverts. Index maths, not a filter, so a second
                       or third partner simply doesn't render on a short list.
@@ -6590,18 +6700,29 @@ const AdminOverlay = ({ onClose }) => {
 };
 
 // ── Cookie consent ────────────────────────────────────────────────────────────
+// One line, not four.
+//
+// This was a heading, a paragraph and two full-width buttons floating over the
+// page — roughly 150px of consent notice sitting on top of the category grid on
+// a phone, which is the second overlay a first-time visitor met after the
+// signup wall. Both were between somebody and the parking they came for.
+//
+// Same choice, same words in the same order, a third of the height: the
+// sentence carries the meaning and the buttons sit beside it rather than under
+// it. Nothing is pre-ticked and neither option is hidden — a compact consent
+// notice is still a consent notice, a tall one is just a bigger obstacle.
 const CookieBanner = ({ onChoice }) => (
   <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-24px)]" style={{maxWidth:640}}>
-    <div className="glass rounded-2xl p-4">
-      <p className="text-sm font-bold text-[#EAF1F8] font-display mb-1">Cookies &amp; privacy</p>
-      <p className="text-xs text-[rgba(234,241,248,0.6)] leading-relaxed mb-3">
-        We use essential storage to make ParkEasy work, plus optional analytics to improve it. You choose.
+    <div className="glass rounded-2xl px-3.5 py-3 flex items-center gap-3 flex-wrap sm:flex-nowrap">
+      <p className="text-[12px] text-[rgba(234,241,248,0.72)] leading-snug flex-1 min-w-[180px]">
+        <strong className="text-[#EAF1F8]">Cookies:</strong> essential storage to make ParkEasy work,
+        plus optional analytics. You choose.
       </p>
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-shrink-0">
         <button onClick={()=>onChoice('all')}
-          className="flex-1 text-[#06231f] text-xs font-bold py-2.5 rounded-xl btn-teal active:scale-95 transition">Accept all</button>
+          className="text-[#06231f] text-[12px] font-bold px-3.5 min-h-[38px] rounded-xl btn-teal active:scale-95 transition">Accept all</button>
         <button onClick={()=>onChoice('essential')}
-          className="flex-1 bg-white/8 border border-white/15 text-[#cdd9e8] text-xs font-bold py-2.5 rounded-xl hover:bg-white/12 active:scale-95 transition">Reject all</button>
+          className="bg-white/8 border border-white/15 text-[#cdd9e8] text-[12px] font-bold px-3.5 min-h-[38px] rounded-xl hover:bg-white/12 active:scale-95 transition">Reject all</button>
       </div>
     </div>
   </div>

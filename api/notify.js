@@ -46,6 +46,12 @@ const TEMPLATES = {
     rows: [['Business', d.biz], ['Contact', d.name], ['Email', d.email], ['Phone', d.phone],
       ['Where', d.address], ['Web / Instagram', d.web], ['What they do', d.about],
       ['Came from', 'parkeasy.uk/partners']] }),
+  // Somebody searched, found nothing bookable, and asked to be told when there
+  // is. The most commercially useful email this endpoint sends: every one of
+  // these is evidence to put in front of a club near that destination.
+  parking_request: (d) => ({ subject: `📍 Wants to book near ${d.destination || 'somewhere'}`,
+    rows: [['Where', d.destination], ['Date wanted', d.wanted], ['Email', d.email],
+      ['Why it matters', 'No bookable space within 3km — this is demand with no supply']] }),
   business: (d) => ({ subject: `🏪 New business listing enquiry: ${d.name || ''}`,
     rows: [['Business', d.name], ['Email', d.email], ['Message', d.message]] }),
   spot:     (d) => ({ subject: `🅿️ New spot submitted: ${d.name || ''}`,
