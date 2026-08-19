@@ -38,6 +38,14 @@ const TEMPLATES = {
     rows: [['Organisation', d.org], ['Contact', d.name], ['Email', d.email], ['Phone', d.phone],
       ['Postcode', d.postcode], ['Rough spaces', d.spaces],
       ['Came from', 'parkeasy.uk/hosts']] }),
+  // A business filling in the form at /partners. Distinct from 'business',
+  // which is the older in-app enquiry — this one carries everything needed to
+  // build the partner row, so the reply can be the page rather than a
+  // question. reply_to is their address.
+  partner:  (d) => ({ subject: `⭐ Partner enquiry: ${d.biz || 'a business'}`,
+    rows: [['Business', d.biz], ['Contact', d.name], ['Email', d.email], ['Phone', d.phone],
+      ['Where', d.address], ['Web / Instagram', d.web], ['What they do', d.about],
+      ['Came from', 'parkeasy.uk/partners']] }),
   business: (d) => ({ subject: `🏪 New business listing enquiry: ${d.name || ''}`,
     rows: [['Business', d.name], ['Email', d.email], ['Message', d.message]] }),
   spot:     (d) => ({ subject: `🅿️ New spot submitted: ${d.name || ''}`,

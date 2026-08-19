@@ -6806,19 +6806,31 @@ const INFO_PAGES = {
       </>
     ),
   },
+  // Rewritten because three claims in it were not true of the product.
+  //
+  //   "Thousands of drivers use ParkEasy"  — there are around 500 members.
+  //   "A clearly-labelled Sponsored slot"  — the app says "Featured", not
+  //                                          "Sponsored". Different word, and
+  //                                          the one on screen is the honest one.
+  //   "Your pin highlighted on the map"    — partner pins are not highlighted.
+  //   "A spot on the Local businesses tab" — there is no such tab. The tabs are
+  //                                          Search, Nearby, Spaces, Add Spot.
+  //
+  // What replaced them is what the code actually does, and the detail now lives
+  // on /partners so there is a real URL to send a business.
   advertise: {
-    title: 'Advertise with us', Icon: Megaphone,
+    title: 'Get your business on ParkEasy', Icon: Megaphone,
     body: (
       <>
-        <p>Thousands of drivers use ParkEasy to decide where to park — and where to park is where they shop, eat and visit. Put your business in front of them at the exact moment they&apos;re choosing.</p>
+        <p>Drivers open ParkEasy to work out where to leave the car &mdash; minutes before they walk past your door. That is the moment your business can be the answer rather than an advert.</p>
         <p><strong className="text-[#EAF1F8]">What you get:</strong></p>
-        <ul className="list-disc pl-5 space-y-1.5">
-          <li>A clearly-labelled &ldquo;Sponsored&rdquo; slot shown to drivers searching near you</li>
-          <li>Your pin highlighted on the map with your offer</li>
-          <li>A spot on the Local businesses tab</li>
+        <ul>
+          <li>A card in the results, marked <em>Featured</em>, shown to drivers searching near you</li>
+          <li>Your own page &mdash; photos, your words, your links, and a map of the parking around your door</li>
+          <li>You lead your category, so the gyms we feature come first under Gyms &amp; Wellbeing</li>
         </ul>
-        <p><strong className="text-[#EAF1F8]">Pricing:</strong> tailored to your business and area — limited slots per area so it stays useful, not cluttered.</p>
-        <p>Interested? Email <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com?subject=Advertising%20with%20ParkEasy">parkeasyuk@gmail.com</a> and we&apos;ll set you up.</p>
+        <p>Every business on ParkEasy today is listed <strong className="text-[#EAF1F8]">free</strong> while we are getting started.</p>
+        <p><a href="/partners" className="text-[#5BE7DA] font-bold">See what you get and get in touch &rarr;</a></p>
       </>
     ),
   },
@@ -6930,6 +6942,7 @@ const Footer = ({ onOpen }) => (
           rest of the committee — which is exactly what /list-your-space failed
           to be while it silently served the homepage. */}
       <a href="/hosts" className="hover:text-[#5BE7DA] transition font-bold text-[#5BE7DA]">List your car park</a>
+      <a href="/partners" className="hover:text-[#5BE7DA] transition font-bold text-[#5BE7DA]">Feature your business</a>
       {[['howitworks','How it works'],['faq','FAQ'],['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
         <button key={id} onClick={()=>onOpen(id)} className="hover:text-[#5BE7DA] transition font-medium">{label}</button>
       ))}

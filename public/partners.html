@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Get your business on ParkEasy</title>
+<meta name="description" content="Drivers use ParkEasy to decide where to park — and where they park is where they shop, eat and train. Featured local businesses get a card in the results and a page with the parking around their door.">
+<link rel="canonical" href="https://parkeasy.uk/partners">
+<meta property="og:title" content="Where people park is where they spend">
+<meta property="og:description" content="Get your business in front of drivers at the moment they choose where to park in Belfast.">
+<meta property="og:url" content="https://parkeasy.uk/partners">
+<meta property="og:image" content="https://parkeasy.uk/og-image.png">
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap">
+<style>
+  /* Same tokens as /hosts and the app — one brand, three surfaces. */
+  :root{
+    --bg:#0a111e; --sheet:#0d1626; --surface:#111d31; --hairline:rgba(255,255,255,0.10);
+    --ink:#EAF1F8; --muted:#aebfd4; --faint:#6b7d96;
+    --teal:#2ED3C6; --teal-lt:#5BE7DA; --teal-ink:#06231f;
+    --green:#34E0A0; --amber:#FFC24B; --violet:#C9A7FF;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:Manrope,system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--teal-lt)}
+  .wrap{max-width:680px; margin:0 auto; padding:0 20px}
+  h1,h2,h3{margin:0; letter-spacing:-.02em; text-wrap:balance; font-weight:800}
+
+  header.top{border-bottom:1px solid var(--hairline); background:var(--sheet)}
+  header.top .wrap{display:flex; align-items:center; gap:12px; padding-top:14px; padding-bottom:14px}
+  .brand{display:flex; align-items:center; gap:9px; font-weight:800; font-size:17px; color:var(--ink); text-decoration:none}
+  .brand span.dot{
+    width:28px; height:28px; border-radius:9px; flex-shrink:0;
+    background:linear-gradient(135deg,var(--teal-lt),var(--teal));
+    display:inline-flex; align-items:center; justify-content:center; color:var(--teal-ink); font-size:15px
+  }
+  .top a.back{margin-left:auto; font-size:13.5px; font-weight:700; text-decoration:none}
+
+  .hero{padding:44px 0 34px}
+  .kicker{font-size:11.5px; font-weight:800; letter-spacing:.18em; text-transform:uppercase; color:var(--teal-lt); margin:0 0 12px}
+  .hero h1{font-size:clamp(30px,7.4vw,44px); line-height:1.08}
+  .hero p.lede{font-size:17px; color:var(--muted); margin:16px 0 0}
+  .cta{
+    display:inline-block; margin-top:22px; background:linear-gradient(135deg,var(--teal-lt),var(--teal));
+    color:var(--teal-ink); font-weight:800; font-size:15.5px; padding:14px 24px;
+    border-radius:14px; text-decoration:none; min-height:48px
+  }
+  .cta.ghost{background:none; border:1px solid var(--hairline); color:var(--ink); margin-left:8px}
+
+  section{padding:34px 0; border-top:1px solid var(--hairline)}
+  section h2{font-size:clamp(21px,4.6vw,27px); line-height:1.15}
+  section p{color:var(--muted); margin:12px 0 0}
+
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-top:20px}
+  .stat{background:var(--surface); border:1px solid var(--hairline); border-radius:14px; padding:14px}
+  .stat b{display:block; font-size:24px; font-weight:800; color:var(--teal-lt); letter-spacing:-.03em; line-height:1.1}
+  .stat span{display:block; font-size:12px; color:var(--faint); margin-top:4px; line-height:1.4}
+
+  ul.facts{list-style:none; padding:0; margin:20px 0 0; display:grid; gap:12px}
+  ul.facts li{background:var(--surface); border:1px solid var(--hairline); border-radius:14px; padding:14px 16px}
+  ul.facts b{display:block; color:var(--ink); font-weight:800; margin-bottom:3px; font-size:14.5px}
+  ul.facts span{color:var(--muted); font-size:13.5px}
+
+  /* A real partner card, drawn as the app draws it, so a business can see
+     exactly what it is buying rather than reading a description of it. */
+  .demo{background:#0e1a2c; border:1px solid var(--hairline); border-radius:18px; overflow:hidden; margin-top:20px; display:flex}
+  .demo .rail{width:3px; background:var(--teal-lt); flex-shrink:0}
+  .demo .inner{padding:16px 18px; min-width:0}
+  .demo .eyebrow{font-size:10px; font-weight:800; letter-spacing:.18em; text-transform:uppercase; color:var(--teal-lt); margin:0}
+  .demo h3{font-size:20px; margin:6px 0 0}
+  .demo p.tag{font-size:13px; color:#cdd9e8; margin:8px 0 0}
+  .demo p.addr{font-size:12px; color:var(--faint); margin:6px 0 0}
+  .demo .near{margin-top:14px; padding-top:12px; border-top:1px solid var(--hairline)}
+  .demo .near .lab{font-size:10px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:rgba(234,241,248,.5); margin:0 0 6px}
+  .demo .near .row{display:flex; justify-content:space-between; gap:10px; font-size:12.5px; color:#cdd9e8; padding:2px 0}
+  .demo .near .row em{font-style:normal; color:var(--teal-lt); font-weight:700; font-size:11px; white-space:nowrap}
+  .demo .btn{display:inline-block; margin-top:14px; background:linear-gradient(135deg,var(--teal-lt),var(--teal)); color:var(--teal-ink); font-weight:800; font-size:11px; letter-spacing:.1em; text-transform:uppercase; padding:10px 16px; border-radius:12px}
+
+  .who{display:grid; gap:10px; margin-top:18px}
+  .who div{background:var(--surface); border:1px solid var(--hairline); border-radius:12px; padding:12px 14px; font-size:14px}
+  .who b{color:var(--ink)}
+
+  details{border-bottom:1px solid var(--hairline); padding:15px 0}
+  details:first-of-type{border-top:1px solid var(--hairline)}
+  summary{cursor:pointer; font-weight:700; font-size:15px; list-style:none; display:flex; gap:10px; align-items:flex-start}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:'+'; color:var(--teal-lt); font-weight:800; flex-shrink:0}
+  details[open] summary::before{content:'–'}
+  details p{font-size:14.5px; margin-top:10px}
+
+  form{margin-top:20px; display:grid; gap:14px}
+  form label{font-size:13px; font-weight:700; display:block; margin-bottom:6px}
+  input[type=text],input[type=email],input[type=tel],textarea{
+    width:100%; padding:13px 14px; border-radius:13px; font-size:16px; font-family:inherit;
+    background:rgba(255,255,255,0.05); border:1px solid var(--hairline); color:var(--ink); min-height:48px
+  }
+  textarea{min-height:90px; resize:vertical}
+  input:focus,textarea:focus{outline:2px solid var(--teal); outline-offset:1px}
+  .row{display:grid; gap:14px}
+  @media(min-width:560px){ .row{grid-template-columns:1fr 1fr} }
+  button.submit{
+    background:linear-gradient(135deg,var(--teal-lt),var(--teal)); color:var(--teal-ink);
+    font-weight:800; font-size:15.5px; padding:15px; border:0; border-radius:14px; cursor:pointer;
+    font-family:inherit; min-height:50px
+  }
+  button.submit:disabled{opacity:.55; cursor:default}
+  .msg{font-size:14px; padding:13px 15px; border-radius:13px; display:none}
+  .msg.ok{display:block; background:rgba(52,224,160,0.12); border:1px solid rgba(52,224,160,0.35); color:var(--green)}
+  .msg.err{display:block; background:rgba(255,194,75,0.12); border:1px solid rgba(255,194,75,0.35); color:var(--amber)}
+  .small{font-size:12.5px; color:var(--faint); line-height:1.55}
+
+  footer{border-top:1px solid var(--hairline); padding:26px 0 44px; margin-top:10px}
+  footer p{font-size:12.5px; color:var(--faint); margin:0 0 8px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><span class="dot">P</span>ParkEasy</a>
+    <a class="back" href="/">Find parking →</a>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <p class="kicker">For local businesses</p>
+    <h1>Where people park is where they spend.</h1>
+    <p class="lede">
+      Drivers open ParkEasy to work out where to leave the car. That decision happens
+      minutes before they walk past your door — and it is the one moment your business can
+      be the answer instead of an advert.
+    </p>
+    <a class="cta" href="#signup">Get your business on</a>
+    <a class="cta ghost" href="#what">See what you get</a>
+  </div>
+
+  <section>
+    <h2>Where you'd be showing up</h2>
+    <div class="stats">
+      <div class="stat"><b>~500</b><span>members, and growing</span></div>
+      <div class="stat"><b>741</b><span>parking spots mapped</span></div>
+      <div class="stat"><b>31</b><span>towns across NI</span></div>
+      <div class="stat"><b>8</b><span>businesses featured so far</span></div>
+    </div>
+    <p class="small" style="margin-top:14px">
+      ParkEasy is new and we would rather say so. Eight businesses are on it today —
+      Tara Lodge, SBG Maeda, Sandy McDermott S&amp;C, Jack Daniels Fitness, The Red Devil,
+      Aaron Quinn Hair, Gransha Grill and Marcus Donnelly Fitness. Being early is the
+      point: there is no queue in front of you.
+    </p>
+  </section>
+
+  <section id="what">
+    <h2>What you actually get</h2>
+    <p>Not a banner. A card in the results, and a page of your own.</p>
+
+    <div class="demo">
+      <div class="rail"></div>
+      <div class="inner">
+        <p class="eyebrow">Featured · Belfast</p>
+        <h3>Your business</h3>
+        <p class="tag">The one line you want a driver to read while they are deciding where to park.</p>
+        <p class="addr">Your street, Belfast</p>
+        <div class="near">
+          <p class="lab">🅿 Parking near your business</p>
+          <div class="row"><span>Nearest car park</span><em>2 min walk · £1.80</em></div>
+          <div class="row"><span>A free spot locals use</span><em>4 min walk · free</em></div>
+          <div class="row"><span>On-street bays</span><em>5 min walk · free after 6pm</em></div>
+        </div>
+        <div class="btn">Visit your business ↗</div>
+      </div>
+    </div>
+    <p class="small" style="margin-top:12px">That is the real card, drawn the way the app draws it.</p>
+
+    <ul class="facts">
+      <li><b>A card in the results</b><span>Shown to drivers searching near you, spaced through the list so it reads as a suggestion rather than an interruption.</span></li>
+      <li><b>Your own page</b><span>Your photos, your words, your links — and a map of the parking around your door, with walking times. It is genuinely useful to your customers, which is why they open it.</span></li>
+      <li><b>You lead your category</b><span>Tap "Gyms &amp; Wellbeing" and the gyms we feature come first. Same for hotels, and for pubs and nights out.</span></li>
+      <li><b>You lead searches near you</b><span>Someone searching for parking within about a mile of your door sees you above everything else.</span></li>
+      <li><b>Free while we are getting started</b><span>Every business on ParkEasy today is listed free. When that changes, early partners will hear it from us first — and nobody gets moved down for not paying.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Who it works for</h2>
+    <div class="who">
+      <div><b>Gyms and studios</b> — people drive to a 6am class and need somewhere to leave the car.</div>
+      <div><b>Hotels and guest accommodation</b> — guests arriving by car ask about parking before anything else.</div>
+      <div><b>Bars, cafés and restaurants</b> — "where will we park?" decides where a group ends up.</div>
+      <div><b>Barbers, salons and clinics</b> — appointment-based, so the drive is planned in advance.</div>
+      <div><b>Anywhere with awkward parking</b> — if customers ring to ask where to park, that question is costing you bookings.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The honest bits</h2>
+
+    <details>
+      <summary>How many people will actually see it?</summary>
+      <p>Fewer than a billboard and more than your own social feed. ParkEasy has around 500
+      members and is growing — we are not going to dress that up. What is different is
+      <em>when</em> they see you: at the moment they are deciding where to leave the car near
+      you, not while they scroll.</p>
+    </details>
+
+    <details>
+      <summary>Is it labelled as advertising?</summary>
+      <p>Yes. Every card says "Featured" and looks different from a parking result. We are
+      not going to disguise it as a recommendation — that would cost us the trust that makes
+      the placement worth having.</p>
+    </details>
+
+    <details>
+      <summary>What do you need from me?</summary>
+      <p>A couple of photos, a line about what you do, your address and where you want the
+      link to go. That is it. We build the page and send it to you before it goes live —
+      nothing is published until you have seen it and you are happy.</p>
+    </details>
+
+    <details>
+      <summary>Can I come off?</summary>
+      <p>Any time, no notice, no reason needed. Send an email and it is gone that day.</p>
+    </details>
+
+    <details>
+      <summary>Do you have parking mapped near me?</summary>
+      <p>Usually. 741 spots across 31 towns, and if there is a gap near your door we will
+      map it as part of setting you up — that happened for Aaron Quinn's barbers on the
+      Andersonstown Road, where we had nothing until we pinned him.</p>
+    </details>
+  </section>
+
+  <section id="signup">
+    <h2>Get in touch</h2>
+    <p>Tell us about the business and we will come back with what your page would look like.
+      No commitment, and no cost while we are getting started.</p>
+
+    <form id="pForm" novalidate>
+      <div class="row">
+        <div>
+          <label for="name">Your name</label>
+          <input type="text" id="name" autocomplete="name" required>
+        </div>
+        <div>
+          <label for="biz">Business name</label>
+          <input type="text" id="biz" autocomplete="organization" required>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="addr">Where are you?</label>
+          <input type="text" id="addr" placeholder="Street and town" required>
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input type="email" id="email" autocomplete="email" required>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="phone">Phone (optional)</label>
+          <input type="tel" id="phone" autocomplete="tel">
+        </div>
+        <div>
+          <label for="web">Website or Instagram</label>
+          <input type="text" id="web" placeholder="@yourbusiness">
+        </div>
+      </div>
+      <div>
+        <label for="about">What does the business do?</label>
+        <textarea id="about" placeholder="A couple of lines is plenty."></textarea>
+      </div>
+      <button class="submit" type="submit" id="send">Send this to Marty</button>
+      <div class="msg" id="msg" role="status"></div>
+      <p class="small">We will only use these details to talk to you about listing your business.</p>
+    </form>
+  </section>
+
+  <section>
+    <h2>Who you'd be dealing with</h2>
+    <p>ParkEasy is <strong>ParkEasy Apps Ltd</strong>, company number NI742027, registered in
+      Northern Ireland and run by Martin Rooney in Belfast. Every partner on the app so far
+      came from a conversation, not a sales team — and that is still how it works.</p>
+    <p style="margin-top:16px">
+      <a class="cta" href="#signup">Start the conversation</a>
+      <a class="cta ghost" href="/hosts">Got a car park instead?</a>
+    </p>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <p>ParkEasy · parkeasy.uk · <a href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a></p>
+    <p>ParkEasy Apps Ltd, company number NI742027, registered in Northern Ireland.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Posts to /api/notify with the 'partner' template — the same Resend route
+  // /hosts and the in-app forms use. Nothing new to configure.
+  var el = function (id) { return document.getElementById(id); };
+  var form = el('pForm'), msg = el('msg'), btn = el('send');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var d = {
+      name: el('name').value.trim(), biz: el('biz').value.trim(),
+      address: el('addr').value.trim(), email: el('email').value.trim(),
+      phone: el('phone').value.trim(), web: el('web').value.trim(),
+      about: el('about').value.trim()
+    };
+    if (!d.name || !d.biz || !d.address || !d.email) {
+      msg.className = 'msg err';
+      msg.textContent = 'Please fill in your name, the business, where you are and an email.';
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Sending…';
+    msg.className = 'msg'; msg.textContent = '';
+    fetch('/api/notify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'partner', data: d })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('failed');
+      msg.className = 'msg ok';
+      msg.textContent = 'Got it — thanks. Marty will come back to you within a day or two.';
+      form.reset(); btn.textContent = 'Sent';
+    }).catch(function () {
+      msg.className = 'msg err';
+      msg.innerHTML = 'That did not send. Please email <a href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a> and we will pick it up.';
+      btn.disabled = false; btn.textContent = 'Try again';
+    });
+  });
+})();
+</script>
+</body>
+</html>
