@@ -173,7 +173,24 @@ select
   case when is_taster then name end        as name,
   case when is_taster then restriction end as restriction,
   case when is_taster then notes end       as notes,
-  case when is_taster then tags else '{}'::text[] end as tags,
+  -- TAGS ARE CARRIED FOR EVERYONE, and that is a deliberate reversal.
+  --
+  -- They were withheld from non-tasters at first, on the reasoning that less is
+  -- safer. Measured against the real 84 gems, that reasoning cost 30 of them —
+  -- 36% — their findability: a free user searching "Waring" or "Innisfayle" got
+  -- nothing back, where before they got a locked card saying "Hidden gem ·
+  -- Premium — unlock the exact spot". That card IS the upsell, and a gem nobody
+  -- can search for cannot sell anything.
+  --
+  -- Tags are area and landmark keywords — the same class of thing as `near`,
+  -- which the locked card already prints on screen. They are used for MATCHING
+  -- and never rendered, which is exactly how the bundled version behaved for
+  -- months: findable by name, never showing it.
+  --
+  -- What stays gated is what Premium actually buys: the exact coordinate (still
+  -- snapped to ~500m below), the notes — which are the technique, "the lines
+  -- stop just before the double yellows" — and the restriction.
+  tags,
   case when is_taster then walk end        as walk,
   case when is_taster then lat  else round((lat * 200)::numeric)::double precision / 200 end as approx_lat,
   case when is_taster then lng  else round((lng * 200)::numeric)::double precision / 200 end as approx_lng

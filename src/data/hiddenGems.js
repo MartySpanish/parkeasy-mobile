@@ -60,6 +60,10 @@ const teaserToSpot = (t) => ({
   // stops the name leaving the database.
   name: t.name || 'Hidden gem',
   near: t.near || '',
+  // Used for search matching only — never rendered on a locked card, which
+  // shows gatedLabel() and `near` and nothing else. Without these, 30 of the 84
+  // non-taster gems could not be found by a word from their own name, and the
+  // locked card that sells Premium never appeared.
   tags: t.tags || [],
   badge: 'hidden_gem',
   dist: 0,
