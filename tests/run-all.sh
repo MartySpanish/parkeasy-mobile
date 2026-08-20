@@ -37,6 +37,11 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  car wash               $(grep -c 'PASS  ' /tmp/pe-t3.log) checks" \
     || { fail=1; echo "  car wash               FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t3.log; }
 
+  tests/db/run.sh supabase/migrations/20260820_spot_photos.sql \
+                  tests/db/spot_photos.test.sql                     > /tmp/pe-t4.log 2>&1 \
+    && echo "  spot photos            $(grep -c 'PASS  ' /tmp/pe-t4.log) checks" \
+    || { fail=1; echo "  spot photos            FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t4.log; }
+
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
 else
