@@ -59,6 +59,35 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  hidden gems seed       $(grep -c 'PASS  ' /tmp/pe-t6.log) checks" \
     || { fail=1; echo "  hidden gems seed       FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t6.log; }
 
+  tests/db/run.sh supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260725_bookings_functional.sql \
+                  supabase/migrations/20260820_overnight_fee_columns.sql \
+                  supabase/migrations/20260820_listing_payout_mode.sql \
+                  tests/db/listing_payout_mode.test.sql              > /tmp/pe-t7.log 2>&1 \
+    && echo "  listing payout mode    $(grep -c 'PASS  ' /tmp/pe-t7.log) checks" \
+    || { fail=1; echo "  listing payout mode    FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t7.log; }
+
+  # The APCOA test runs the migration file's real bytes, twice: once as
+  # committed (it must refuse) and once with the four missing facts filled in
+  # the way a human would fill them (it must publish). The sed is that human.
+  cp supabase/migrations/20260820_apcoa_bookable.sql /tmp/pe-apcoa.sql
+  sed -e "s/v_access_method   text := null;/v_access_method text := 'Book on ParkEasy; we send your plate to APCOA before 6pm the day before and their ANPR lets you in.';/" \
+      -e "s/v_contact_name    text := null;/v_contact_name text := 'A Person';/" \
+      -e "s/v_contact_phone   text := null;/v_contact_phone text := '028 9000 0000';/" \
+      -e "s/v_org_regis       text := null;/v_org_regis text := '02572793';/" \
+      /tmp/pe-apcoa.sql > /tmp/pe-apcoa-filled.sql
+  chmod 644 /tmp/pe-apcoa.sql /tmp/pe-apcoa-filled.sql
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260704_listing_requirements.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260725_bookings_functional.sql \
+                  supabase/migrations/20260817_apcoa_capacity_and_drafts.sql \
+                  supabase/migrations/20260820_overnight_fee_columns.sql \
+                  supabase/migrations/20260820_listing_payout_mode.sql \
+                  tests/db/apcoa_bookable.test.sql                   > /tmp/pe-t8.log 2>&1 \
+    && echo "  apcoa publish gate     $(grep -c 'PASS  ' /tmp/pe-t8.log) checks" \
+    || { fail=1; echo "  apcoa publish gate     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t8.log; }
+
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
 else

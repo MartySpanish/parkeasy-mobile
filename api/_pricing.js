@@ -103,12 +103,30 @@ export function driverServiceFeePence(bookingPricePence, env = {}, opts = {}) {
  *                      not supplied — the safe direction, since underclaiming
  *                      our own commission costs us money whereas overclaiming
  *                      breaks a contract.
+ * opts.commissionRate— our share of the SPACE price, when it isn't the standard
+ *                      15%. Left alone for every club, driveway and school:
+ *                      HOST_COMMISSION is in signed agreements and does not
+ *                      move. It exists for invoice-mode listings, where the
+ *                      operator's cut is a negotiated figure on the listing row
+ *                      (rental_listings.operator_share_pct) rather than the
+ *                      standard split — a commercial car park chain does not
+ *                      take 85% terms. Clamped to [0, 1]; anything outside that
+ *                      is a data error, and rounding a booking into a negative
+ *                      payout would be worse than clamping it.
  */
 export function priceBreakdown(bookingPricePence, env = {}, opts = {}) {
   const booking = Math.max(0, Math.round(Number(bookingPricePence) || 0));
   const surcharge = Math.max(0, Math.round(Number(opts.surchargePence) || 0));
   const serviceFee = driverServiceFeePence(booking, env, opts);
-  const commission = Math.round(booking * HOST_COMMISSION);
+  // ABSENT MEANS THE STANDARD SPLIT, NOT A FREE BOOKING. Number(null) and
+  // Number('') are both 0, so a null column or a blank form field coerced
+  // straight through would read as "ParkEasy takes nothing" and hand the whole
+  // space price away on every booking, quietly. Only a value that is actually a
+  // number overrides HOST_COMMISSION.
+  const given = opts.commissionRate;
+  const usable = given != null && String(given).trim() !== '' && Number.isFinite(Number(given));
+  const rate = usable ? Math.min(1, Math.max(0, Number(given))) : HOST_COMMISSION;
+  const commission = Math.round(booking * rate);
   const surchargeRate = Math.min(0.30, Math.max(0, Number(opts.surchargeCommissionRate) || 0));
   const surchargeCommission = Math.round(surcharge * surchargeRate);
   return {
@@ -118,6 +136,7 @@ export function priceBreakdown(bookingPricePence, env = {}, opts = {}) {
     commissionPence: commission,
     surchargeCommissionPence: surchargeCommission,
     eventDay: !!opts.eventDay,
+    commissionRate: rate,
     // What ParkEasy keeps: commission on the space, the whole driver fee, and
     // our share of the surcharge if this listing's agreement allows one.
     applicationFeePence: commission + serviceFee + surchargeCommission,
