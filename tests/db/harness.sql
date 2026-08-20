@@ -35,10 +35,6 @@ end $$;
 
 grant usage on schema public to anon, authenticated, service_role;
 
--- Enough of rental_listings for the FKs, the settlement view's join and the
--- cluster view's distance test. The real table has ~30 more columns and none of
--- them matter here — but lat/lng do, and leaving them out made
--- hotspot_clusters fail on a column the real table has had since June.
 -- NOTHING THAT A REAL MIGRATION CREATES BELONGS IN THIS FILE.
 --
 -- promo_redemptions and spot_submissions were both stubbed here for a while and
@@ -50,16 +46,52 @@ grant usage on schema public to anon, authenticated, service_role;
 -- Real tables come from real migrations — pass them in the chain:
 --   promo_redemptions  supabase/migrations/20260707_promo_codes.sql
 --   spot_submissions   supabase/migrations/20260720_spot_submissions.sql
+--   rental_listings    supabase/migrations/20260625_rental_listings.sql
+--                      supabase/migrations/20260704_listing_requirements.sql
+--
+-- rental_listings was the last one to go, and it was the same mistake twice
+-- over: the stub had five columns, so every suite that touched a listing was
+-- testing against something that would let anything publish, while the real
+-- table has ELEVEN check constraints gating status='active'. Passing the real
+-- migrations means the tests now meet the rules production actually enforces.
 --
 -- This file is only for what Supabase itself provides and no migration ever
--- creates: the auth schema, the roles, and a rental_listings stub thin enough
--- not to pretend it is the real one.
+-- creates: the auth schema, auth.uid(), auth.jwt(), the roles, and the storage
+-- schema below.
 
-create table if not exists public.rental_listings (
-  id      uuid primary key default gen_random_uuid(),
-  title   text not null,
-  address text,
-  lat     float,
-  lng     float,
-  status  text not null default 'active'
+-- ── storage ──────────────────────────────────────────────────────────────────
+-- Supabase Storage. 20260704_listing_requirements.sql creates the
+-- listing-photos bucket and four RLS policies on storage.objects, so a chain
+-- that includes that migration needs somewhere to put them. Thin on purpose:
+-- nothing here is under test, it only has to exist and behave the same way for
+-- an insert and a policy. auth.role() and storage.foldername() are the two
+-- functions those policies call.
+create schema if not exists storage;
+
+create table if not exists storage.buckets (
+  id     text primary key,
+  name   text not null,
+  public boolean not null default false
 );
+
+create table if not exists storage.objects (
+  id        uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets(id),
+  name      text,
+  owner     uuid
+);
+
+alter table storage.objects enable row level security;
+
+create or replace function auth.role() returns text
+language sql stable as $$
+  select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'anon');
+$$;
+
+-- Supabase's own helper: splits an object path into its folder segments, so a
+-- policy can check the first one against auth.uid().
+create or replace function storage.foldername(p_name text) returns text[]
+language sql immutable as $$
+  select string_to_array(regexp_replace(coalesce(p_name,''), '/[^/]*$', ''), '/');
+$$;
+

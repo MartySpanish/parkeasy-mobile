@@ -12,11 +12,13 @@ end $$;
 
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111','ann@example.test');
-insert into public.rental_listings (id, title, status, wash_enabled, wash_days) values
-  ('aaaaaaaa-0000-0000-0000-000000000001','Davitt Park','active', true, '{1}'),
-  ('aaaaaaaa-0000-0000-0000-000000000002','No washes here','active', false, '{1}'),
+-- address is NOT NULL on the real table, and status stays 'draft' — a wash
+-- attaches to a listing, and none of these rules care whether it is published.
+insert into public.rental_listings (id, title, address, status, wash_enabled, wash_days) values
+  ('aaaaaaaa-0000-0000-0000-000000000001','Davitt Park','Davitt Park, Belfast','draft', true, '{1}'),
+  ('aaaaaaaa-0000-0000-0000-000000000002','No washes here','Somewhere, Belfast','draft', false, '{1}'),
   -- An event site, on Sundays. The reason wash_days is a column.
-  ('aaaaaaaa-0000-0000-0000-000000000003','Event car park','active', true, '{7}');
+  ('aaaaaaaa-0000-0000-0000-000000000003','Event car park','A field, Belfast','draft', true, '{7}');
 insert into public.bookings (id, listing_id, amount_total_pence, booking_price_pence,
                              application_fee_pence, service_fee_pence)
 values ('bbbbbbbb-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001',2300,2000,399,300);

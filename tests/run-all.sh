@@ -18,31 +18,41 @@ done
 
 echo "── Database ─────────────────────────────────────────────────────────"
 if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
-  tests/db/run.sh supabase/migrations/20260820_corporate_permits.sql \
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260704_listing_requirements.sql \
+                  supabase/migrations/20260820_corporate_permits.sql \
                   tests/db/corporate_permits.test.sql              > /tmp/pe-t1.log 2>&1 \
     && echo "  corporate permits      $(grep -c 'PASS  ' /tmp/pe-t1.log) checks" \
     || { fail=1; echo "  corporate permits      FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t1.log; }
 
-  tests/db/run.sh supabase/migrations/20260720_spot_submissions.sql \
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260704_listing_requirements.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
                   supabase/migrations/20260728_public_approved_spots.sql \
                   supabase/migrations/20260820_hotspot_moderation.sql \
                   tests/db/hotspot_moderation.test.sql              > /tmp/pe-t2.log 2>&1 \
     && echo "  hotspot moderation     $(grep -c 'PASS  ' /tmp/pe-t2.log) checks" \
     || { fail=1; echo "  hotspot moderation     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t2.log; }
 
-  tests/db/run.sh supabase/migrations/20260724_stripe_connect.sql \
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260704_listing_requirements.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
                   supabase/migrations/20260820_corporate_permits.sql \
                   supabase/migrations/20260820_car_wash.sql \
                   tests/db/car_wash.test.sql                        > /tmp/pe-t3.log 2>&1 \
     && echo "  car wash               $(grep -c 'PASS  ' /tmp/pe-t3.log) checks" \
     || { fail=1; echo "  car wash               FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t3.log; }
 
-  tests/db/run.sh supabase/migrations/20260820_spot_photos.sql \
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260704_listing_requirements.sql \
+                  supabase/migrations/20260820_spot_photos.sql \
                   tests/db/spot_photos.test.sql                     > /tmp/pe-t4.log 2>&1 \
     && echo "  spot photos            $(grep -c 'PASS  ' /tmp/pe-t4.log) checks" \
     || { fail=1; echo "  spot photos            FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t4.log; }
 
-  tests/db/run.sh supabase/migrations/20260707_promo_codes.sql \
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260704_listing_requirements.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
                   supabase/migrations/20260720_spot_submissions.sql \
                   supabase/migrations/20260820_hidden_gems.sql \
                   tests/db/hidden_gems.test.sql                     > /tmp/pe-t5.log 2>&1 \
@@ -51,13 +61,24 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
 
   # The seed test needs the seed on disk at the path the test \i-includes.
   cp supabase/migrations/20260820_hidden_gems_seed.sql /tmp/pe-seed.sql
-  tests/db/run.sh supabase/migrations/20260707_promo_codes.sql \
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260704_listing_requirements.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
                   supabase/migrations/20260720_spot_submissions.sql \
                   supabase/migrations/20260820_hidden_gems.sql \
                   supabase/migrations/20260820_hidden_gems_seed.sql \
                   tests/db/hidden_gems_seed.test.sql                > /tmp/pe-t6.log 2>&1 \
     && echo "  hidden gems seed       $(grep -c 'PASS  ' /tmp/pe-t6.log) checks" \
     || { fail=1; echo "  hidden gems seed       FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t6.log; }
+
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260704_listing_requirements.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260817_apcoa_capacity_and_drafts.sql \
+                  supabase/migrations/20260820_listing_publish_readiness.sql \
+                  tests/db/listing_readiness.test.sql                > /tmp/pe-t7.log 2>&1 \
+    && echo "  listing readiness      $(grep -c 'PASS  ' /tmp/pe-t7.log) checks" \
+    || { fail=1; echo "  listing readiness      FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t7.log; }
 
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1

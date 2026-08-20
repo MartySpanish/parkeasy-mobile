@@ -28,9 +28,12 @@ insert into auth.users (id, email) values
   ('33333333-3333-3333-3333-333333333333','cara@acme.test'),
   ('44444444-4444-4444-4444-444444444444','dan@rival.test');
 
-insert into public.rental_listings (id, title, address) values
-  ('aaaaaaaa-0000-0000-0000-000000000001','Lanyon Place Car Park','Lanyon Place, Belfast'),
-  ('aaaaaaaa-0000-0000-0000-000000000002','Oxford Street Car Park','Oxford Street, Belfast');
+-- status='draft': these only need to EXIST as the block's foreign key. The
+-- real table refuses status='active' without eleven other fields, and this
+-- suite is not testing the publish rules.
+insert into public.rental_listings (id, title, address, status) values
+  ('aaaaaaaa-0000-0000-0000-000000000001','Lanyon Place Car Park','Lanyon Place, Belfast','draft'),
+  ('aaaaaaaa-0000-0000-0000-000000000002','Oxford Street Car Park','Oxford Street, Belfast','draft');
 
 insert into public.corporate_accounts (id, company_name, billing_contact_email) values
   ('c0000000-0000-0000-0000-000000000001','Acme Ltd','billing@acme.test'),

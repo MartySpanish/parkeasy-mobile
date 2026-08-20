@@ -13,7 +13,9 @@
 # second connects, which is a test that passes whether or not the lock works.
 set -euo pipefail
 
-MIGRATION="${MIGRATION:-supabase/migrations/20260820_corporate_permits.sql}"
+# rental_listings comes from its own migrations now that the harness no longer
+# stubs it — corporate_permit_blocks has a foreign key to it.
+MIGRATIONS="${MIGRATIONS:-supabase/migrations/20260625_rental_listings.sql supabase/migrations/20260704_listing_requirements.sql supabase/migrations/20260820_corporate_permits.sql}"
 WORKERS="${WORKERS:-20}"
 PGBIN="${PGBIN:-/usr/lib/postgresql/16/bin}"
 PGDATA="${PGDATA:-/var/tmp/pe-pg-test}"
@@ -38,7 +40,7 @@ DB="c$(date +%s)$$"
 psql -q -c "create database $DB;"
 trap 'psql -q -c "drop database if exists $DB;" >/dev/null 2>&1 || true' EXIT
 psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$HERE/harness.sql"
-psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$MIGRATION"
+for m in $MIGRATIONS; do psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$m"; done
 
 run_case () {              # run_case <permits> <workers> <expected winners>
   local permits="$1" workers="$2" expect="$3"
@@ -53,8 +55,8 @@ truncate public.permit_claims, public.member_vehicles, public.corporate_members,
          public.corporate_permit_blocks, public.corporate_accounts,
          public.rental_listings, auth.users cascade;
 
-insert into public.rental_listings (id, title) values
-  ('aaaaaaaa-0000-0000-0000-000000000001','Lanyon Place Car Park');
+insert into public.rental_listings (id, title, address, status) values
+  ('aaaaaaaa-0000-0000-0000-000000000001','Lanyon Place Car Park','Lanyon Place, Belfast','draft');
 insert into public.corporate_accounts (id, company_name, billing_contact_email) values
   ('c0000000-0000-0000-0000-000000000001','Acme Ltd','billing@acme.test');
 insert into public.corporate_permit_blocks

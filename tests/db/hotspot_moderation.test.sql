@@ -142,13 +142,28 @@ select assert(
   'and a spot 90km away is its own cluster, not folded into it');
 
 -- A listing inside the dense cluster.
-insert into public.rental_listings (id, title, address, status)
-values ('bbbbbbbb-0000-0000-0000-000000000001','Ormeau car park','Ormeau Road','active');
+--
+-- THIS FIXTURE USED TO ASSERT SOMETHING THAT CANNOT HAPPEN. It inserted an
+-- ACTIVE listing with no coordinates and checked it was not counted — which
+-- only worked because the harness stubbed rental_listings with three columns.
+-- The real table has publish_coords: a listing without lat/lng cannot be
+-- active at all, so the case being tested does not exist in production.
+--
+-- Replaced with the one that does: a DRAFT nearby must not be counted, because
+-- an unpublished car park is not supply anybody can use.
+insert into public.rental_listings
+  (id, title, address, lat, lng, status, instructions, photos, contact_phone,
+   availability, price_per_day)
+values
+  ('bbbbbbbb-0000-0000-0000-000000000001','Ormeau car park','Ormeau Road',
+   54.5810, -5.9210, 'draft',
+   'Straight in the gate and park anywhere on the tarmac to your left.',
+   array['a','b','c'], '02890000000', 'Always', 15.00);
 select assert(
   (select listings_nearby from public.hotspot_clusters order by spot_count desc limit 1) = 0,
-  'a listing with no coordinates is not counted as nearby');
+  'a DRAFT listing nearby is not counted — it is not supply anybody can use');
 
-update public.rental_listings set lat = 54.5810, lng = -5.9210
+update public.rental_listings set status = 'active'
  where id = 'bbbbbbbb-0000-0000-0000-000000000001';
 select assert(
   (select listings_nearby from public.hotspot_clusters order by spot_count desc limit 1) = 1,
