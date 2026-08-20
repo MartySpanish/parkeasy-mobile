@@ -6536,11 +6536,23 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
 };
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
+// FIVE TABS, NOT FOUR.
+//
+// The supply side had no home. It was a strip near the top of the search page, a
+// section further down it, and two links in the footer — three places, none of
+// them a destination, and Marty went looking for it three times and could not
+// find it. A section you have to scroll to is a section people scroll past; a
+// tab is somewhere you can be sent, and somewhere you can come back to.
+//
+// "Partner", singular, because it is the shortest true label. "Business" reads
+// as ParkEasy's business rather than yours, and "Work with us" does not fit
+// under an icon at 78px.
 const TABS = [
   { id:'search',     label:'Search',     Icon:Search    },
   { id:'nearby',     label:'Nearby',     Icon:Crosshair },
   { id:'spaces',     label:'Spaces',     Icon:Key       },
   { id:'add',        label:'Add Spot',   Icon:Plus      },
+  { id:'partner',    label:'Partner',    Icon:Store     },
 ];
 
 // ── Main App ──────────────────────────────────────────────────────────────────
@@ -7641,6 +7653,119 @@ const WorkWithUs = () => (
   </section>
 );
 
+// ── The Partner tab ──────────────────────────────────────────────────────────
+//
+// One destination for everybody who is on the OTHER side of ParkEasy: a club
+// with an empty car park, a barber who wants to be found, and the businesses
+// already on it.
+//
+// The featured list is here for two reasons and only one of them is obvious.
+// The obvious one is that a driver browsing "who's on this" is a driver who
+// might walk into one of these shops. The other is that it is the pitch: a
+// business deciding whether to pay wants to see what a paid placement actually
+// looks like, and a page that describes one is far less convincing than nine of
+// them sitting there.
+const PartnerTab = ({ onOpenPartner }) => {
+  const [partners, setPartners] = useState(null);   // null = still loading
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!isSupabaseEnabled) { setPartners([]); return; }
+      try {
+        // A HARD TIMEOUT, because "Loading…" with no end is worse than an
+        // honest empty state. A hanging request — bad signal, a captive portal,
+        // a blocked host — leaves a promise that never settles and a spinner
+        // that never stops. Eight seconds, then say so.
+        const query = supabase.from('partners')
+          .select('id,slug,name,tagline,logo_url,photo_url,photo_urls,address,is_online,lat,lng,radius_m,geo_verified,priority,link_url,links,description,name_irish,postcode,contact_phone')
+          .order('priority', { ascending: false });
+        const { data } = await Promise.race([
+          query,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+        ]);
+        if (live) setPartners(data || []);
+      } catch { if (live) setPartners([]); }
+    })();
+    return () => { live = false; };
+  }, []);
+
+  return (
+    <div className="pb-6">
+      <div className="px-4 pt-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5BE7DA]">Work with ParkEasy</p>
+        <h1 className="font-display font-extrabold text-[22px] text-[#EAF1F8] leading-tight mt-1">
+          Got a space, or a business beside one?
+        </h1>
+        <p className="text-[13px] text-[rgba(234,241,248,0.6)] leading-relaxed mt-2">
+          ParkEasy has two sides. Drivers looking for somewhere to park &mdash; and the
+          clubs, churches and businesses on the other end of that search.
+        </p>
+      </div>
+
+      <div className="px-4 pt-4">
+        <div className="pe-work-grid">
+          {WORK_WITH_US.map(({ href, Icon, label, title, blurb, cta }) => (
+            <a key={href} href={href}
+              className="flex flex-col rounded-2xl p-4 active:scale-[0.99] transition"
+              style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.10)'}}>
+              <span className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center"
+                  style={{background:'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
+                  <Icon size={16} className="text-[#06231f]"/>
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[rgba(234,241,248,0.5)]">{label}</span>
+              </span>
+              <span className="font-display font-extrabold text-[16px] text-[#EAF1F8] leading-tight mt-2.5">{title}</span>
+              <span className="text-[12.5px] text-[#cdd9e8] leading-relaxed mt-1.5 flex-1">{blurb}</span>
+              <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#5BE7DA] mt-3">
+                {cta}<ChevronRight size={14}/>
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <div className="px-4 pt-6">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5BE7DA]">Featured on ParkEasy</p>
+        <h2 className="font-display font-extrabold text-[18px] text-[#EAF1F8] leading-tight mt-1">
+          {partners?.length ? `${partners.length} local businesses` : 'Local businesses'}
+        </h2>
+        <p className="text-[12.5px] text-[rgba(234,241,248,0.55)] leading-relaxed mt-1.5">
+          Each one gets a card in the results near them and a page of their own. This is
+          what a placement looks like.
+        </p>
+      </div>
+
+      {partners === null ? (
+        <p className="px-4 pt-3 text-[13px] text-[#8da2bd]">Loading&hellip;</p>
+      ) : partners.length === 0 ? (
+        <p className="px-4 pt-3 text-[13px] text-[#8da2bd]">
+          Couldn&rsquo;t load the featured businesses just now &mdash; check your connection and pull to refresh.
+        </p>
+      ) : (
+        <div className="px-4">
+          {partners.map(p => (
+            <PartnerCard key={p.id} partner={p} listingId={null}
+              eyebrow="Featured partner" onOpenPartner={onOpenPartner}/>
+          ))}
+        </div>
+      )}
+
+      <div className="px-4 pt-6">
+        <a href="/partners"
+          className="w-full flex items-center gap-2 rounded-2xl px-4 py-3.5 active:scale-[0.99] transition"
+          style={{background:'linear-gradient(135deg, rgba(91,231,218,0.12), rgba(46,211,198,0.06))', border:'1px solid rgba(91,231,218,0.28)'}}>
+          <Store size={16} className="text-[#5BE7DA] flex-shrink-0"/>
+          <span className="flex-1 min-w-0 text-[13px] font-bold text-[#EAF1F8]">
+            Want your business here?
+          </span>
+          <ChevronRight size={16} className="text-[rgba(234,241,248,0.4)] flex-shrink-0"/>
+        </a>
+      </div>
+    </div>
+  );
+};
+
 const Footer = ({ onOpen }) => (
   <footer className="px-4 pt-2 pb-6 text-center">
     <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-[rgba(234,241,248,0.5)]">
@@ -8493,10 +8618,11 @@ export default function App() {
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
-        {/* Every tab except Search, which now carries its own copy near the top
-            of the results. Two on one screen would be the clutter the single
-            section was meant to replace. */}
-        {tab !== 'search' && <WorkWithUs/>}
+        {tab==='partner'    && <PartnerTab onOpenPartner={setDetailPartner}/>}
+        {/* Not on Search, which carries its own copy near the top of the
+            results, and not on Partner, which IS this section. Two on one
+            screen would be the clutter one section was meant to replace. */}
+        {!['search','partner'].includes(tab) && <WorkWithUs/>}
         <Footer onOpen={setInfoPage}/>
       </main>
 
