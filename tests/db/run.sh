@@ -41,6 +41,15 @@ DB="t$(date +%s)$$"
 psql -q -c "create database $DB;"
 trap 'psql -q -c "drop database if exists $DB;" >/dev/null 2>&1 || true' EXIT
 
+# The harness carries a thin rental_listings stub for the suites that only need
+# a table to point a foreign key at. When the REAL migration is in the chain the
+# stub has to stand down, or `create table if not exists` no-ops and every later
+# ALTER lands on the stub's six columns. Told to the harness through a GUC, so
+# the caller never has to remember a flag.
+case " ${MIGRATIONS[*]} " in
+  *20260625_rental_listings.sql*) export PGOPTIONS="${PGOPTIONS:-} -c parkeasy.real_listings=1" ;;
+esac
+
 psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$(dirname "$0")/harness.sql"
 for m in "${MIGRATIONS[@]}"; do
   psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$m"

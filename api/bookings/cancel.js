@@ -3,8 +3,11 @@
 //   • Driver cancels ≥24h before  → full refund.
 //   • Driver cancels <24h before  → 50% of the booking price.
 //   • After start / no-show       → no refund.
-// Refunds use reverse_transfer (claws the host's share back) + refund the
-// application fee, so the accounting stays clean. Amounts in integer pence.
+// Refunds on a destination charge use reverse_transfer (claws the host's share
+// back) + refund the application fee, so the accounting stays clean. On an
+// invoice-mode booking there is neither, and the refund comes straight out of
+// ParkEasy's balance — what the operator is owed is reduced by hand at
+// settlement time. Amounts in integer pence.
 import Stripe from 'stripe';
 import { hostEmails } from '../_hostEmails.js';
 import { bccFor } from '../_bcc.js';
@@ -98,11 +101,22 @@ export default async function handler(req, res) {
 
     const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
     if (refundPence > 0 && booking.stripe_payment_intent) {
+      // reverse_transfer and refund_application_fee only mean anything on a
+      // DESTINATION charge — the money is sitting in the host's connected
+      // account and has to be clawed back. An invoice-mode booking is a plain
+      // charge into ParkEasy's own balance: there is no transfer and no
+      // application fee, and Stripe rejects the call outright if you claim
+      // there is. That rejection would throw here, before the row is updated,
+      // so the driver would get no refund AND no cancellation.
+      //
+      // Keyed off stripe_destination rather than payout_mode because it is the
+      // literal thing being reversed, and because it is correct for the
+      // bookings taken before payout_mode existed.
+      const destinationCharge = !!booking.stripe_destination;
       await stripe.refunds.create({
         payment_intent: booking.stripe_payment_intent,
         amount: refundPence,
-        reverse_transfer: true,
-        refund_application_fee: true,
+        ...(destinationCharge ? { reverse_transfer: true, refund_application_fee: true } : {}),
       });
     }
 

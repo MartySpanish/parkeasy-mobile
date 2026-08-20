@@ -94,10 +94,21 @@ export function hostBookingEmail(opts) {
       </div>
     </div>` : '';
 
+  // Two payout models, and the wrong sentence here is a promise we don't keep.
+  // A club is paid by Stripe automatically. An invoice-mode operator is not
+  // paid by anything — ParkEasy holds the money and settles by invoice — so
+  // telling them to expect a weekly Stripe payout would have them waiting on a
+  // transfer that never arrives, and chasing the wrong people about it.
+  const invoiceMode = b.payout_mode === 'invoice';
+  const yours = invoiceMode
+    ? (b.operator_share_pence || 0)
+    : (b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence));
   const money = `<h3 style="font-family:system-ui;margin:20px 0 4px;font-size:15px">What you earn</h3>
     <table style="border-collapse:collapse;font-family:system-ui">
       <tr><td style="padding:4px 10px;color:#64748b">Driver paid</td><td style="padding:4px 10px">${gbp(b.amount_total_pence)}</td></tr>
-      <tr><td style="padding:4px 10px;color:#64748b">You receive</td><td style="padding:4px 10px"><strong>${gbp(b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence))}</strong> (after 15% fee), paid out weekly by Stripe.</td></tr>
+      <tr><td style="padding:4px 10px;color:#64748b">You receive</td><td style="padding:4px 10px"><strong>${gbp(yours)}</strong> ${invoiceMode
+        ? 'under your agreed share. ParkEasy collects the payment and settles with you by invoice &mdash; there is no Stripe payout on this site.'
+        : '(after 15% fee), paid out weekly by Stripe.'}</td></tr>
     </table>`;
 
   const manage = `<p style="font-family:system-ui;margin:18px 0">

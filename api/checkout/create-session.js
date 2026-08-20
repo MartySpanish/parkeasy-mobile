@@ -119,11 +119,41 @@ export default async function handler(req, res) {
       } catch { /* fall back to base price */ }
     }
 
-    // The host must have completed Connect onboarding (transfers active).
-    const hr = await fetch(`${URL_}/rest/v1/host_accounts?host_id=eq.${listing.owner_id}&select=*`, { headers: svc });
-    const host = (await hr.json())?.[0];
-    if (!host?.stripe_account_id || !host.transfers_active) {
-      return res.status(409).json({ error: 'This host hasn’t finished setting up payouts yet, so the space can’t be booked.' });
+    // ── HOW THIS LISTING GETS PAID ───────────────────────────────────────────
+    // Two models, and the listing says which.
+    //
+    //   'connect' — the default, and right for a club or a driveway. A
+    //     destination charge: Stripe splits the payment at the moment it is
+    //     taken and the host's 85% lands in their own account. Needs a
+    //     connected account with transfers active, so the gate below is real.
+    //
+    //   'invoice' — a plain charge into ParkEasy's own balance, settled with
+    //     the operator afterwards. No Connect account, no destination, no
+    //     application fee. This is how a commercial operator with a finance
+    //     department wants to be dealt with, and it is the same arrangement
+    //     corporate pooled permits already run on (public.operator_settlements).
+    //
+    // ⚠️ INVOICE MODE PAYS NOBODY BY ITSELF. The whole amount stays with
+    // ParkEasy and a human has to send the operator their share. What is owed
+    // is snapshotted onto the booking below and totalled in
+    // public.booking_settlements. Nothing else will remind anyone.
+    const invoiceMode = listing.payout_mode === 'invoice';
+    let host = null;
+    if (invoiceMode) {
+      // The share is a negotiated commercial term with no sensible default, so
+      // an invoice-mode listing missing it is a configuration mistake, not a
+      // reason to guess. The DB constraint should have stopped this; refuse
+      // rather than take money we cannot account for.
+      if (listing.operator_share_pct == null) {
+        return res.status(409).json({ error: 'This car park isn’t set up for payouts yet, so it can’t be booked. Please try again later.' });
+      }
+    } else {
+      // The host must have completed Connect onboarding (transfers active).
+      const hr = await fetch(`${URL_}/rest/v1/host_accounts?host_id=eq.${listing.owner_id}&select=*`, { headers: svc });
+      host = (await hr.json())?.[0];
+      if (!host?.stripe_account_id || !host.transfers_active) {
+        return res.status(409).json({ error: 'This host hasn’t finished setting up payouts yet, so the space can’t be booked.' });
+      }
     }
 
     // Double-booking prevention. A start time is required so we can check the
@@ -263,13 +293,25 @@ export default async function handler(req, res) {
     }
 
     // One driver service fee per booking series, not per week.
+    //
+    // Under the invoice model our share of the space price is whatever was
+    // negotiated with the operator, not the standard 15%. Passing it through
+    // priceBreakdown rather than doing the arithmetic here keeps the checkout
+    // line items, the booking row and the settlement view reading from one
+    // calculation — which is the entire reason _pricing.js exists.
     const money = priceBreakdown(bookingPricePence, process.env, {
       eventDay, surchargePence,
       surchargeCommissionRate: listing.overnight_fee_commission_rate,
+      commissionRate: invoiceMode ? 1 - (Number(listing.operator_share_pct) / 100) : undefined,
     });
     const SERVICE_FEE_PENCE = money.serviceFeePence;
     const applicationFeePence = money.applicationFeePence;
     const totalPence = money.totalPence;
+    // What we owe the operator once the money is in our balance. Zero under
+    // connect, where Stripe has already moved it. hostReceivesPence is exactly
+    // that figure — the space price less our cut, plus their share of any
+    // overnight fee — so the two models stay one calculation.
+    const operatorSharePence = invoiceMode ? money.hostReceivesPence : 0;
 
     // from_hotspot: whether this booking started at a free spot. Stripe metadata
     // values are strings, so it is read back with === 'true' below.
@@ -302,11 +344,16 @@ export default async function handler(req, res) {
           quantity: 1,
         }] : []),
       ],
-      payment_intent_data: {
-        application_fee_amount: applicationFeePence,
-        transfer_data: { destination: host.stripe_account_id },
-        metadata: meta,
-      },
+      // Invoice mode takes a PLAIN charge into ParkEasy's own balance: no
+      // destination, no application fee. Stripe rejects both on a charge with
+      // no connected account, and there is nowhere for them to point anyway.
+      payment_intent_data: invoiceMode
+        ? { metadata: meta }
+        : {
+            application_fee_amount: applicationFeePence,
+            transfer_data: { destination: host.stripe_account_id },
+            metadata: meta,
+          },
       metadata: meta,
       expires_at: Math.floor(now / 1000) + 30 * 60,   // hold the slot for 30 min max
       success_url: `${APP_URL}/?booking=success&session_id={CHECKOUT_SESSION_ID}`,
@@ -335,7 +382,14 @@ export default async function handler(req, res) {
       // owed only if the car is actually left in overnight.
       surcharge_pence: i === 0 ? surchargePence : 0,
       stripe_session_id: i === 0 ? session.id : `${session.id}#${i}`,
-      stripe_destination: host.stripe_account_id, status: 'pending',
+      // Null under invoice mode, and that is the flag the refund path reads:
+      // no destination means no transfer to reverse.
+      stripe_destination: host?.stripe_account_id || null, status: 'pending',
+      // Snapshotted, not looked up later. A listing's payout mode and the
+      // operator's share can both change; what was owed on a booking already
+      // taken cannot.
+      payout_mode: invoiceMode ? 'invoice' : 'connect',
+      operator_share_pence: i === 0 ? operatorSharePence : 0,
       marketing_opt_in: marketingOptIn,
       // On the first occurrence only, same rule as the money: a repeat series
       // is one conversion from one comparison card, and counting it seven times
