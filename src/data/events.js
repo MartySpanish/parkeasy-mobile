@@ -49,6 +49,21 @@ export const VENUES = {
   botanic:    { name: 'Botanic Gardens', lat: 54.5840, lng: -5.9330, area: 'Botanic' },
   ormeaupark: { name: 'Ormeau Park', lat: 54.5836, lng: -5.9040, area: 'Ormeau', approx: true },
   eikon:      { name: 'Eikon Exhibition Centre', lat: 54.4867, lng: -6.1094, area: 'Lisburn' },
+  // BELFAST'S BIGGEST OUTDOOR VENUE, AND IT WAS NOT IN THIS FILE AT ALL.
+  //
+  // Four dates in eleven days — Capaldi, Calvin Harris and both days of Emerge —
+  // and ParkEasy knew about none of them, because the venue had no entry here.
+  // Marty found out about tonight's from the radio. A missing venue is a whole
+  // class of missing events, which is worse than a missing event: nothing about
+  // the gap is visible until somebody happens to notice.
+  //
+  // Coordinate is APPROX and placed from what the data already knows about
+  // Boucher Road rather than from a geocoder (all are blocked here): the Weev
+  // hub at 8-8a Boucher Road sits at 54.5872,-5.9573 and Musgrave Park at
+  // 54.5665,-5.964, and the fields are at the Stockman's Lane end between them.
+  // BT12 6EU. It positions the parking radius, so it wants checking on the
+  // ground — 200m out shows the wrong side of a dual carriageway.
+  boucher:    { name: 'Boucher Road Playing Fields', lat: 54.5770, lng: -5.9580, area: 'Boucher Road', approx: true },
   derrycity:  { name: 'Derry~Londonderry city centre', lat: 54.9966, lng: -7.3086, area: 'Derry~Londonderry', approx: true },
 };
 
@@ -68,6 +83,27 @@ export const EVENTS = [
   { id: 'wolfetones', name: 'The Wolfe Tones', venue: 'o2', date: '2026-08-29', time: '19:30', crowd: null, closures: false, tag: 'Concert' },
   { id: 'giants-herlev-2', name: 'Belfast Giants v Herlev Eagles', venue: 'o2', date: '2026-08-30', time: '16:00', crowd: null, closures: false, tag: 'Ice hockey' },
   { id: 'mela-day', name: 'Belfast Mela Day', venue: 'botanic', date: '2026-08-30', time: null, crowd: null, closures: false, tag: 'Festival' },
+
+  // ── Boucher Road, added 20 Aug 2026 ──────────────────────────────────────
+  // All four verified against their weekday, and each corroborated by the
+  // official ticketing platform as well as the aggregators: Live Nation for
+  // Capaldi, Ticketmaster for Calvin Harris, Belfast City Council's own events
+  // page for Emerge.
+  //
+  // `time` here is GATES, not stage time, and it is labelled as such wherever
+  // it shows. For a parking app that is the more useful number by a mile —
+  // gates is when forty thousand cars arrive and the car parks fill, and stage
+  // time is two hours after anyone needed to have parked.
+  { id: 'capaldi-boucher', name: 'Lewis Capaldi', venue: 'boucher',
+    date: '2026-08-20', time: '17:00', timeIsGates: true, crowd: null, closures: false,
+    tag: 'Concert', support: 'Loyle Carner' },
+  { id: 'calvinharris-boucher', name: 'Calvin Harris', venue: 'boucher',
+    date: '2026-08-22', time: '16:00', timeIsGates: true, crowd: null, closures: false,
+    tag: 'Concert', support: 'Jazzy' },
+  { id: 'emerge-sat', name: 'Emerge Festival — Saturday', venue: 'boucher',
+    date: '2026-08-29', time: null, crowd: null, closures: false, tag: 'Festival' },
+  { id: 'emerge-sun', name: 'Emerge Festival — Sunday', venue: 'boucher',
+    date: '2026-08-30', time: null, crowd: null, closures: false, tag: 'Festival' },
 
   // ── September ─────────────────────────────────────────────────────────────
   { id: 'sigurros', name: 'Sigur Rós with the Ulster Orchestra', venue: 'waterfront', date: '2026-09-04', time: '19:00', crowd: null, closures: false, tag: 'Concert' },
@@ -121,10 +157,51 @@ export const upcomingEvents = (todayISO) => {
   return EVENTS.filter(e => endOf(e) >= today).sort((a, b) => startOf(a).localeCompare(startOf(b)));
 };
 
+/**
+ * What is on TODAY or TOMORROW, soonest first.
+ *
+ * THE FUNCTION THIS FILE SHOULD HAVE HAD FROM THE START. Forty thousand people
+ * went to Boucher Road on 20 August and ParkEasy said nothing, because the only
+ * "there's an event on" banner in the app was hardcoded for one festival and
+ * expired itself on 13 August. Every event after that date was in this file and
+ * on no screen a driver would see without going looking for it.
+ *
+ * A calendar somebody has to remember to open is a calendar that gets forgotten
+ * on precisely the day it mattered. This is what the home screen reads.
+ *
+ * @param todayISO injectable so this is testable without mocking the clock
+ */
+export const eventsOn = (todayISO) => {
+  const today = todayISO || new Date().toISOString().slice(0, 10);
+  const t = new Date(`${today}T12:00:00Z`);
+  t.setUTCDate(t.getUTCDate() + 1);
+  const tomorrow = t.toISOString().slice(0, 10);
+  return EVENTS
+    // A multi-day festival counts on every one of its days, not just the first.
+    .filter(e => startOf(e) <= tomorrow && endOf(e) >= today)
+    .sort((a, b) => startOf(a).localeCompare(startOf(b)));
+};
+
+/** 'Tonight', 'Today' or 'Tomorrow' for an event, relative to a given day. */
+export const whenWord = (ev, todayISO) => {
+  const today = todayISO || new Date().toISOString().slice(0, 10);
+  if (startOf(ev) > today) return 'Tomorrow';
+  // "Tonight" only when there is a start time and it is an evening one.
+  // Calling a 10am parkrun "tonight" is the kind of small wrongness that makes
+  // somebody stop trusting the rest of the card.
+  const hour = ev.time ? parseInt(ev.time.slice(0, 2), 10) : null;
+  return hour != null && hour >= 15 ? 'Tonight' : 'Today';
+};
+
 export const formatWhen = (ev) => {
   const fmt = (d, opts) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', opts);
   if (!Array.isArray(ev.date)) {
-    return `${fmt(ev.date, { weekday: 'short', day: 'numeric', month: 'short' })}${ev.time ? ` · ${ev.time}` : ''}`;
+    // "gates", where that is what the time is. An outdoor show quoting 17:00 is
+    // telling you when the field opens, not when the act is on — and for
+    // somebody deciding when to leave the house that is the more useful of the
+    // two, as long as it does not pretend to be the other one.
+    const t = ev.time ? ` · ${ev.timeIsGates ? 'gates ' : ''}${ev.time}` : '';
+    return `${fmt(ev.date, { weekday: 'short', day: 'numeric', month: 'short' })}${t}`;
   }
   const [a, b] = ev.date;
   const sameMonth = a.slice(0, 7) === b.slice(0, 7);

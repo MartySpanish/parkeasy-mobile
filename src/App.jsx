@@ -24,6 +24,7 @@ import { splitPartnersByCategory } from './data/partnerCategories';
 import { claimState, canClaim } from './data/spotClaims';
 import { networkPartner, networkSites, nearestSiteDistance } from './data/networkPartners';
 import { holdCopy } from './data/spaceHold';
+import { eventsOn, whenWord, venueOf } from './data/events';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
@@ -2203,17 +2204,58 @@ const FeaturedSpace = ({ spot, onOpen }) => {
   );
 };
 
-const EventBanner = ({ onOpen }) => !FLEADH.on ? null : (
-  <button onClick={onOpen} className="w-full flex items-center gap-3 text-left rounded-2xl px-3.5 py-3 mb-3 active:scale-[0.985] transition"
-    style={{background:'linear-gradient(135deg, rgba(201,167,255,0.15), rgba(91,231,218,0.10))', border:'1px solid rgba(201,167,255,0.35)'}}>
-    <span className="text-xl">🎻</span>
-    <span className="flex-1 min-w-0">
-      <span className="block font-display font-bold text-[13.5px] text-[#EAF1F8]">Fleadh Cheoil · 2–9 Aug</span>
-      <span className="block text-[11.5px] text-[#cdd9e8] mt-0.5">City Hall to Cathedral Quarter closed — see which streets</span>
-    </span>
-    <ChevronRight size={16} className="text-[#C9A7FF] flex-shrink-0"/>
-  </button>
-);
+// WHAT IS ON TODAY OR TOMORROW, READ FROM THE CALENDAR.
+//
+// This used to be hardcoded to the Fleadh and expire itself on 13 August. Every
+// event after that sat in data/events.js and appeared on no screen a driver
+// would see without going looking. On 20 August forty thousand people went to
+// Boucher Road for Lewis Capaldi and ParkEasy said nothing at all — the venue
+// was not even in the file.
+//
+// Now it reads eventsOn(), so anything added to the calendar surfaces by
+// itself on the day. Nobody has to remember to switch a banner on, which is the
+// only version of this that survives a busy week.
+//
+// The Fleadh's road-closure screen is still one tap away and still special —
+// a closed city centre is a different warning from "there is a gig on" — but it
+// no longer owns the only slot.
+const EventBanner = ({ onEvent, onEvents }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const on = eventsOn(today);
+  if (FLEADH.on) return (
+    <button onClick={onEvent} className="w-full flex items-center gap-3 text-left rounded-2xl px-3.5 py-3 mb-3 active:scale-[0.985] transition"
+      style={{background:'linear-gradient(135deg, rgba(201,167,255,0.15), rgba(91,231,218,0.10))', border:'1px solid rgba(201,167,255,0.35)'}}>
+      <span className="text-xl">🎻</span>
+      <span className="flex-1 min-w-0">
+        <span className="block font-display font-bold text-[13.5px] text-[#EAF1F8]">Fleadh Cheoil · 2–9 Aug</span>
+        <span className="block text-[11.5px] text-[#cdd9e8] mt-0.5">City Hall to Cathedral Quarter closed — see which streets</span>
+      </span>
+      <ChevronRight size={16} className="text-[#C9A7FF] flex-shrink-0"/>
+    </button>
+  );
+  if (!on.length) return null;
+
+  const ev = on[0];
+  const v  = venueOf(ev);
+  const word = whenWord(ev, today);
+  const more = on.length - 1;
+  return (
+    <button onClick={onEvents} className="w-full flex items-center gap-3 text-left rounded-2xl px-3.5 py-3 mb-3 active:scale-[0.985] transition"
+      style={{background:'linear-gradient(135deg, rgba(201,167,255,0.15), rgba(91,231,218,0.10))', border:'1px solid rgba(201,167,255,0.35)'}}>
+      <span className="text-xl">{ev.tag === 'Festival' ? '🎪' : ev.tag === 'Concert' ? '🎤' : '🎟'}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block font-display font-bold text-[13.5px] text-[#EAF1F8] truncate">
+          {word}: {ev.name}
+        </span>
+        <span className="block text-[11.5px] text-[#cdd9e8] mt-0.5 truncate">
+          {v?.name}{ev.time ? ` · ${ev.timeIsGates ? 'gates' : ''} ${ev.time}`.replace('  ',' ') : ''} — park before you set off
+          {more > 0 ? ` · +${more} more` : ''}
+        </span>
+      </span>
+      <ChevronRight size={16} className="text-[#C9A7FF] flex-shrink-0"/>
+    </button>
+  );
+};
 
 // Street name printed on the map at a boundary corner. Red-on-dark with a hard
 // outline so it stays readable over the zone fill and the map tiles beneath.
@@ -3340,7 +3382,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           to find your way back, which is the one thing a stuck person will not
           do. This is the first thing under the control that got them here. */}
       {isSearching && <BackToBrowse/>}
-      {onEvent && CITIES.find(c=>c.name===cityName)?.region === 'Northern Ireland' && <EventBanner onOpen={onEvent}/>}
+      {onEvent && CITIES.find(c=>c.name===cityName)?.region === 'Northern Ireland' && <EventBanner onEvent={onEvent} onEvents={onEvents || onEvent}/>}
       {!geo && !geoBusy && !textMode && query.trim() && (
         <button onClick={()=>doSearch(query)} className="w-full flex items-center gap-2 text-xs font-semibold text-[#5BE7DA] bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 px-3.5 py-2.5 rounded-2xl hover:bg-[#2ED3C6]/15 transition">
           <Navigation size={13}/> Find parking near &ldquo;{query.trim()}&rdquo; — press Enter
