@@ -740,7 +740,12 @@ function isFreeNow(s){
 // Spot-type badge pills (semantic accents from the approved reference).
 const TYPE_BADGES = {
   free:       { label:'Free',           c:'#34E0A0' },
-  hidden_gem: { label:'✨ Hidden gem',  c:'#C9A7FF' },
+  // "· Premium" is not decoration. "Hidden gem" is the brand word for these and
+  // it stays, but on its own it never told anybody WHY they are different from
+  // the free spot two cards up — which is the whole thing the subscription
+  // sells. A Premium member wants to see what they are paying for; everybody
+  // else needs to know it exists.
+  hidden_gem: { label:'✨ Hidden gem · Premium',  c:'#C9A7FF' },
   timed:      { label:'Timed',          c:'#FFC24B' },
   paid:       { label:'Pay & Display',  c:'#FF9D4B' },
   official:   { label:'Car park',       c:'#7CC4FF' },
@@ -2471,6 +2476,12 @@ const BADGE_FILTERS = [
   { id:'all',      label:'All' },
   { id:'freenow',  label:'Free now' },
   { id:'free',     label:'Free' },
+  // The one the Premium Hotspots tile needed and did not have. It used to send
+  // people to badgeFilter 'free', which is every free spot in Northern Ireland —
+  // 500-odd council car parks and laybys with the 89 gems scattered through
+  // them. Tapping the tile that sells the subscription showed you mostly the
+  // things you do not need a subscription for.
+  { id:'gems',     label:'✨ Hotspots', premium: true },
   { id:'covered',  label:'Covered' },
   { id:'ev',       label:'EV' },
 ];
@@ -2490,6 +2501,7 @@ const isCovered = (s) => {
 const applyChip = (arr, chip) => {
   if (chip === 'freenow') return arr.filter(isFreeNow);
   if (chip === 'free')    return arr.filter(isSpotFree);
+  if (chip === 'gems')    return arr.filter(s => s.badge === 'hidden_gem');
   if (chip === 'covered') return arr.filter(isCovered);
   if (chip === 'ev')      return arr.filter(s => s.ev?.available);
   return arr;
@@ -3200,10 +3212,20 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
         break;
       case 'filter':  setBadgeFilter(cat.filter); clearSearch(); break;
       case 'premium':
-        // Premium members already have the gems, so send them to them rather
-        // than to a paywall they have paid.
-        if (isPremium) { setBadgeFilter('free'); setSortBy('free'); clearSearch(); }
-        else onUpgrade?.();
+        // THE TILE NOW SHOWS THE HOTSPOTS. It used to set badgeFilter 'free',
+        // which is every free spot in the country — the 89 gems buried among
+        // hundreds of council car parks and laybys. Tapping the tile that sells
+        // the subscription mostly showed you the things you do not need one for.
+        //
+        // Sorted by popular rather than "free first": every gem is free, so
+        // that sort put them in an arbitrary order. Votes are the closest thing
+        // to "which of these do locals actually rate".
+        //
+        // A non-subscriber sees the SAME list, locked, rather than a bare
+        // paywall. Eighty-nine cards saying "unlock the exact spot" is a far
+        // better argument than a price sheet, and it is the honest one: this is
+        // exactly what the money buys.
+        setBadgeFilter('gems'); setSortBy('popular'); clearSearch();
         break;
       default: break;
     }
@@ -3663,6 +3685,32 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
           <ParkingMap spots={mapSpots} center={mapCenter} zoom={mapZoom} height={235} selectedId={focusSpot?.id} isPremium={isPremium} onUpgrade={onUpgrade} pin={geo}/>
         </div>
         <div className="pe-list-col">
+        {/* WHAT THIS LIST IS, when it is the hotspots. The results header below
+            says "89 spots", which on this filter is true and says nothing —
+            these are the ones the subscription is FOR, and a Premium member
+            looking at them should be able to see that is what they bought.
+            Only on this filter; every other list explains itself. */}
+        {badgeFilter === 'gems' && (
+          <div className="px-4 pt-3">
+            <div className="rounded-2xl px-4 py-3"
+              style={{background:'linear-gradient(135deg, rgba(201,167,255,0.14), rgba(91,231,218,0.07))', border:'1px solid rgba(201,167,255,0.32)'}}>
+              <p className="font-display font-extrabold text-[15px] text-[#EAF1F8]">
+                ✨ Premium hotspots{filtered.length ? ` · ${filtered.length}` : ''}
+              </p>
+              <p className="text-[12.5px] text-[#cdd9e8] leading-relaxed mt-1">
+                {isPremium
+                  ? <>Free to park, hand-picked by locals, and only visible with Premium. This is what your subscription is for.</>
+                  : <>Free to park &mdash; but the exact spot is Premium only. You can see the area each one is in; Premium reveals the kerb, the notes and the directions.</>}
+              </p>
+              {!isPremium && (
+                <button onClick={onUpgrade}
+                  className="mt-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#06231f] btn-teal px-3.5 py-2 rounded-xl active:scale-95 transition">
+                  ★ Unlock all {filtered.length || ''} hotspots
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between px-4 pt-3.5 pb-1">
           <p className="text-[12.5px] text-[rgba(234,241,248,0.5)] font-semibold"><strong className="text-[#EAF1F8]">{filtered.length}</strong> spot{filtered.length!==1?'s':''}{geo?` near ${geo.label.split(',')[0]}`:` · ${cityName} first`}{hiddenCount>0?` · ${hiddenCount} ✨ Premium`:''}</p>
           <div className="relative">
