@@ -50,12 +50,27 @@ const gems = all.filter(s => s.badge === 'hidden_gem')
                 .sort((a, b) => Number(a.id) - Number(b.id));
 
 // ── PRIVATE LAND ─────────────────────────────────────────────────────────────
-// land_type is NOT NULL and 'private' can never be published. Rather than
-// stamping all 89 'public' and hoping, every gem is tested against the words
-// that actually indicate somebody else's car park. A match is seeded
-// land_type='private', status='draft' — off the map until a human says
-// otherwise. The safe direction: a wrongly-drafted public car park costs one
-// spot, a wrongly-published private one costs a driver a £100 charge notice.
+// Every gem is tested against the words that indicate somebody else's car park,
+// so the five that read that way are identified rather than stamped 'public'
+// and forgotten:
+//
+//     568  Tesco Extra, Castle Way (Antrim)      "Free, customers only"
+//     870  Strabane Retail Park Overflow         "Free all day"
+//    1018  Tesco, Castlewellan Road (Banbridge)  "customers only during store hours"
+//    2137  Bann Boulevard (Portadown)            "Free all day"
+//    2158  Eurospar Scarva Street (Banbridge)    "customers only during store hours"
+//
+// MARTY'S CALL, 19 AUGUST: publish all five. They have been on the app for
+// months, they are spots locals genuinely use, and he knows these car parks.
+// The concern was put to him — three of the five say "customers only" and two
+// coach a token purchase in the notes, and NI retail car parks are ANPR-enforced
+// by third parties — and the decision is his.
+//
+// So they are seeded land_type='private', status='published'. The flag stays
+// because it is TRUE and because it is what any future moderation rule keys
+// off; the publish decision is recorded here rather than the flag being quietly
+// falsified to make a constraint pass. If one of these ever produces a charge
+// notice, this is the list to look at.
 const PRIVATE_SIGNALS = /retail park|shopping centre|supermarket|tesco|asda|sainsbury|lidl|aldi|eurospar|spar\b|customers? only|private land|patrons? only/i;
 const looksPrivate = (g) =>
   PRIVATE_SIGNALS.test([g.name, g.near, g.notes, g.restriction].filter(Boolean).join(' '));
@@ -87,7 +102,8 @@ const rows = gems.map(g => `  (${[
   q(g.restriction), q(g.notes), n(g.lat), n(g.lng), q(g.photo),
   n(g.spaces),
   q(looksPrivate(g) ? 'private' : 'public'),
-  q(looksPrivate(g) ? 'draft' : 'published'),
+  q('published'),
+  q(looksPrivate(g) ? 'Marty Rooney, 19 Aug 2026 — knows these car parks, live for months' : null),
   arr(g.tags), q(g.walk), n(g.dist), q(g.by), n(g.votes ?? 0), b(g.premium),
   q(g._city), TASTERS.has(String(g.id)) ? 'true' : 'false',
 ].join(', ')})`).join(',\n');
@@ -104,19 +120,21 @@ process.stdout.write(`-- hidden_gems: the ${gems.length} curated free spots, out
 -- 'rental-<uuid>' for a listing. That dual shape is deliberate and stays;
 -- legacy_id is what keeps the integer half joinable.
 --
--- ${priv.length} of the ${gems.length} are seeded land_type='private', status='draft' rather than
--- published, because their own text describes somebody else's car park:
+-- ${priv.length} of the ${gems.length} sit on private retail land by their own description:
 ${priv.map(g => `--   ${String(g.id).padStart(5)}  ${g.name} — "${g.restriction}"`).join('\n')}
--- Three of those say "customers only" outright and two coach a token purchase
--- to get away with it. Retail car parks in NI are ANPR-enforced by third
--- parties, so publishing them sends a driver to a £100 charge notice. Flip any
--- that turn out to be genuinely public with:
---   update public.hidden_gems set land_type='public', status='published' where legacy_id='2137';
+-- All ${gems.length} are PUBLISHED, at Marty's instruction on 19 August. He knows these car
+-- parks and they have been live for months. The concern was put to him — three
+-- say "customers only" and two coach a token purchase in the notes, and NI
+-- retail car parks are ANPR-enforced by third parties — and he made the call.
+--
+-- land_type stays 'private' on those five because it is true, and because it is
+-- what any future moderation rule keys off. Retire one with:
+--   update public.hidden_gems set status='retired' where legacy_id='568';
 
 insert into public.hidden_gems (
   legacy_id, name, near, street, type, restriction, notes, lat, lng, photo_url,
-  spaces_estimate, land_type, status, tags, walk, dist_miles, submitted_by, votes,
-  premium, town, is_taster
+  spaces_estimate, land_type, status, private_land_approved_by, tags, walk,
+  dist_miles, submitted_by, votes, premium, town, is_taster
 ) values
 ${rows}
 -- NEITHER status NOR land_type IS UPDATED ON CONFLICT, and that is deliberate.

@@ -13,10 +13,13 @@ end $$;
 \echo ''
 \echo '1. The seed lands'
 select assert((select count(*) from public.hidden_gems) = 89, 'all 89 gems inserted');
-select assert((select count(*) from public.hidden_gems where status='published') = 84,
-  '84 published — the five on private retail land are held back as drafts');
+select assert((select count(*) from public.hidden_gems where status='published') = 89,
+  'all 89 published — including the five on retail land, at Marty''s instruction');
 select assert((select count(*) from public.hidden_gems where land_type='private') = 5,
-  'and those five are marked private, not quietly relabelled public');
+  'and those five are still MARKED private, not quietly relabelled public to pass a constraint');
+select assert(
+  (select count(*) from public.hidden_gems where land_type='private' and private_land_approved_by is null) = 0,
+  'every one of them carries a named sign-off');
 select assert((select count(*) from public.hidden_gems where legacy_id is null) = 0,
   'every gem carries its legacy_id');
 select assert((select count(distinct legacy_id) from public.hidden_gems) = 89,
@@ -36,8 +39,9 @@ select assert((select name from public.hidden_gems where legacy_id='66') <> 'WRO
 
 \echo ''
 \echo '2b. A rerun must not undo a moderation decision'
--- Marty confirms Bann Boulevard is a council car park and publishes it.
-update public.hidden_gems set land_type='public', status='published' where legacy_id='2137';
+-- Marty later confirms Bann Boulevard really is a council car park, so the
+-- private flag and the override come off.
+update public.hidden_gems set land_type='public', private_land_approved_by=null where legacy_id='2137';
 \i /tmp/pe-seed.sql
 select assert(
   (select status from public.hidden_gems where legacy_id='2137') = 'published',
@@ -45,8 +49,11 @@ select assert(
 select assert(
   (select land_type from public.hidden_gems where legacy_id='2137') = 'public',
   'and the land_type decision is not reset under it');
-select assert((select count(*) from public.hidden_gems where status='published') = 85,
-  'so the published count reflects the human decision, not the generator');
+select assert(
+  (select private_land_approved_by from public.hidden_gems where legacy_id='2137') is null,
+  'nor is a withdrawn sign-off quietly reinstated');
+select assert((select count(*) from public.hidden_gems where status='published') = 89,
+  'so the published count reflects the human decisions, not the generator');
 
 \echo ''
 \echo '3. THE JOIN THIS WHOLE MIGRATION EXISTS TO PROTECT'

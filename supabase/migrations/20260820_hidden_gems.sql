@@ -65,13 +65,28 @@ create table if not exists public.hidden_gems (
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now(),
 
-  -- A published gem must say what the restrictions are, and can never be on
-  -- private land. Both are conditional on status for the same reason: the
-  -- person typing a draft is not the person deciding to publish it.
+  -- Who signed off publishing this despite it being on private land, and when.
+  -- Null for every ordinary gem.
+  private_land_approved_by text,
+
+  -- A published gem must say what the restrictions are, and must not be on
+  -- private land UNLESS somebody has explicitly signed that off. Both are
+  -- conditional on status for the same reason: the person typing a draft is not
+  -- the person deciding to publish it.
+  --
+  -- THE OVERRIDE IS A COLUMN, NOT A DELETED RULE. Marty's call on 19 August was
+  -- to publish the five retail-land gems that have been live for months. The
+  -- lazy way to honour that is to drop the constraint or relabel them 'public',
+  -- and both would mean the NEXT private car park somebody submits gets
+  -- published by accident — with a driver clamped at the end of it. This keeps
+  -- the rule doing its job for everything new, and turns the exception into a
+  -- signature somebody can be asked about.
   constraint hidden_gems_restriction_on_publish
     check (status <> 'published' or length(trim(restriction)) >= 3),
   constraint hidden_gems_no_private_publish
-    check (status <> 'published' or land_type <> 'private')
+    check (status <> 'published'
+           or land_type <> 'private'
+           or private_land_approved_by is not null)
 );
 
 create index if not exists hidden_gems_status_idx on public.hidden_gems (status);

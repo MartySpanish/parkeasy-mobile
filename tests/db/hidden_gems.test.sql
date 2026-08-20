@@ -47,21 +47,38 @@ end $$;
 do $$ begin
   insert into public.hidden_gems (legacy_id, name, restriction, lat, lng, land_type, status)
   values ('9002','Somebody else''s car park','Free, customers only', 54.6, -5.9, 'private', 'published');
-  raise exception 'FAIL  a private-land gem was published';
+  raise exception 'FAIL  a private-land gem was published with nobody signing it off';
 exception when check_violation then
-  raise notice '  PASS  a private-land gem can never be published';
+  raise notice '  PASS  private land cannot be published by default';
 end $$;
 
 do $$ begin
   update public.hidden_gems set status = 'published' where legacy_id = '568';
-  raise exception 'FAIL  the Tesco car park was published by an update';
+  raise exception 'FAIL  the Tesco draft was promoted with nobody signing it off';
 exception when check_violation then
   raise notice '  PASS  nor by promoting an existing draft';
 end $$;
 
+-- THE OVERRIDE IS A SIGNATURE, NOT A DELETED RULE. Marty's call was to publish
+-- the five retail-land gems that have been live for months. Dropping the
+-- constraint would have honoured that and left the NEXT private car park
+-- somebody submits publishable by accident.
+update public.hidden_gems
+   set private_land_approved_by = 'Marty Rooney, 19 Aug 2026', status = 'published'
+ where legacy_id = '568';
 select assert(
-  (select status from public.hidden_gems where legacy_id='568') = 'draft',
-  'and it stays as a draft rather than disappearing');
+  (select status from public.hidden_gems where legacy_id='568') = 'published',
+  'but private land CAN be published once somebody has signed it off');
+select assert(
+  (select private_land_approved_by from public.hidden_gems where legacy_id='568') is not null,
+  'and the sign-off is recorded against the row, not lost in a chat');
+
+do $$ begin
+  update public.hidden_gems set private_land_approved_by = null where legacy_id = '568';
+  raise exception 'FAIL  the sign-off was removed from a published private-land gem';
+exception when check_violation then
+  raise notice '  PASS  and it cannot be withdrawn while the gem is still published';
+end $$;
 
 --------------------------------------------------------------------------------
 \echo ''
@@ -93,15 +110,13 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','11111111-1111-1111-1111-111111111111', false);
 select set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","email":"payer@example.test"}', false);
 select assert(public.has_premium(), 'a live STRIPE-SUB row is Premium');
-select assert((select count(*) from public.hidden_gems) = 2, 'and sees both published gems');
-select assert((select count(*) from public.hidden_gems where legacy_id='568') = 0,
-  'but not the private-land draft');
+select assert((select count(*) from public.hidden_gems) = 3, 'and sees the published gems');
 
 -- The payment-link buyer with no user_id, matched on email.
 select set_config('request.jwt.claim.sub','33333333-3333-3333-3333-333333333333', false);
 select set_config('request.jwt.claims','{"sub":"33333333-3333-3333-3333-333333333333","email":"emailonly@example.test"}', false);
 select assert(public.has_premium(), 'a subscriber with no user_id is still Premium, matched on email');
-select assert((select count(*) from public.hidden_gems) = 2, 'and sees the gems');
+select assert((select count(*) from public.hidden_gems) = 3, 'and sees the gems');
 
 -- Expired code: a free user.
 select set_config('request.jwt.claim.sub','22222222-2222-2222-2222-222222222222', false);
@@ -111,8 +126,8 @@ select assert((select count(*) from public.hidden_gems) = 0,
   'and a free user sees NO gem rows at all — not even to hide in the UI');
 
 -- The teaser is what a free user gets instead.
-select assert((select count(*) from public.hidden_gems_teaser) = 2,
-  'a free user still sees the two teasers');
+select assert((select count(*) from public.hidden_gems_teaser) = 3,
+  'a free user still sees the teasers');
 select assert(
   (select approx_lat from public.hidden_gems_teaser where legacy_id='66') = 54.580,
   'with the coordinate snapped to the ~500m grid');
@@ -121,10 +136,22 @@ select assert(
   'so two gems 100m apart snap to the same pin');
 
 reset role;
+-- The columns exist because a TASTER carries its real detail — it is given away
+-- on purpose. What matters is what a non-taster row actually contains, so this
+-- tests the values rather than the schema. (An earlier version asserted the
+-- columns were absent and started failing the moment tasters were added, which
+-- would have been a green light to weaken the check instead of the right one.)
+select assert(
+  (select count(*) from public.hidden_gems_teaser
+    where not is_taster and (name is not null or notes is not null or restriction is not null)) = 0,
+  'a non-taster teaser carries no name, notes or restriction');
+select assert(
+  (select count(*) from public.hidden_gems_teaser where not is_taster and tags <> '{}') = 0,
+  'nor its tags, which name the streets around it');
 select assert(not exists (
   select 1 from information_schema.columns
-   where table_name='hidden_gems_teaser' and column_name in ('name','notes','restriction','photo_url','lat','lng')),
-  'the teaser exposes no name, notes, restriction, photo or exact coordinate');
+   where table_name='hidden_gems_teaser' and column_name in ('photo_url','lat','lng')),
+  'and the exact coordinate and photo are not columns of the view at all');
 
 select assert(not has_table_privilege('anon','public.hidden_gems','select'),
   'anon cannot read the gem table at all');
@@ -139,8 +166,8 @@ select assert(not has_table_privilege('authenticated','public.hidden_gems','inse
 \echo ''
 \echo '4. The public count'
 --------------------------------------------------------------------------------
-select assert((select published from public.hidden_gem_stats) = 2, 'counts published gems only');
-select assert((select towns from public.hidden_gem_stats) = 1, 'and the towns they are in');
+select assert((select published from public.hidden_gem_stats) = 3, 'counts published gems only');
+select assert((select towns from public.hidden_gem_stats) = 2, 'and the towns they are in');
 
 \echo ''
 \echo 'ALL CHECKS PASSED'
