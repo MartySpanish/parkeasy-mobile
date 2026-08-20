@@ -26,11 +26,11 @@ insert into public.promo_redemptions (user_id, user_email, code, expires_at) val
 insert into public.rental_listings (id, title, lat, lng, status)
 values ('aaaaaaaa-0000-0000-0000-000000000001','Davitt Park', 54.58, -5.99, 'active');
 
-insert into public.hidden_gems (legacy_id, name, near, restriction, notes, lat, lng, land_type, status, town)
+insert into public.hidden_gems (legacy_id, name, near, restriction, notes, lat, lng, land_type, status, town, tags)
 values
-  ('66','LORAG centre kerbside','Ormeau','Free — no restrictions','Quiet after 6pm', 54.5800, -5.9200, 'public','published','belfast'),
-  ('36','Ormeau Embankment riverside','Ormeau','Free all day', null, 54.5810, -5.9210, 'public','published','belfast'),
-  ('568','Tesco Extra Car Park','Castle Mall','Free, customers only', null, 54.7200, -6.2100, 'private','draft','antrim');
+  ('66','LORAG centre kerbside','Ormeau','Free — no restrictions','Quiet after 6pm', 54.5800, -5.9200, 'public','published','belfast', array['lorag','lower ormeau','gasworks']::text[]),
+  ('36','Ormeau Embankment riverside','Ormeau','Free all day', null, 54.5810, -5.9210, 'public','published','belfast', array['ormeau embankment','lagan']::text[]),
+  ('568','Tesco Extra Car Park','Castle Mall','Free, customers only', null, 54.7200, -6.2100, 'private','draft','antrim', array['tesco','castle way']::text[]);
 
 --------------------------------------------------------------------------------
 \echo ''
@@ -145,9 +145,12 @@ select assert(
   (select count(*) from public.hidden_gems_teaser
     where not is_taster and (name is not null or notes is not null or restriction is not null)) = 0,
   'a non-taster teaser carries no name, notes or restriction');
+-- Tags ARE carried, for everyone. Withholding them cost 30 of the 84 gems their
+-- findability, and a gem a free user cannot search for never shows the locked
+-- card that sells Premium. They are matched against and never rendered.
 select assert(
-  (select count(*) from public.hidden_gems_teaser where not is_taster and tags <> '{}') = 0,
-  'nor its tags, which name the streets around it');
+  (select cardinality(tags) from public.hidden_gems_teaser where legacy_id = '66') > 0,
+  'a non-taster teaser DOES carry its tags, so it stays searchable');
 select assert(not exists (
   select 1 from information_schema.columns
    where table_name='hidden_gems_teaser' and column_name in ('photo_url','lat','lng')),
