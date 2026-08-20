@@ -225,12 +225,18 @@ h1, h2, h3 { letter-spacing: -0.02em; }
 @media (min-width: 640px)  { .pe-cat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .pe-cat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
-/* Work-with-ParkEasy: stacked on a phone, side by side from the same 640px
-   breakpoint the category grid uses, so the page changes shape in one place.
-   One column on a phone on purpose — these two cards carry a paragraph each,
-   and side by side at 420px they become two narrow columns of wrapped text. */
-.pe-work-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 640px) { .pe-work-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Work-with-ParkEasy.
+   auto-fit AND NOT A MEDIA QUERY, deliberately. A viewport breakpoint asks the
+   wrong question: this section now renders inside the results list, which is a
+   ~490px column even on a 1577px desktop. At 640px-of-VIEWPORT the cards went
+   two-up inside that column and the second one's paragraph was clipped
+   mid-sentence. auto-fit measures the space actually available, so the same
+   markup is one column in the list and two wherever there is genuinely room. */
+.pe-work-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
 
 /* The "what you can do here" strip under the hero. One column on a phone so
    each line reads as a sentence; two from 480px, where a single column starts

@@ -39,25 +39,21 @@ grant usage on schema public to anon, authenticated, service_role;
 -- cluster view's distance test. The real table has ~30 more columns and none of
 -- them matter here — but lat/lng do, and leaving them out made
 -- hotspot_clusters fail on a column the real table has had since June.
--- Premium entitlement. No subscriptions table exists: an unexpired row here IS
--- the subscription.
-create table if not exists public.promo_redemptions (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid references auth.users(id) on delete set null,
-  user_email  text,
-  code        text not null,
-  redeemed_at timestamptz not null default now(),
-  expires_at  timestamptz
-);
-
-create table if not exists public.spot_submissions (
-  id          uuid primary key default gen_random_uuid(),
-  near        text,
-  street      text,
-  restriction text,
-  status      text not null default 'new',
-  created_at  timestamptz not null default now()
-);
+-- NOTHING THAT A REAL MIGRATION CREATES BELONGS IN THIS FILE.
+--
+-- promo_redemptions and spot_submissions were both stubbed here for a while and
+-- both were a mistake: `create table if not exists` in the real migration then
+-- silently did nothing, and the policy two lines below it failed on a column
+-- the stub did not have. The stub looked like it was helping right up to the
+-- point it shadowed the thing under test.
+--
+-- Real tables come from real migrations — pass them in the chain:
+--   promo_redemptions  supabase/migrations/20260707_promo_codes.sql
+--   spot_submissions   supabase/migrations/20260720_spot_submissions.sql
+--
+-- This file is only for what Supabase itself provides and no migration ever
+-- creates: the auth schema, the roles, and a rental_listings stub thin enough
+-- not to pretend it is the real one.
 
 create table if not exists public.rental_listings (
   id      uuid primary key default gen_random_uuid(),
