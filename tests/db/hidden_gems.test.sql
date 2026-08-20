@@ -23,8 +23,8 @@ insert into public.promo_redemptions (user_id, user_email, code, expires_at) val
   (null,                                  'emailonly@example.test','STRIPE-SUB', now() + interval '30 days'),
   ('22222222-2222-2222-2222-222222222222','freeloader@example.test','PARKEZ', now() - interval '1 day');
 
-insert into public.rental_listings (id, title, lat, lng, status)
-values ('aaaaaaaa-0000-0000-0000-000000000001','Davitt Park', 54.58, -5.99, 'active');
+insert into public.rental_listings (id, title, address, lat, lng, status)
+values ('aaaaaaaa-0000-0000-0000-000000000001','Davitt Park','Davitt Park, Belfast', 54.58, -5.99, 'draft');
 
 insert into public.hidden_gems (legacy_id, name, near, restriction, notes, lat, lng, land_type, status, town, tags)
 values
