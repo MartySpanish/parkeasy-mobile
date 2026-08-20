@@ -20,3 +20,20 @@ begin
     alter table public.spot_submissions add column if not exists photo_url text;
   end if;
 end $$;
+
+--   promo_redemptions.user_id — declared NOT NULL by 20260707_promo_codes.sql
+--   and NULLABLE in production. It had to be: Premium bought through a Stripe
+--   payment link is linked by the email typed at checkout, and one of the ten
+--   live STRIPE-SUB rows has no auth user behind it. Somebody dropped the
+--   constraint by hand and did not write it down, so a database rebuilt from
+--   this repo would reject a paying subscriber.
+--
+--   This is the THIRD instance of the same problem, after spot_submissions
+--   .photo_url and the nine columns missing from listings_public. Worth saying
+--   plainly: supabase/migrations/* cannot currently rebuild this database.
+do $$
+begin
+  if to_regclass('public.promo_redemptions') is not null then
+    alter table public.promo_redemptions alter column user_id drop not null;
+  end if;
+end $$;

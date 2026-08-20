@@ -297,6 +297,25 @@ export default async function handler(req, res) {
     if (!id || !['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Bad request' });
     if (action === 'reject' && !(reason || '').trim()) return res.status(400).json({ error: 'Rejection requires a reason' });
 
+    // ── Driver photos of a spot ──
+    // Nothing shows until this runs: spot_photos_public selects only
+    // status='approved', and there is deliberately no update policy for
+    // authenticated users, so a driver cannot approve their own picture.
+    //
+    // A photo taken on a street sometimes has a number plate, a face or
+    // somebody's front door in it. That is the whole reason a person looks at
+    // every one before it goes on the map.
+    if (kind === 'spot_photo') {
+      const patch = action === 'approve'
+        ? { status: 'approved', reviewed_at: new Date().toISOString(), review_note: null }
+        : { status: 'rejected', reviewed_at: new Date().toISOString(), review_note: reason.trim() };
+      const up = await fetch(`${URL_}/rest/v1/spot_photos?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH', headers: svcH, body: JSON.stringify(patch),
+      });
+      if (!up.ok) return res.status(502).json({ error: 'Update failed', detail: await up.text().catch(() => '') });
+      return res.status(200).json({ ok: true, status: patch.status });
+    }
+
     // ── Community spot submissions ──
     // Approving is what makes a submitted spot public: spots_public selects
     // only status='approved'. Kept service-role-only and deliberately given no
@@ -409,6 +428,16 @@ export default async function handler(req, res) {
         }));
       }
     } catch { /* table may not exist yet */ }
+
+    // Driver photos waiting to be looked at. Kept small and newest-last so the
+    // oldest — the one somebody has been waiting on — is at the top.
+    let photoQueue = [];
+    try {
+      const pq = await fetch(
+        `${URL_}/rest/v1/spot_photos?status=eq.pending&select=id,spot_key,photo_url,caption,submitter_name,created_at&order=created_at.asc&limit=40`,
+        { headers: svcH });
+      if (pq.ok) photoQueue = await pq.json();
+    } catch { /* table may not exist until the migration runs */ }
 
     // Organization listings awaiting founder approval
     let pending = [];
@@ -611,6 +640,7 @@ export default async function handler(req, res) {
       ok: true, configured: true,
       env,
       hotspots,
+      photoQueue,
       pending,
       promos,
       spots,

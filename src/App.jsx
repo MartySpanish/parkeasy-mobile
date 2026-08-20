@@ -26,6 +26,8 @@ import { networkPartner, networkSites, nearestSiteDistance } from './data/networ
 import { holdCopy } from './data/spaceHold';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
+import { fetchGems, fetchGemStats } from './data/hiddenGems';
+import { fetchPhotosForSpot, submitSpotPhoto, spotKeyOf } from './data/spotPhotos';
 import ComparisonCard from './components/funnel/ComparisonCard';
 import WashAddOn from './components/wash/WashAddOn';
 import CancelSubscription from './components/account/CancelSubscription';
@@ -1094,7 +1096,7 @@ const BusinessModal = ({ onClose }) => {
 };
 
 // ── Pricing / Premium Modal ───────────────────────────────────────────────────
-const PricingModal = ({ isPremium, onClose, onRedeem }) => {
+const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
   const [showCodeBox, setShowCodeBox] = useState(false);
   const [code,        setCode]        = useState('');
   const [codeError,   setCodeError]   = useState(false);
@@ -1160,6 +1162,16 @@ const PricingModal = ({ isPremium, onClose, onRedeem }) => {
             <strong className="text-white">{ALL_SPOTS_STATS.length} parking spots across Northern Ireland</strong>,
             every one checked before it goes on the map.
           </p>
+          {/* The gem count, queried rather than hardcoded, so it moves the day
+              Marty publishes one instead of the next time somebody deploys.
+              Hidden entirely when the query has not answered — a missing number
+              is better than a stale one on the screen where somebody decides
+              whether to pay. */}
+          {gemCount != null && (
+            <p className="text-[#5BE7DA] text-[12.5px] mt-1">
+              Including <strong className="text-white">{gemCount} hidden gems</strong> you only see with Premium.
+            </p>
+          )}
           <p className="text-[#5BE7DA] text-sm mt-1.5">Unlock the spots only locals know — hand-picked free hidden gems + EV chargers across NI</p>
         </div>
         <div className="p-6 space-y-4">
@@ -1541,7 +1553,115 @@ const ReportSheet = ({ spot, onClose, onDone }) => {
   );
 };
 
-const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot, reportFlagged, onReported }) => {
+// "Add a photo" — a driver standing at the spot, showing the next one what it
+// looks like.
+//
+// THE GAP THIS FILLS. A gem is a sentence: "quiet residential street off the
+// Glen Road", "small lay-by most people miss". Enough to find the street, not
+// enough to recognise the spot when you pull up — which is exactly when the app
+// is being used, from a car, often in the dark. The upload path already existed
+// but only on the form that creates a NEW submission, so somebody standing at
+// an existing gem with a camera in their hand had nowhere to put the picture.
+//
+// capture="environment" so a phone opens the rear camera rather than the photo
+// library: the person using this is at the spot now, and the useful picture is
+// the one they have not taken yet.
+const AddPhotoSheet = ({ spot, user, onClose, onAdded }) => {
+  const [file, setFile]       = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [caption, setCaption] = useState('');
+  const [state, setState]     = useState('idle');
+  const [err, setErr]         = useState('');
+
+  const pick = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f); setErr('');
+    const r = new FileReader();
+    r.onload = () => setPreview(r.result);
+    r.readAsDataURL(f);
+  };
+
+  const send = async () => {
+    setState('sending'); setErr('');
+    const res = await submitSpotPhoto({
+      file, spot, caption, user, upload: uploadListingPhoto,
+      db: supabase, enabled: isSupabaseEnabled,
+    });
+    if (res.ok) { setState('done'); onAdded?.(); setTimeout(onClose, 1600); }
+    else { setErr(res.error); setState('idle'); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.7)'}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] px-5 pt-4 pb-8 animate-fade-in-up"
+        style={{maxWidth:680,width:'100%',margin:'0 auto',background:'var(--sheet)',borderTop:'1px solid var(--hairline)'}}>
+        <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-3"/>
+        {state === 'done' ? (
+          <div className="py-6 text-center">
+            <p className="font-display font-extrabold text-[17px] text-[#EAF1F8]">Thanks &mdash; that&rsquo;s really useful.</p>
+            <p className="text-[13px] text-[#cdd9e8] mt-1.5 leading-relaxed">
+              We&rsquo;ll check it and put it on the spot. Photos help more than anything else we ask for.
+            </p>
+          </div>
+        ) : !user ? (
+          <div className="py-6 text-center">
+            <p className="font-display font-extrabold text-[17px] text-[#EAF1F8]">Sign in to add a photo</p>
+            <p className="text-[13px] text-[#cdd9e8] mt-1.5 leading-relaxed">
+              So we can credit it to you, and come back to you if there&rsquo;s a question.
+            </p>
+            <button onClick={onClose} className="w-full mt-4 py-3 rounded-2xl font-bold text-[13px] text-[rgba(234,241,248,0.6)]">Close</button>
+          </div>
+        ) : (
+          <>
+            <h3 className="font-display font-extrabold text-[17px] text-[#EAF1F8]">Show the next driver what it looks like</h3>
+            <p className="text-[12.5px] text-[rgba(234,241,248,0.55)] mt-1 leading-relaxed">
+              A photo of {spot.name} &mdash; the entrance, the bay, or the sign that says when you&rsquo;d be ticketed.
+            </p>
+
+            <label className="block mt-3 rounded-2xl overflow-hidden cursor-pointer"
+              style={{border:'1px dashed rgba(91,231,218,0.45)', background:'rgba(46,211,198,0.06)'}}>
+              {preview
+                ? <img src={preview} alt="" className="w-full h-44 object-cover"/>
+                : <span className="flex flex-col items-center justify-center h-32 gap-1.5">
+                    <Camera size={22} className="text-[#5BE7DA]"/>
+                    <span className="text-[13px] font-bold text-[#EAF1F8]">Take or choose a photo</span>
+                  </span>}
+              <input type="file" accept="image/*" capture="environment" onChange={pick} className="hidden"/>
+            </label>
+
+            <input value={caption} onChange={e=>setCaption(e.target.value)} maxLength={140}
+              placeholder="One line, if it helps — e.g. entrance is round the back"
+              aria-label="Caption, optional"
+              className="w-full mt-2.5 bg-white/[0.06] border border-white/12 rounded-xl px-3 py-2.5 text-[13px] text-[#EAF1F8] placeholder-[rgba(234,241,248,0.4)] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/50"/>
+
+            {err && (
+              <p className="mt-2.5 text-[12px] text-[#FFD27A] leading-relaxed flex items-start gap-1.5">
+                <AlertCircle size={13} className="mt-0.5 flex-shrink-0"/><span>{err}</span>
+              </p>
+            )}
+
+            {/* Said before they send it, not after. A photo taken on a street
+                sometimes has a plate or a face in it, and somebody should know
+                a person will look at it. */}
+            <p className="text-[11px] text-[rgba(234,241,248,0.45)] mt-2.5 leading-relaxed">
+              We check every photo before it goes on the map. Try to keep number plates and
+              faces out of the shot.
+            </p>
+
+            <button onClick={send} disabled={!file || state === 'sending'}
+              className="w-full mt-3 py-3.5 rounded-2xl font-display font-bold text-[15px] text-[#06231f] btn-teal active:scale-95 transition disabled:opacity-50">
+              {state === 'sending' ? 'Sending…' : 'Send photo'}
+            </button>
+            <button onClick={onClose} className="w-full mt-2 py-3 rounded-2xl font-bold text-[13px] text-[rgba(234,241,248,0.6)]">Cancel</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot, reportFlagged, onReported, user }) => {
   // Featured Partner: a local business within its radius of this spot. Same
   // contextual placement as on bookable listings — community spots are where
   // the traffic is, so the partner is visible while supply is still growing.
@@ -1568,12 +1688,29 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   }, [spot.id]);
   const [shareDone,setShareDone]=useState(false);
   const [reporting,setReporting]=useState(false);
+  // Driver photos of this spot, approved. Loaded when the sheet opens rather
+  // than with the list — a request per card on a 40-row list is 40 requests for
+  // pictures nobody has scrolled to.
+  const [addingPhoto,setAddingPhoto]=useState(false);
+  const [driverPhotos,setDriverPhotos]=useState([]);
+  const loadPhotos = useCallback(() => {
+    if (!spot) return;
+    fetchPhotosForSpot(spotKeyOf(spot), isSupabaseEnabled ? supabase : null).then(setDriverPhotos);
+  }, [spot?.id, spot?.listingId]);
+  useEffect(() => { setDriverPhotos([]); loadPhotos(); }, [loadPhotos]);
   // When a submitter supplied a photo of the space, that is far more useful at
   // the top than a map: it answers "will I recognise this when I get there".
   // The map stays one tap away rather than being replaced.
   const [showMap,setShowMap]=useState(false);
   const [photoBroken,setPhotoBroken]=useState(false);
-  const hasPhoto = !!spot?.photo && !photoBroken;
+  // The spot's own photo (from whoever submitted it) plus every approved photo
+  // drivers have added since, oldest first. One list, so the header, the strip
+  // and the count can never disagree about how many there are.
+  const allPhotos = useMemo(() => [
+    ...(spot?.photo ? [{ id: 'own', photo_url: spot.photo, submitter_name: spot.by, caption: null }] : []),
+    ...driverPhotos,
+  ], [spot?.photo, spot?.by, driverPhotos]);
+  const hasPhoto = allPhotos.length > 0 && !photoBroken;
   const [confirmedAt,setConfirmedAt]=useState(()=> spot ? (ls.get('pe_confirmed_at',{})[spot.id]||null) : null);
   if (!spot) return null;
   const confirmCount=(spot.votes||0)+(voted?1:0);
@@ -1607,13 +1744,35 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               teaser card, so no approximate pin is shown as exact. */}
           {hasPhoto && !showMap ? (
             <>
-              <img src={spot.photo} alt={`Photo of ${spot.name}`} loading="lazy"
-                onError={()=>setPhotoBroken(true)}
-                className="w-full h-full object-cover"/>
+              {/* Several photos of one spot are the normal case now — the
+                  entrance, the bay and the sign are three pictures and three
+                  people take them. Swipeable, oldest first, so the original
+                  stays the one you see when the sheet opens. */}
+              {allPhotos.length === 1 ? (
+                <img src={allPhotos[0].photo_url} alt={`Photo of ${spot.name}`} loading="lazy"
+                  onError={()=>setPhotoBroken(true)}
+                  className="w-full h-full object-cover"/>
+              ) : (
+                <div className="flex h-full overflow-x-auto no-scrollbar snap-x snap-mandatory">
+                  {allPhotos.map((ph, i) => (
+                    <img key={ph.id || i} src={ph.photo_url} loading={i ? 'lazy' : 'eager'}
+                      alt={ph.caption ? `${spot.name} — ${ph.caption}` : `Photo ${i + 1} of ${spot.name}`}
+                      className="h-full w-full flex-shrink-0 object-cover snap-start"/>
+                  ))}
+                </div>
+              )}
               <div className="absolute inset-x-0 bottom-0 h-16 pointer-events-none" style={{background:'linear-gradient(to top, rgba(6,11,20,0.75), transparent)'}}/>
-              {spot.by && (
+              {allPhotos[0]?.submitter_name && (
                 <span className="absolute left-3 bottom-2.5 z-[600] flex items-center gap-1 text-[11px] text-white/80">
-                  <Camera size={11}/> Photo by {spot.by}
+                  <Camera size={11}/> Photo by {allPhotos[0].submitter_name}
+                </span>
+              )}
+              {/* ABOVE the Map toggle, not beside it. Both wanted the
+                  bottom-right corner and the badge lost — it rendered
+                  underneath, half of it hidden behind "Map". */}
+              {allPhotos.length > 1 && (
+                <span className="absolute right-3 bottom-11 z-[600] text-[10px] font-bold px-2 py-1 rounded-full bg-black/60 text-white">
+                  swipe · {allPhotos.length} photos
                 </span>
               )}
             </>
@@ -1826,6 +1985,18 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
                   mail client, and asks somebody on a wet street to write a
                   paragraph. The old link is kept as the fallback for a build
                   with no database behind it. */}
+              {/* THE ASK THAT PAYS BACK MOST. A gem is a sentence; a photo is
+                  the answer to "is this it?" from a car in the dark. Sitting
+                  beside Still here / Changed because it is the same act —
+                  somebody who is AT the spot telling the next person what they
+                  will find. */}
+              {isSupabaseEnabled && (
+                <button onClick={()=>setAddingPhoto(true)}
+                  aria-label={allPhotos.length ? 'Add another photo of this spot' : 'Add a photo of this spot'}
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold py-2.5 px-3 rounded-xl border border-white/15 text-[#5BE7DA] hover:border-[#5BE7DA]/50 transition">
+                  <Camera size={13}/>{allPhotos.length ? 'Add' : 'Photo'}
+                </button>
+              )}
               {isSupabaseEnabled ? (
                 <button onClick={()=>setReporting(true)}
                   className="flex items-center justify-center text-xs font-semibold py-2.5 px-3 rounded-xl border border-white/15 text-[rgba(234,241,248,0.6)] hover:text-red-300 hover:border-red-400/40 transition">
@@ -1843,6 +2014,9 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
         </div>
       </div>
       {reporting && <ReportSheet spot={spot} onClose={()=>setReporting(false)} onDone={onReported}/>}
+      {addingPhoto && (
+        <AddPhotoSheet spot={spot} user={user} onClose={()=>setAddingPhoto(false)} onAdded={loadPhotos}/>
+      )}
     </div>
   );
 };
@@ -2434,7 +2608,10 @@ const walkFromMiles = (mi) => {
 // exact location or notes.
 const isGated = (spot) => {
   if (spot.mine) return false;                                         // community submissions
-  if (TASTER_GEM_IDS.has(spot.id)) return false;                       // 5 free taster gems, app-wide
+  // is_taster comes off the database row now; TASTER_GEM_IDS is the fallback
+  // for the bundled list, and for a session where the gem query failed.
+  if (spot.isTaster === true) return false;                            // taster, per the database
+  if (spot.isTaster === undefined && TASTER_GEM_IDS.has(spot.id)) return false;  // bundled fallback
   if (spot.badge === 'hidden_gem') return true;                        // every other hidden gem is Premium
   if (spot.price) return false;                                        // paid to park → free to view
   if (['official','timed','paid'].includes(spot.badge)) return false;  // car parks, P&R, on-street
@@ -6663,8 +6840,9 @@ const AdminOverlay = ({ onClose }) => {
   const act = async (action, id, kind) => {
     let reason;
     if (action === 'reject') {
-      reason = window.prompt(kind === 'spot'
-        ? 'Why not? This is emailed to the person who sent it in:'
+      reason = window.prompt(
+        kind === 'spot'       ? 'Why not? This is emailed to the person who sent it in:'
+        : kind === 'spot_photo' ? 'Why not? (Not emailed — photos are rejected quietly.)'
         : 'Reason for rejection (sent to the host by email):');
       if (!reason || !reason.trim()) return;
     }
@@ -6841,6 +7019,45 @@ const AdminOverlay = ({ onClose }) => {
                 </div>
               )}
               <WashWeek/>
+              {d.photoQueue?.length > 0 && (
+                <div>
+                  <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">
+                    Photos waiting ({d.photoQueue.length})
+                  </h3>
+                  {/* THE ONE THING TO LOOK FOR. A photo taken on a street will
+                      sometimes have a number plate, a face or somebody's front
+                      door in it — that is why a person sees every one before it
+                      goes on the map, and why the image is shown big enough to
+                      actually check rather than as a thumbnail. */}
+                  <p className="text-[11.5px] text-[rgba(234,241,248,0.5)] leading-relaxed mb-2">
+                    Check each one for number plates, faces and front doors before approving.
+                  </p>
+                  <div className="space-y-2">
+                    {d.photoQueue.map(ph => (
+                      <div key={ph.id} className="glass rounded-2xl overflow-hidden">
+                        <img src={ph.photo_url} alt="" className="w-full h-48 object-cover"/>
+                        <div className="p-3">
+                          <p className="text-[12.5px] text-[#EAF1F8] font-semibold">
+                            Spot {ph.spot_key}
+                            {ph.submitter_name && <span className="text-[rgba(234,241,248,0.5)] font-normal"> · {ph.submitter_name}</span>}
+                          </p>
+                          {ph.caption && <p className="text-[12px] text-[#cdd9e8] mt-0.5">{ph.caption}</p>}
+                          <div className="flex gap-2 mt-2.5">
+                            <button onClick={()=>act('approve', ph.id, 'spot_photo')} disabled={acting===ph.id}
+                              className="flex-1 py-2 rounded-xl text-[12.5px] font-bold text-[#06231f] btn-teal active:scale-95 transition disabled:opacity-50">
+                              Approve
+                            </button>
+                            <button onClick={()=>act('reject', ph.id, 'spot_photo')} disabled={acting===ph.id}
+                              className="flex-1 py-2 rounded-xl text-[12.5px] font-bold text-red-300 bg-red-400/10 border border-red-400/35 active:scale-95 transition disabled:opacity-50">
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {d.hotspots && (
                 <div>
                   <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">Hotspots</h3>
@@ -7923,6 +8140,40 @@ export default function App() {
   const loadReportCounts = useCallback(() => { fetchReportCounts().then(setReportCounts); }, []);
   useEffect(() => { loadReportCounts(); }, [loadReportCounts]);
 
+  // ── HIDDEN GEMS, FROM THE DATABASE ───────────────────────────────────────
+  // The 89 curated free spots now live in public.hidden_gems, so they can be
+  // published, retired, counted and joined without a deploy — and so RLS, not
+  // the UI, decides who sees a kerb-accurate coordinate.
+  //
+  // `gemSource` says where the list on screen came from, and is not cosmetic:
+  //   'db'      a subscriber read the real rows
+  //   'teaser'  a free user read areas and the five tasters
+  //   'none'    the query failed, and the HARDCODED list is standing in
+  //
+  // The fallback exists because gems are the paid product on a live app. A
+  // failed request must not silently remove 89 spots from a subscriber's map.
+  // It is temporary: once this path has proven itself the hardcoded copies come
+  // out of the bundle, which is what actually stops a non-subscriber reading
+  // every gem's exact location out of devtools.
+  const [dbGems,    setDbGems]    = useState(null);   // null = not loaded yet
+  const [gemSource, setGemSource] = useState('loading');
+  const [gemStats,  setGemStats]  = useState(null);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const { spots, source, error } = await fetchGems();
+      if (!live) return;
+      if (source === 'none' || !spots.length) {
+        if (error) console.warn('hidden gems: falling back to the bundled list —', error);
+        setDbGems(null); setGemSource('none');
+      } else {
+        setDbGems(spots); setGemSource(source);
+      }
+    })();
+    fetchGemStats().then(st => { if (live && st) setGemStats(st); });
+    return () => { live = false; };
+  }, [isPremium]);   // re-read on upgrade, so a new subscriber gets real pins
+
   const [rentalSpots, setRentalSpots] = useState([]);
   useEffect(() => {
     let live = true;
@@ -8004,6 +8255,19 @@ export default function App() {
     return () => { live = false; };
   }, []);
 
+  // Bundled spots with the hardcoded gems swapped out for the database ones.
+  // ONE place does the substitution, so citySpots and networkSpots can never
+  // disagree about which gems exist — the failure that would show a gem on the
+  // map and not in the list.
+  const withDbGems = useCallback((bundled) => {
+    if (!dbGems) return bundled;                       // fallback: bundle as-is
+    const ids = new Set(dbGems.map(g => String(g.id)));
+    return [
+      ...bundled.filter(s => s.badge !== 'hidden_gem' || !ids.has(String(s.id))),
+      ...dbGems,
+    ];
+  }, [dbGems]);
+
   const citySpots   = useMemo(
     () => {
       // A submitter's own copy is kept locally so their spot shows immediately
@@ -8014,7 +8278,8 @@ export default function App() {
         ...userSpots.filter(s => s.city === currentCity.id && !approvedKeys.has(`${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`)),
         ...approvedSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
         ...rentalSpots.filter(s => nearestCity(s.lat, s.lng)?.id === currentCity.id),
-        ...getCitySpots(currentCity.id),
+        ...withDbGems(getCitySpots(currentCity.id))
+            .filter(s => s.badge !== 'hidden_gem' || !s.town || s.town === currentCity.id),
       ];
       // Attach the live count here rather than threading a prop through every
       // card, row, pin and sheet — they all already receive the spot.
@@ -8030,10 +8295,16 @@ export default function App() {
           : s;
       });
     },
-    [userSpots, approvedSpots, rentalSpots, currentCity.id, occupancy, heading, capacity]
+    [userSpots, approvedSpots, rentalSpots, currentCity.id, occupancy, heading, capacity, withDbGems]
   );
   // Everything addressable by id (used by Saved, which can hold community spots too).
-  const allSpots    = useMemo(() => [...userSpots, ...Object.values(CITY_SPOTS).flat()], [userSpots]);
+  // Saved spots resolve by id through this, so the database gems have to be in
+  // it too — otherwise a subscriber's saved gem quietly stops resolving the day
+  // the source switches.
+  const allSpots    = useMemo(
+    () => withDbGems([...userSpots, ...Object.values(CITY_SPOTS).flat()]),
+    [userSpots, withDbGems],
+  );
 
   // The whole network — every town, same enrichment citySpots gets. Search runs
   // off this rather than one town's slice. The coverage IS the product, and
@@ -8045,7 +8316,7 @@ export default function App() {
       ...userSpots.filter(s => !approvedKeys.has(`${s.lat?.toFixed(4)},${s.lng?.toFixed(4)}`)),
       ...approvedSpots,
       ...rentalSpots,
-      ...ALL_SPOTS,
+      ...withDbGems(ALL_SPOTS),
     ];
     return all.map(s => {
       const n = occupancy[String(s.id)] || 0;
@@ -8056,7 +8327,7 @@ export default function App() {
             ...(c ? { spaces: c, spacesEstimated: true } : {}) }
         : s;
     });
-  }, [userSpots, approvedSpots, rentalSpots, occupancy, heading, capacity]);
+  }, [userSpots, approvedSpots, rentalSpots, occupancy, heading, capacity, withDbGems]);
 
   // The phone's back button closes what's open instead of quitting the app.
   // Ordered outermost first: the LAST open one is the topmost on screen, and
@@ -8469,7 +8740,7 @@ export default function App() {
       }} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
         onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}
         bookableSpots={rentalSpots} onOpenSpot={openSpot}
-        reportFlagged={reportFlag(reportCounts, detailSpot.id)} onReported={loadReportCounts}/>}
+        reportFlagged={reportFlag(reportCounts, detailSpot.id)} onReported={loadReportCounts} user={user}/>}
       {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
       {showCorporate && (
@@ -8509,7 +8780,7 @@ export default function App() {
         </div>
       )}
       {showBizModal && <BusinessModal onClose={()=>setShowBizModal(false)}/>}
-      {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)} onRedeem={redeemVipCode}/>}
+      {showPricing  && <PricingModal isPremium={isPremium} onClose={()=>setShowPricing(false)} onRedeem={redeemVipCode} gemCount={gemStats?.published ?? null}/>}
       {rewardUntil && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[210] flex items-center justify-center p-4" onClick={()=>setRewardUntil(null)}>
           <div onClick={e=>e.stopPropagation()} className="bg-[#0e1a2c] rounded-3xl w-full max-w-sm p-8 text-center space-y-4 shadow-2xl">

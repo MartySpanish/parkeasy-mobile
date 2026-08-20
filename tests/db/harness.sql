@@ -18,6 +18,14 @@ language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
 
+-- auth.jwt() returns the whole claims object. Needed because Premium can be
+-- held against an email with no linked user_id — there is one such live row —
+-- so has_premium() has to read the email claim, not just the subject.
+create or replace function auth.jwt() returns jsonb
+language sql stable as $$
+  select coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb);
+$$;
+
 -- Supabase's roles, so grant/revoke in the migration resolve.
 do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
@@ -31,6 +39,22 @@ grant usage on schema public to anon, authenticated, service_role;
 -- cluster view's distance test. The real table has ~30 more columns and none of
 -- them matter here — but lat/lng do, and leaving them out made
 -- hotspot_clusters fail on a column the real table has had since June.
+-- NOTHING THAT A REAL MIGRATION CREATES BELONGS IN THIS FILE.
+--
+-- promo_redemptions and spot_submissions were both stubbed here for a while and
+-- both were a mistake: `create table if not exists` in the real migration then
+-- silently did nothing, and the policy two lines below it failed on a column
+-- the stub did not have. The stub looked like it was helping right up to the
+-- point it shadowed the thing under test.
+--
+-- Real tables come from real migrations — pass them in the chain:
+--   promo_redemptions  supabase/migrations/20260707_promo_codes.sql
+--   spot_submissions   supabase/migrations/20260720_spot_submissions.sql
+--
+-- This file is only for what Supabase itself provides and no migration ever
+-- creates: the auth schema, the roles, and a rental_listings stub thin enough
+-- not to pretend it is the real one.
+
 create table if not exists public.rental_listings (
   id      uuid primary key default gen_random_uuid(),
   title   text not null,
