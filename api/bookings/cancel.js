@@ -7,6 +7,7 @@
 // application fee, so the accounting stays clean. Amounts in integer pence.
 import Stripe from 'stripe';
 import { hostEmails } from '../_hostEmails.js';
+import { bccFor } from '../_bcc.js';
 
 const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
 function applyCors(req, res) {
@@ -151,14 +152,67 @@ export default async function handler(req, res) {
           ${booking.vehicle_reg ? `<p style="margin:0 0 10px">Vehicle: <strong>${booking.vehicle_reg}</strong> — this car is no longer expected.</p>` : ''}
           <p style="margin:16px 0 0;color:#555;font-size:13px">You don't need to do anything. This is just so the space isn't held for a car that isn't coming.</p>
         </div>`;
-        const send = (to) => fetch('https://api.resend.com/emails', {
+        const send = (to, subj, body, bcc) => fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { Authorization: `Bearer ${KEY_R}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+          body: JSON.stringify({ from: FROM, to: [to], bcc, subject: subj, html: body }),
         }).catch(() => {});
+
         const targets = hostEmails(listing);
         if (TO_ADMIN) targets.push(TO_ADMIN);
-        await Promise.all(targets.map(send));
+        const jobs = targets.map(to => send(to, subject, html));
+
+        // ── AND TELL THE DRIVER ──────────────────────────────────────────
+        // This whole block notified the host, the co-host and the admin, and
+        // never the one person whose money had just moved. booking.driver_email
+        // sat in the row the entire time — select=* — and was never read.
+        //
+        // The silence was worst in exactly the case that matters most. When a
+        // HOST cancels, the driver has done nothing wrong, has already paid,
+        // and finds out either from a Stripe line on their statement days later
+        // or by driving to a space that is no longer theirs. That is the same
+        // failure as the locked gates on 8 August, pointed the other way.
+        //
+        // Three outcomes, three different things to say, because "your booking
+        // was cancelled" answers none of the questions a driver actually has:
+        // was it me or them, am I getting my money back, and how much.
+        const refundLine = (() => {
+          const amt = `£${(refundPence / 100).toFixed(2)}`;
+          if (isHost) {
+            return `<p style="margin:0 0 10px">You have been refunded <strong>${amt}</strong> in full, including the booking fee. Refunds usually land back on your card within 5–10 working days.</p>`;
+          }
+          if (refundPence <= 0) {
+            return `<p style="margin:0 0 10px">This cancellation was after the free-cancellation deadline, so <strong>no refund is due</strong> — the space had been held for you and the host still receives their share.</p>`;
+          }
+          if (refundPence >= booking.amount_total_pence) {
+            return `<p style="margin:0 0 10px">You have been refunded <strong>${amt}</strong> in full. Refunds usually land back on your card within 5–10 working days.</p>`;
+          }
+          const fee = `£${((booking.amount_total_pence - refundPence) / 100).toFixed(2)}`;
+          return `<p style="margin:0 0 10px">You have been refunded <strong>${amt}</strong> — the parking price in full. The ${fee} booking fee is non-refundable. Refunds usually land back on your card within 5–10 working days.</p>`;
+        })();
+
+        // The subject has to survive a lock screen. "Cancelled by the host" is
+        // the fact that changes what the driver does next; their own
+        // cancellation is something they already know about.
+        const driverSubject = isHost
+          ? `The host cancelled your parking — ${listing?.title || 'your space'}, ${when}`
+          : `Your parking is cancelled — ${listing?.title || 'your space'}, ${when}`;
+
+        const driverHtml = `<div style="font-family:system-ui,sans-serif;max-width:520px">
+          <h2 style="margin:0 0 12px">${isHost ? 'Your booking was cancelled by the host' : 'Your booking is cancelled'}</h2>
+          <p style="margin:0 0 10px"><strong>${listing?.title || 'Your space'}</strong><br>${when}</p>
+          ${isHost ? '<p style="margin:0 0 10px">You do not need to do anything, and this is not your fault — the host has withdrawn the space.</p>' : ''}
+          ${refundLine}
+          ${booking.vehicle_reg ? `<p style="margin:0 0 10px">Vehicle: <strong>${booking.vehicle_reg}</strong></p>` : ''}
+          ${isHost ? '<p style="margin:16px 0 0"><a href="https://parkeasy.uk" style="color:#0f766e;font-weight:bold">Find another space on ParkEasy →</a></p>' : ''}
+          <p style="margin:16px 0 0;color:#555;font-size:13px">Any questions, just reply to this email.</p>
+        </div>`;
+
+        if (booking.driver_email) {
+          jobs.push(send(booking.driver_email, driverSubject, driverHtml, bccFor(booking.driver_email)));
+        }
+
+        await Promise.all(jobs);
       }
     } catch (e) {
       // Logged, never surfaced. The cancellation itself already succeeded.
