@@ -42,6 +42,23 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  spot photos            $(grep -c 'PASS  ' /tmp/pe-t4.log) checks" \
     || { fail=1; echo "  spot photos            FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t4.log; }
 
+  tests/db/run.sh supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  tests/db/hidden_gems.test.sql                     > /tmp/pe-t5.log 2>&1 \
+    && echo "  hidden gems            $(grep -c 'PASS  ' /tmp/pe-t5.log) checks" \
+    || { fail=1; echo "  hidden gems            FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t5.log; }
+
+  # The seed test needs the seed on disk at the path the test \i-includes.
+  cp supabase/migrations/20260820_hidden_gems_seed.sql /tmp/pe-seed.sql
+  tests/db/run.sh supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  supabase/migrations/20260820_hidden_gems_seed.sql \
+                  tests/db/hidden_gems_seed.test.sql                > /tmp/pe-t6.log 2>&1 \
+    && echo "  hidden gems seed       $(grep -c 'PASS  ' /tmp/pe-t6.log) checks" \
+    || { fail=1; echo "  hidden gems seed       FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t6.log; }
+
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
 else
