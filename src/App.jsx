@@ -2933,7 +2933,20 @@ const RequestParking = ({ geo, cityName }) => {
   );
 };
 
-const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39, 44];
+// Where a partner card sits in the results list. The gaps widen then tighten
+// on purpose: adverts near the top are the ones people actually see, and three
+// in a row anywhere turns a list of parking spots into a column of adverts.
+//
+// ONE SLOT PER PARTNER, ALWAYS. On the landing screen the top partner gets the
+// featured block, but during a SEARCH there is no featured block — so all of
+// them need a slot here. restPartners is sliced to this array's length, which
+// means an extra partner with no extra slot simply does not render. No error,
+// no warning, the last one in the priority order is gone. It has happened at
+// four, five, six, seven, eight and ten partners.
+//
+// Eleventh added at 49 for BFAST, five cards after the tenth, same spacing as
+// the gap before it.
+const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39, 44, 49];
 
 
 const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
@@ -3067,13 +3080,12 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   // grows in blocks instead. The COUNT is always the real total; only how many
   // cards are painted is paged, which is why there's a "Show more" rather than
   // a silently truncated list.
-  // 48, not 40. The tenth partner needed a tenth slot, and the paragraph above
-  // PARTNER_SLOTS says what to do at that point: a bigger page, not thinner
-  // gaps. Every existing gap is untouched and the new slot sits at 44, five
-  // cards after the ninth — so the end of the list still reads as a list with
-  // adverts in it rather than a column of adverts. Eight more cards before
-  // "show more" costs nothing; three-in-a-row would have cost the format.
-  const PAGE = 48;
+  // DERIVED FROM THE LAST SLOT, not typed. This was 40, then 48, each time
+  // hand-edited after a partner was added — and a page that ends before the
+  // last slot silently drops that partner's card just as surely as a missing
+  // slot does. Five cards after the final advert, so the list still ends
+  // reading as a list rather than on an advert.
+  const PAGE = PARTNER_SLOTS[PARTNER_SLOTS.length - 1] + 5;
   const [shown, setShown] = useState(PAGE);
   useEffect(() => { setShown(PAGE); }, [geo, query, badgeFilter, sortBy, evOnly, cityName]);
   const visibleSpots = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
