@@ -234,11 +234,17 @@ const SPOTS = [
   // Atlas at 7pm needs to know the street works when the Mill's own gates may
   // not.
   //
-  // "About fifteen" is an ESTIMATE off two partial photos, not a count: the
-  // runs visible hold roughly eight each and neither photo shows the full
-  // street. Said as an estimate for the same reason id 300 says "about six to
-  // eight" — a driver can plan around a hedge and cannot plan around a wrong
-  // number. Nobody has walked it with a clicker.
+  // CAPACITY IS MARTY'S NUMBER NOW, not mine. I estimated "about fifteen" off
+  // two partial photos and said so; he knows the street and puts it at 25 to
+  // 30. His figure replaces the guess — that is what local knowledge is for,
+  // and it is the same provenance as the other 745 spots in the dataset.
+  // spaces holds 27, the middle of his range, and the notes carry the range
+  // itself so nobody reads the single number as a survey.
+  //
+  // BOTH PHOTOS, because one is not enough here. The bays run in two stretches
+  // on opposite sides of the street; a photo of one looks like the whole thing
+  // and is half of it. photo carries the first for the hero and the thumbnail,
+  // photos carries both for the gallery.
   //
   // Free, confirmed by Marty 17 Aug. It went in badged 'official' while the
   // tariff was unknown, because the two errors are not symmetrical — telling
@@ -257,7 +263,7 @@ const SPOTS = [
   // the way Conway Mill was.
   { id:306, name:'Andersonstown Leisure Centre car park', near:'130 Andersonstown Road, beside Cut N Edge Barbers', tags:['andersonstown','andersonstown road','leisure centre','west belfast','bt11','aqua park','swimming'], badge:'official', dist:0, walk:'Right there', restriction:'Centre car park — check the signs on arrival', notes:"Roughly 35 spaces plus 10 accessible bays at Andersonstown Leisure Centre, on the Andersonstown Road itself. Right beside the shops at 130-134, so it is the closest parking to that run of the road. It is the centre's own car park — check the signage for who it is for and how long you can stay.", lat:54.573287, lng:-5.988669, by:'ParkEasy', votes:0, photo:null, price:null, spaces:35 },
   { id:307, name:"Andersonstown Social Club (the PD) car park", near:'South Link, just off the Andersonstown Road', tags:['andersonstown','south link','the pd','andersonstown social club','west belfast','bt11'], badge:'official', dist:0.2, walk:'3 min', restriction:'Club car park — check the signs on arrival', notes:"Parking behind the Andersonstown Social Club, known locally as the PD, a couple of minutes off the Andersonstown Road. Handy for the shops and the leisure centre. It belongs to the club, so check the signage before you leave the car — a club car park is not the same as a public one.", lat:54.5751, lng:-5.988548, by:'ParkEasy', votes:0, photo:null, price:null, spaces:null },
-  { id:305, name:'Conway Mill car park & Conway Street bays', near:'Conway Street, off the Falls Road', tags:['conway mill','conway street','falls road','lower falls','west belfast','atlas gym','bfast','langka','muay thai','free parking','on-street','city centre walk'], badge:'free', dist:0.88, walk:'18 min', restriction:'Free — no restrictions signed', notes:'Free parking on Conway Street itself, just off the Falls Road: about fifteen marked bays along the street outside the Mill, no machine and nothing signed on them. Conway Mill has its own free car park through the gates as well, serving the units inside including Atlas Gym and the BFAST office. Handy for the Lower Falls, and about a 20-minute walk into the city centre.', lat:54.599499, lng:-5.951222, by:'ParkEasy', votes:0, photo:null, price:null, spaces:15 },
+  { id:305, name:'Conway Mill car park & Conway Street bays', near:'Conway Street, off the Falls Road', tags:['conway mill','conway street','falls road','lower falls','west belfast','atlas gym','bfast','langka','muay thai','free parking','on-street','city centre walk'], badge:'free', dist:0.88, walk:'18 min', restriction:'Free — no restrictions signed', notes:'Free parking on Conway Street itself, just off the Falls Road: between 25 and 30 marked bays running in two stretches along the street outside the Mill, no machine and nothing signed on them. Conway Mill has its own free car park through the gates as well, serving the units inside including Atlas Gym and the BFAST office. Handy for the Lower Falls, and about a 20-minute walk into the city centre.', lat:54.599499, lng:-5.951222, by:'ParkEasy', votes:0, photo:'https://parkeasy.uk/conwaymill/1-bays.jpg', photos:['https://parkeasy.uk/conwaymill/1-bays.jpg','https://parkeasy.uk/conwaymill/2-bays-north.jpg'], price:null, spaces:27 },
   { id:66, name:'LORAG centre / Shaftesbury Rec kerbside', near:'Lower Ormeau / Gasworks', tags:['lorag','shaftesbury','lower ormeau','gasworks','south belfast','free parking','city centre walk'], badge:'hidden_gem', dist:0.30, walk:'8 min', restriction:'Free all day', notes:'Founder pick: free kerbside and community-centre parking around LORAG on the Lower Ormeau, beside the Gasworks. Park up and walk into the city centre in minutes — ideal on match and gig days.', lat:54.5900, lng:-5.9235, by:'ParkEasy', votes:0, photo:null, price:null, spaces:null, premium:true },
   { id:67, name:'Kennedy Centre car park', near:'Falls Road', tags:['kennedy centre','kennedy center','falls road','west belfast','ev charging','andersonstown','shopping centre','free parking'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Free customer car park at the Kennedy Centre on the Falls Road with EV charging points — a handy West Belfast charging stop while you shop. Community estimate on charger speed and availability.', lat:54.5943, lng:-5.9808, by:'WestBelfastLocal', votes:0, photo:null, price:null, spaces:400, ev:{available:true, ports:2, speed:'22kW'}, premium:true },
   { id:68, name:'Olympia Leisure Centre car park', near:'Olympia / Windsor Park', tags:['olympia','olympia leisure centre','boucher road','windsor park','national football stadium','linfield','south belfast','free parking','leisure centre','swimming'], badge:'free', dist:0.00, walk:'Right there', restriction:'Free — centre hours', notes:'Big free car park at Olympia Leisure Centre on Boucher Road, right beside Windsor Park. Plenty of room most of the day for the pool and gym. Fills fast before Northern Ireland and Linfield home games — get there early on match days or you will be circling Boucher.', lat:54.5817, lng:-5.9487, by:'ParkEasy', votes:0, photo:null, price:null, spaces:250 },
@@ -1724,13 +1730,24 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   // The map stays one tap away rather than being replaced.
   const [showMap,setShowMap]=useState(false);
   const [photoBroken,setPhotoBroken]=useState(false);
+  const [lightbox,setLightbox]=useState(null);   // index being viewed full-screen, or null
   // The spot's own photo (from whoever submitted it) plus every approved photo
   // drivers have added since, oldest first. One list, so the header, the strip
   // and the count can never disagree about how many there are.
-  const allPhotos = useMemo(() => [
-    ...(spot?.photo ? [{ id: 'own', photo_url: spot.photo, submitter_name: spot.by, caption: null }] : []),
-    ...driverPhotos,
-  ], [spot?.photo, spot?.by, driverPhotos]);
+  // `photos` (several) wins over `photo` (one) when a spot carries both.
+  // Conway Street is the first spot where one frame genuinely is not enough:
+  // the bays run in two stretches on opposite sides of the street, and a photo
+  // of one of them looks like the whole thing and is half of it. Every other
+  // spot still has a single `photo` and behaves exactly as it did — and 305
+  // sets BOTH fields, so the hero image, the search-result thumbnail and the
+  // map card go on reading `photo` without any of them needing to change.
+  const allPhotos = useMemo(() => {
+    const curated = spot?.photos?.length ? spot.photos : (spot?.photo ? [spot.photo] : []);
+    return [
+      ...curated.map((u, i) => ({ id: `own-${i}`, photo_url: u, submitter_name: spot?.by, caption: null })),
+      ...driverPhotos,
+    ];
+  }, [spot?.photo, spot?.photos, spot?.by, driverPhotos]);
   const hasPhoto = allPhotos.length > 0 && !photoBroken;
   const [confirmedAt,setConfirmedAt]=useState(()=> spot ? (ls.get('pe_confirmed_at',{})[spot.id]||null) : null);
   if (!spot) return null;
@@ -1752,6 +1769,12 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   const share=async()=>{ const url=location.origin+location.pathname+'#s='+spot.id; const text=`${spot.name} — ${(spot.notes||'').slice(0,90)}`; if(navigator.share){try{await navigator.share({title:'ParkEasy',text,url});}catch{}}else{navigator.clipboard?.writeText(url);setShareDone(true);setTimeout(()=>setShareDone(false),2000);} };
   return (
     <div className="fixed inset-0 z-[70] flex flex-col justify-end" style={{background:'rgba(6,11,20,0.6)'}} onClick={onClose}>
+      {lightbox !== null && (
+        <div onClick={e=>e.stopPropagation()}>
+          <PhotoLightbox photos={allPhotos.map(p=>p.photo_url)} startIndex={lightbox}
+            alt={spot.name} onClose={()=>setLightbox(null)}/>
+        </div>
+      )}
       <div onClick={e=>e.stopPropagation()} className="rounded-t-[28px] overflow-hidden animate-fade-in-up" style={{maxWidth:680,width:'100%',margin:'0 auto',maxHeight:'92vh',background:'var(--sheet)',borderTop:'1px solid var(--hairline)',boxShadow:'var(--sheet-shadow)'}}>
         <div className="relative h-44">
           {/* A photo of the actual space beats a map here — it answers "will I
@@ -1769,16 +1792,28 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
                   entrance, the bay and the sign are three pictures and three
                   people take them. Swipeable, oldest first, so the original
                   stays the one you see when the sheet opens. */}
+              {/* Tappable, same as the partner strip. This header is only 176px
+                  tall — a harder crop than anywhere else in the app — so a
+                  photo of a car park here shows a band across its middle. The
+                  whole point of the picture is "will I recognise this when I
+                  pull up", and half a photo answers that half as well. */}
               {allPhotos.length === 1 ? (
-                <img src={allPhotos[0].photo_url} alt={`Photo of ${spot.name}`} loading="lazy"
-                  onError={()=>setPhotoBroken(true)}
-                  className="w-full h-full object-cover"/>
+                <button type="button" onClick={()=>setLightbox(0)} aria-label={`View photo of ${spot.name}`}
+                  className="w-full h-full block p-0 border-0 bg-transparent cursor-zoom-in">
+                  <img src={allPhotos[0].photo_url} alt={`Photo of ${spot.name}`} loading="lazy"
+                    onError={()=>setPhotoBroken(true)}
+                    className="w-full h-full object-cover"/>
+                </button>
               ) : (
                 <div className="flex h-full overflow-x-auto no-scrollbar snap-x snap-mandatory">
                   {allPhotos.map((ph, i) => (
-                    <img key={ph.id || i} src={ph.photo_url} loading={i ? 'lazy' : 'eager'}
-                      alt={ph.caption ? `${spot.name} — ${ph.caption}` : `Photo ${i + 1} of ${spot.name}`}
-                      className="h-full w-full flex-shrink-0 object-cover snap-start"/>
+                    <button key={ph.id || i} type="button" onClick={()=>setLightbox(i)}
+                      aria-label={`View photo ${i + 1} of ${allPhotos.length}`}
+                      className="h-full w-full flex-shrink-0 snap-start block p-0 border-0 bg-transparent cursor-zoom-in">
+                      <img src={ph.photo_url} loading={i ? 'lazy' : 'eager'}
+                        alt={ph.caption ? `${spot.name} — ${ph.caption}` : `Photo ${i + 1} of ${spot.name}`}
+                        className="h-full w-full object-cover"/>
+                    </button>
                   ))}
                 </div>
               )}
@@ -5077,6 +5112,106 @@ const bizPin = (label) => L.divIcon({
   iconSize: [0, 0], iconAnchor: [0, 0],
 });
 
+// Tap a photo to see the whole thing.
+//
+// WHY. Every photo strip in the app is object-cover inside a fixed-height band,
+// which is right for a strip — a row of ragged letterboxed images reads as
+// broken — but it means the picture on screen is a CROP. BFAST's shorts are cut
+// off at the knee in a 240px band; a photo of a car park shows the middle third
+// of the car park. Swiping moves you between crops. There was no way to see any
+// photo in full, and no affordance suggesting there might be.
+//
+// object-contain here, deliberately: this is the one place the whole frame
+// matters, and black bars are the correct answer to "show me all of it".
+//
+// The strip idiom is reused rather than reinvented — the same scroll-snap
+// container, so a swipe works natively on a phone with no gesture handling of
+// our own. Arrows and arrow keys exist for a desktop mouse, which cannot swipe.
+const PhotoLightbox = ({ photos, startIndex = 0, alt = '', onClose }) => {
+  const scroller = useRef(null);
+  const [i, setI] = useState(startIndex);
+
+  // Jump to the tapped photo before the first paint, so opening the fourth
+  // photo does not animate through the first three.
+  useEffect(() => {
+    const el = scroller.current;
+    if (el) el.scrollLeft = el.clientWidth * startIndex;
+  }, [startIndex]);
+
+  const go = useCallback((next) => {
+    const el = scroller.current;
+    if (!el) return;
+    const clamped = Math.max(0, Math.min(photos.length - 1, next));
+    el.scrollTo({ left: el.clientWidth * clamped, behavior: 'smooth' });
+    setI(clamped);
+  }, [photos.length]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.();
+      else if (e.key === 'ArrowRight') go(i + 1);
+      else if (e.key === 'ArrowLeft') go(i - 1);
+    };
+    window.addEventListener('keydown', onKey);
+    // The page behind must not scroll while this is open — on a phone a
+    // vertical drag would otherwise move the sheet underneath the photo.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [i, go, onClose]);
+
+  if (!photos?.length) return null;
+
+  return (
+    <div className="fixed inset-0 z-[900] flex flex-col" style={{ background: 'rgba(4,8,14,0.96)' }}
+      role="dialog" aria-modal="true" aria-label={alt || 'Photo'}>
+      {/* Tapping the backdrop closes. The image itself does not, so a
+          mis-tap while looking at a photo does not throw you out of it. */}
+      <div ref={scroller} onClick={onClose}
+        className="flex-1 flex overflow-x-auto no-scrollbar snap-x snap-mandatory"
+        onScroll={(e) => {
+          const w = e.currentTarget.clientWidth;
+          if (w) setI(Math.round(e.currentTarget.scrollLeft / w));
+        }}>
+        {photos.map((u, n) => (
+          <div key={n} className="w-full flex-shrink-0 snap-start flex items-center justify-center p-3">
+            <img src={u} alt={`${alt} ${n + 1}`} onClick={(e) => e.stopPropagation()}
+              className="max-w-full max-h-full object-contain rounded-lg"/>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={onClose} aria-label="Close photo"
+        style={{ top: 'calc(env(safe-area-inset-top) + 10px)' }}
+        className="fixed right-3 w-11 h-11 rounded-full bg-black/60 border border-white/25 flex items-center justify-center text-white backdrop-blur active:scale-90 transition">
+        <X size={20}/>
+      </button>
+
+      {photos.length > 1 && (
+        <>
+          {i > 0 && (
+            <button onClick={() => go(i - 1)} aria-label="Previous photo"
+              className="fixed left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/55 border border-white/20 hidden sm:flex items-center justify-center text-white active:scale-90 transition">
+              <ChevronLeft size={22}/>
+            </button>
+          )}
+          {i < photos.length - 1 && (
+            <button onClick={() => go(i + 1)} aria-label="Next photo"
+              className="fixed right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/55 border border-white/20 hidden sm:flex items-center justify-center text-white active:scale-90 transition">
+              <ChevronRight size={22}/>
+            </button>
+          )}
+          <div className="flex-shrink-0 flex items-center justify-center gap-1.5 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-2">
+            {photos.map((_, n) => (
+              <span key={n} className={`h-1.5 rounded-full transition-all ${n === i ? 'w-5 bg-white' : 'w-1.5 bg-white/35'}`}/>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 // Full-screen business page: photos you can swipe, the whole description, and a
 // map of the parking around it. The card can only ever show a teaser — this is
 // where "where do I actually put the car for this place" gets answered.
@@ -5093,6 +5228,8 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
     [np, partner.lat, partner.lng],
   );
   const photos = partner.photo_urls?.length ? partner.photo_urls : (partner.photo_url ? [partner.photo_url] : []);
+  // Which photo the lightbox is showing, or null when it is closed.
+  const [lightbox, setLightbox] = useState(null);
   useEffect(() => {
     trackPartnerEvent(partner.id, null, 'click');
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
@@ -5105,17 +5242,30 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
       {photos.length > 0 && (
         <div className="relative flex-shrink-0">
           <div className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory">
+            {/* A BUTTON, not an img with an onClick. The strip is the only
+                thing on this screen that changes what you are looking at, and
+                it was reachable by touch and by nothing else — no keyboard
+                focus, no role, nothing for a screen reader to announce. */}
             {photos.map((u,i)=>(
-              <img key={i} src={u} alt={`${partner.name} ${i+1}`} loading={i?'lazy':'eager'}
-                className="h-60 w-full flex-shrink-0 object-cover snap-start"/>
+              <button key={i} type="button" onClick={()=>setLightbox(i)}
+                aria-label={`View photo ${i+1} of ${photos.length}`}
+                className="h-60 w-full flex-shrink-0 snap-start block p-0 border-0 bg-transparent cursor-zoom-in">
+                <img src={u} alt={`${partner.name} ${i+1}`} loading={i?'lazy':'eager'}
+                  className="h-full w-full object-cover"/>
+              </button>
             ))}
           </div>
-          {photos.length > 1 && (
-            <p className="absolute bottom-2 right-3 text-[10px] font-bold px-2 py-1 rounded-full bg-black/60 text-white">
-              swipe · {photos.length} photos
-            </p>
-          )}
+          {/* Says TAP as well as swipe, because a strip that only ever moved
+              sideways taught people it was the only thing it did. Shown on a
+              single photo too — one uncropped photo is still worth opening. */}
+          <p className="absolute bottom-2 right-3 text-[10px] font-bold px-2 py-1 rounded-full bg-black/60 text-white pointer-events-none">
+            {photos.length > 1 ? `tap to enlarge · swipe · ${photos.length} photos` : 'tap to enlarge'}
+          </p>
         </div>
+      )}
+      {lightbox !== null && (
+        <PhotoLightbox photos={photos} startIndex={lightbox} alt={partner.name}
+          onClose={()=>setLightbox(null)}/>
       )}
       <button onClick={onClose} aria-label="Close" style={{top:'calc(env(safe-area-inset-top) + 10px)'}}
         className="fixed left-3 z-[600] w-11 h-11 rounded-full bg-black/60 border border-white/25 flex items-center justify-center text-white backdrop-blur active:scale-90 transition"><X size={20}/></button>
