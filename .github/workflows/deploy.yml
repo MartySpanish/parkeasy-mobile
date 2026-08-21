@@ -70,6 +70,19 @@ jobs:
       #
       # GitHub Pages ignores the file (.nojekyll is already there), and this is
       # the last step before the push, so nothing else can pick it up.
+      #
+      # AND THE EXPLANATION LIVES HERE, NOT IN vercel.json. The first attempt at
+      # this put a "_comment_git" key in the root vercel.json to explain why the
+      # setting there was not enough. vercel.json is JSON, JSON has no comments,
+      # and Vercel's schema REJECTS unknown top-level properties outright:
+      #
+      #   The `vercel.json` schema validation failed with the following message:
+      #   should NOT have additional property `_comment_git`
+      #
+      # That failed before the build even started, so there was no build log to
+      # read — and it broke PRODUCTION on three merges, while ostensibly fixing
+      # a cosmetic red cross. Nothing goes in that file that is not in the
+      # schema.
       - name: Tell Vercel not to deploy gh-pages
         run: echo '{"git":{"deploymentEnabled":{"gh-pages":false}}}' > ./dist/vercel.json
 
