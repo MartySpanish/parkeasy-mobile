@@ -49,9 +49,14 @@ $$;
 create schema if not exists storage;
 
 create table if not exists storage.buckets (
-  id     text primary key,
-  name   text,
-  public boolean not null default false
+  id                 text primary key,
+  name               text,
+  public             boolean not null default false,
+  -- Real Supabase carries these and migrations set them. Left out at first,
+  -- and 20260821_partner_photos_bucket.sql failed on the missing column — the
+  -- stub was thin enough to be wrong rather than thin enough to be honest.
+  file_size_limit    bigint,
+  allowed_mime_types text[]
 );
 
 create table if not exists storage.objects (

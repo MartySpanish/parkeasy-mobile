@@ -67,6 +67,14 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  listing payout mode    $(grep -c 'PASS  ' /tmp/pe-t7.log) checks" \
     || { fail=1; echo "  listing payout mode    FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t7.log; }
 
+  tests/db/run.sh supabase/migrations/20260821_partners_table.sql \
+                  supabase/migrations/20260803_partners_online.sql \
+                  supabase/migrations/20260817_partners_geo_verified.sql \
+                  supabase/migrations/20260821_partner_photos_bucket.sql \
+                  tests/db/partner_photos.test.sql                   > /tmp/pe-t9.log 2>&1 \
+    && echo "  partner photos         $(grep -c 'PASS  ' /tmp/pe-t9.log) checks" \
+    || { fail=1; echo "  partner photos         FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t9.log; }
+
   # The APCOA test runs the migration file's real bytes, twice: once as
   # committed (it must refuse) and once with the four missing facts filled in
   # the way a human would fill them (it must publish). The sed is that human.
