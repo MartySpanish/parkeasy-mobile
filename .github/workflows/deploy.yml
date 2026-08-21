@@ -48,6 +48,31 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_GOOGLE_MAPS_KEY: ${{ secrets.VITE_GOOGLE_MAPS_KEY }}
 
+      # ── STOP VERCEL BUILDING THE gh-pages BRANCH ───────────────────────────
+      # Every push to gh-pages produced a FAILED Vercel deployment. Six in a
+      # row before this was noticed, one per merge, all with:
+      #
+      #     sh: line 1: vite: command not found
+      #     Error: Command "vite build" exited with 127
+      #
+      # Of course it did. gh-pages holds the COMPILED OUTPUT — no package.json,
+      # no node_modules, nothing to build — and Vercel was trying to build it
+      # anyway. Production was never affected (that comes off main and has been
+      # green throughout), but it put a red cross on every deploy, which is the
+      # fastest way to teach somebody to stop reading their deploy list.
+      #
+      # vercel.json at the repo root ALREADY carries this setting and it never
+      # applied, which is the part worth writing down: Vercel reads
+      # git.deploymentEnabled from the vercel.json IN THE COMMIT BEING PUSHED,
+      # not from main. gh-pages has no vercel.json, so Vercel fell back to the
+      # dashboard's build command and ran it. The config has to travel WITH the
+      # branch, so it gets written into dist just before publishing.
+      #
+      # GitHub Pages ignores the file (.nojekyll is already there), and this is
+      # the last step before the push, so nothing else can pick it up.
+      - name: Tell Vercel not to deploy gh-pages
+        run: echo '{"git":{"deploymentEnabled":{"gh-pages":false}}}' > ./dist/vercel.json
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:

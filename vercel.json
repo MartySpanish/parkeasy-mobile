@@ -33,6 +33,7 @@
       "destination": "/index.html"
     }
   ],
+  "_comment_git": "gh-pages holds compiled output with no package.json, so a Vercel build of it always fails. THIS SETTING ALONE DOES NOT WORK: Vercel reads git.deploymentEnabled from the vercel.json in the commit being pushed, and gh-pages has none, so it falls back to the dashboard build command and runs vite build against a directory with no node_modules. The copy that actually stops it is written into dist by .github/workflows/deploy.yml. Kept here so main is explicit about the intent.",
   "git": {
     "deploymentEnabled": {
       "gh-pages": false
