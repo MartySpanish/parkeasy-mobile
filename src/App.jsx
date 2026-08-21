@@ -6919,7 +6919,8 @@ const SyncPartners = () => {
     <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
       <p className="font-display font-bold text-[12.5px] text-[#EAF1F8]">Apply pending partner rows</p>
       <p className="text-[11.5px] text-[rgba(234,241,248,0.55)] mt-1 leading-relaxed">
-        Tara Lodge (new, pinned) and Jack Daniels&rsquo; Conway Mill pin. Safe to run twice.
+        BFAST&rsquo;s logo and eight photos, plus the Tara Lodge, APCOA and Jack Daniels
+        rows from August. Safe to run twice &mdash; anything already applied stays as it is.
       </p>
       <button onClick={sync} disabled={busy}
         className="mt-2.5 btn-teal text-[#06231f] font-bold text-[13px] px-4 py-2.5 rounded-xl disabled:opacity-50">
@@ -6934,9 +6935,18 @@ const SyncPartners = () => {
             <p key={s.step} className="text-[11px] text-red-300 mt-1">{s.step}: {s.error || `HTTP ${s.status}`}</p>
           ))}
           {/* The database's own answer, not this component's. */}
+          {/* Images counted from the row that came BACK, so pressing this for
+              BFAST's photos reports on BFAST's photos rather than on a pin. */}
           {result.partners?.map(p => (
             <p key={p.slug} className="text-[11.5px] text-[#cdd9e8] mt-1 flex items-center justify-between gap-2">
-              <span className="truncate">{p.name}</span>
+              <span className="truncate">
+                {p.name}
+                {p.logo_url || p.photo_urls?.length ? (
+                  <span className="text-[10.5px] text-[rgba(234,241,248,0.45)] ml-1.5">
+                    {p.logo_url ? '◼︎' : ''}{p.photo_urls?.length ? ` ${p.photo_urls.length} photo${p.photo_urls.length === 1 ? '' : 's'}` : ''}
+                  </span>
+                ) : null}
+              </span>
               <span className="flex-shrink-0 text-[10.5px] text-[rgba(234,241,248,0.5)]">
                 p{p.priority} · {p.geo_verified ? '📍 pinned' : 'no pin'}
               </span>

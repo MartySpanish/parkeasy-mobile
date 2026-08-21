@@ -266,11 +266,46 @@ export default async function handler(req, res) {
         postcode: 'BT13 2DE',
       });
 
-      // 4. Read back what is actually in the table, so the dashboard reports
+      // 4. BFAST's images — 20260821_bfast_photos_live.sql.
+      //
+      //    Exactly the case this endpoint was built for, and the second time
+      //    in a week: the row and the copy went in while the connector was up,
+      //    the eight image files deployed, and then the connector dropped
+      //    before the URLs could be set. A partner sitting there with no logo
+      //    because a tool is offline is the same wrong failure as Tara Lodge
+      //    waiting five days to go live.
+      //
+      //    A PATCH, not an upsert: the row already exists with its copy, links,
+      //    pin and priority, and a merge-duplicates POST would need every one
+      //    of those fields restated here just to change three. Fewer values to
+      //    drift.
+      //
+      //    SAFE ONLY BECAUSE THE FILES ARE ALREADY SERVING. Checked on the
+      //    published branch before this was written — all eight are in
+      //    origin/gh-pages under bfast/, byte-for-byte what was committed, with
+      //    the deploy run green. Pointing a row at a file that has not deployed
+      //    is what put a broken-image icon on Jack Daniels' card for two days.
+      await run('bfast-photos', `${URL_}/rest/v1/partners?slug=eq.bfast`, 'PATCH', {
+        logo_url: 'https://parkeasy.uk/bfast/logo.png',
+        photo_urls: [
+          'https://parkeasy.uk/bfast/1-champions.jpg',
+          'https://parkeasy.uk/bfast/2-birthday-cake-tee.jpg',
+          'https://parkeasy.uk/bfast/3-moon-rock-tee.jpg',
+          'https://parkeasy.uk/bfast/4-moon-rock-shorts.jpg',
+          'https://parkeasy.uk/bfast/5-birthday-cake-shorts.jpg',
+          'https://parkeasy.uk/bfast/6-shorts-detail.jpg',
+          'https://parkeasy.uk/bfast/7-drop-moon-rock-birthday-cake.jpg',
+        ],
+        // The single-image fallback for anything still reading the old column.
+        // Same picture as the head of the strip, so the two cannot disagree.
+        photo_url: 'https://parkeasy.uk/bfast/1-champions.jpg',
+      });
+
+      // 5. Read back what is actually in the table, so the dashboard reports
       //    the database's answer rather than this function's optimism.
       let partners = null;
       try {
-        const r = await fetch(`${URL_}/rest/v1/partners?select=slug,name,priority,geo_verified,active,lat,lng&order=priority.desc`, { headers: svcH });
+        const r = await fetch(`${URL_}/rest/v1/partners?select=slug,name,priority,geo_verified,active,lat,lng,logo_url,photo_urls&order=priority.desc`, { headers: svcH });
         if (r.ok) partners = await r.json();
       } catch { /* reported as null below */ }
 
