@@ -19,6 +19,10 @@ export const PARTNER_CATEGORIES = {
   'sandy-mcdermott-sc':      ['fitness'],
   'jack-daniels-fitness':    ['fitness'],
   'sbg-maeda-belfast':       ['fitness'],
+  // A fightwear brand AND a gym, in Conway Mill. It earns the fitness tile on
+  // the second half of that — somebody tapping "Gyms & Wellbeing" in west
+  // Belfast is being shown a real gym, not an advert for shorts.
+  'bfast':                   ['fitness'],
   'marcus-donnelly-fitness': ['fitness'],
   'gransha-grill':           ['brunch'],
   'the-red-devil':           ['nightout'],
