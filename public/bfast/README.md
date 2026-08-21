@@ -13,7 +13,7 @@ link them to the website for people too."*
 | `3-moon-rock-tee.jpg` | bfastofficial.com shop | £35.00 |
 | `4-moon-rock-shorts.jpg` | bfastofficial.com shop | £44.99 |
 | `5-birthday-cake-shorts.jpg` | bfastofficial.com shop | £44.99 |
-| `6-shorts-detail.jpg` | @bfastofficial post, 28 May | Birthday Cake shorts worn, sledgehammer in hand. **Photograph by @darraghbarry309**, posted as a collab with BFAST. Left out of the first pass on attribution grounds; Marty asked for it directly afterwards, so it is in on his call. If Darragh objects, delete this file and re-run the sync. |
+| `6-shorts-detail.jpg` | @bfastofficial post, 28 May | Birthday Cake shorts worn, sledgehammer in hand. **Photograph by @darraghbarry309**, posted as a collab with BFAST. Held back in the first pass on attribution grounds and added once Marty confirmed on 21 Aug 2026 that Darragh is happy for it to be used. |
 | `7-drop-moon-rock-birthday-cake.jpg` | @bfastofficial post, 20 April | "Moon Rock & Birthday Cake — our first drop of the year." Both colourways worn. |
 
 The number prefix is the order of the photo strip, matching the convention
@@ -21,10 +21,11 @@ The number prefix is the order of the photo strip, matching the convention
 behave the same way.
 
 **Attribution.** Everything here is BFAST's own material except
-`6-shorts-detail.jpg`, which @darraghbarry309 shot and posted as a collab. It
-was deliberately left out of the first pass for that reason; Marty asked for it
-directly afterwards and it is in on his call, recorded here so the provenance is
-not lost. One file to delete if that ever changes.
+`6-shorts-detail.jpg`, which @darraghbarry309 shot and posted as a collab with
+BFAST. It was held back in the first pass for exactly that reason, and added
+after Marty confirmed on 21 Aug 2026 that Darragh is happy for it to be used.
+Recorded here because a permission nobody wrote down is a permission nobody can
+find later.
 
 Instagram furniture — carousel pills, the ≡ menu, the mute and tag buttons — is
 cropped out where it sits at an edge, and painted out where it sits over white
