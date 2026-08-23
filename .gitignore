@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.local
 .vercel
+
+# Generated at build time from VITE_SUPABASE_* — never committed.
+public/globe/config.js

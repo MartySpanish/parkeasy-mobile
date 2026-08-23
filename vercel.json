@@ -29,6 +29,10 @@
       "destination": "/api/connect/link?mode=refresh"
     },
     {
+      "source": "/globe",
+      "destination": "/globe/index.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

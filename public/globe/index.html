@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ParkEasy — every space on the map</title>
+<meta name="ext-resource-dependency" content="data/countries-110m.json" data-resource-id="world" />
+<meta name="ext-resource-dependency" content="data/ni-ireland.json" data-resource-id="niIreland" />
+<meta name="ext-resource-dependency" content="data/parkeasy-places.json" data-resource-id="places" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="./config.js"></script>
+<script src="./d3.min.js"></script>
+<script src="./topojson-client.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1626;--ink:#EAF1F8;--muted:#8b9bb0;--accent:#2ED3C6;
+    --line:rgba(234,241,248,.14);--rule:rgba(234,241,248,.9);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:Manrope,system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{color:#5BE7DA}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #stage{position:fixed;inset:0}
+
+  .layer{position:absolute;inset:0;pointer-events:none;display:grid;
+    grid-template-columns:minmax(300px,360px) 1fr;grid-template-rows:1fr auto;
+    padding:clamp(18px,2.6vw,36px);gap:0 32px}
+
+  .side{grid-row:1;grid-column:1;display:flex;flex-direction:column;min-height:0;pointer-events:auto}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;
+    font-size:clamp(16px,1.4vw,20px);letter-spacing:-.02em;flex:0 0 auto}
+  .brand span{width:9px;height:9px;background:var(--accent);display:block}
+
+  .headline{margin-top:14px;transition:opacity .3s ease,max-height .4s ease;overflow:hidden}
+  h1{margin:0;font-size:clamp(28px,3.6vw,50px);line-height:1.02;letter-spacing:-.035em;
+    font-weight:700;max-width:13ch;text-wrap:balance}
+  h1 em{font-style:normal;color:var(--accent)}
+  .lede{margin:12px 0 0;max-width:34ch;color:#B7C2D0;font-size:14px;line-height:1.5;text-wrap:pretty}
+  body:not([data-mode="globe"]) .headline,body[data-searching="1"] .headline{opacity:0;max-height:0;margin-top:0}
+
+  .search{margin-top:18px;display:flex;border:2px solid var(--rule);flex:0 0 auto}
+  .search input{flex:1;appearance:none;background:transparent;border:0;color:var(--ink);
+    font:500 14px/1 Manrope, sans-serif;padding:14px 14px}
+  .search input::placeholder{color:var(--muted)}
+  .search input:focus{outline:none}
+  .search:focus-within{border-color:var(--accent)}
+  .search button{appearance:none;background:transparent;border:0;border-left:2px solid var(--rule);
+    color:var(--muted);font:600 11px/1 Manrope, sans-serif;letter-spacing:.1em;padding:0 14px;cursor:pointer}
+  .search button:hover{color:var(--ink)}
+
+  .filters{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;flex:0 0 auto}
+  .filters button{appearance:none;background:transparent;border:1px solid var(--line);color:var(--muted);
+    font:600 10px/1 Manrope, sans-serif;letter-spacing:.1em;text-transform:uppercase;padding:8px 10px;
+    cursor:pointer;display:flex;align-items:center;gap:7px;transition:color .15s,border-color .15s}
+  .filters button[aria-pressed="true"]{color:var(--ink);border-color:rgba(234,241,248,.5)}
+  .filters button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .filters i{width:9px;height:9px;display:block;flex:0 0 9px}
+  .sw-host{background:var(--accent)}
+  .sw-partner{background:var(--accent);transform:rotate(45deg);width:8px;height:8px}
+  .sw-paid{border:2px solid var(--accent);border-radius:50%}
+  .sw-free{background:rgba(234,241,248,.85);border-radius:50%}
+  .sw-gem{border:1.5px solid rgba(234,241,248,.8);border-radius:50%}
+
+  .results{margin-top:14px;overflow-y:auto;min-height:0;flex:1 1 auto;
+    scrollbar-width:thin;scrollbar-color:rgba(234,241,248,.25) transparent;
+    border-top:2px solid var(--rule)}
+  .results::-webkit-scrollbar{width:4px}
+  .results::-webkit-scrollbar-thumb{background:rgba(234,241,248,.25)}
+  body[data-mode="globe"]:not([data-searching="1"]) .results,
+  body[data-mode="globe"]:not([data-searching="1"]) .filters{display:none}
+  .grp{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;padding:14px 0 7px}
+  .row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;appearance:none;
+    background:transparent;border:0;border-bottom:1px solid rgba(234,241,248,.07);
+    color:#D3DBE5;font:500 13px/1.3 Manrope, sans-serif;padding:9px 4px;cursor:pointer}
+  .row:hover{background:rgba(46,211,198,.10);color:#fff}
+  .row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .row i{width:9px;height:9px;flex:0 0 9px}
+  .row s{margin-left:auto;text-decoration:none;color:var(--muted);font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+  .empty{color:var(--muted);font-size:13px;padding:16px 0;line-height:1.5}
+
+  .detail{overflow-y:auto;min-height:0;flex:1 1 auto;margin-top:14px;
+    border-top:2px solid var(--rule);scrollbar-width:thin;
+    scrollbar-color:rgba(234,241,248,.25) transparent}
+  .detail::-webkit-scrollbar{width:4px}
+  .detail::-webkit-scrollbar-thumb{background:rgba(234,241,248,.25)}
+  .back{appearance:none;background:transparent;border:0;color:var(--muted);cursor:pointer;
+    font:600 10px/1 Manrope, sans-serif;letter-spacing:.12em;text-transform:uppercase;
+    padding:14px 0 10px}
+  .back:hover{color:var(--ink)}
+  .badge{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);
+    padding:6px 9px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#B7C2D0;font-weight:600}
+  .detail h2{margin:12px 0 0;font-size:clamp(22px,2.4vw,30px);line-height:1.05;
+    letter-spacing:-.03em;font-weight:700}
+  .detail .note{margin:8px 0 0;color:#94A3B4;font-size:13px;line-height:1.5}
+  .photo{margin-top:16px;height:170px;position:relative}
+  .cta{display:inline-block;margin-top:14px;border:2px solid var(--accent);color:var(--accent);
+    font:600 11px/1 Manrope, sans-serif;letter-spacing:.1em;text-transform:uppercase;padding:12px 14px}
+  .cta:hover{background:var(--accent);color:#04120F}
+  .kv{margin-top:18px;border-top:1px solid var(--line);padding-top:12px;display:flex;gap:26px}
+  .kv b{display:block;font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .kv i{display:block;font-style:normal;margin-top:6px;font-size:10px;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--muted);font-weight:600}
+
+  .toggle{grid-row:1;grid-column:2;justify-self:end;align-self:start;display:flex;
+    pointer-events:auto;border:2px solid var(--rule);height:max-content}
+  .toggle button{appearance:none;background:transparent;border:0;border-right:2px solid var(--rule);
+    color:var(--ink);font:600 12px/1 Manrope, sans-serif;letter-spacing:.1em;text-transform:uppercase;
+    padding:13px 18px;text-align:left;cursor:pointer;transition:background .18s,color .18s}
+  .toggle button:last-child{border-right:0}
+  .toggle button[aria-pressed="true"]{background:var(--accent);color:#04120F}
+  .toggle button:hover[aria-pressed="false"]{background:rgba(46,211,198,.16)}
+  .toggle button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .foot{grid-row:2;grid-column:1/-1;margin-top:18px}
+  .rule{height:2px;background:var(--rule)}
+  .footrow{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
+    flex-wrap:wrap;margin-top:14px}
+  .stats{display:flex;gap:clamp(18px,2.6vw,44px);align-items:flex-end}
+  .stat b{display:block;font-size:clamp(18px,2.1vw,30px);font-weight:700;letter-spacing:-.03em;line-height:1}
+  .stat i{display:block;font-style:normal;margin-top:6px;font-size:10px;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--muted);font-weight:600}
+  .credit{font-size:11px;color:#5D6B80;letter-spacing:.04em}
+  @media (max-width:820px){
+    .layer{grid-template-columns:1fr}
+    .toggle{grid-row:2;grid-column:1;justify-self:start;margin-top:12px}
+    .foot{grid-row:3}
+    .side{max-height:52vh}
+    .stats{gap:18px}
+  }
+</style>
+</head>
+<body data-mode="globe" data-searching="0">
+<template id="__bundler_thumbnail">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" data-bg-color="#0d1626">
+    <rect width="400" height="400" fill="#0d1626"/>
+    <circle cx="200" cy="200" r="110" fill="#16233a"/>
+    <circle cx="200" cy="200" r="110" fill="none" stroke="#2ED3C6" stroke-width="3"/>
+    <circle cx="228" cy="152" r="9" fill="#2ED3C6"/>
+    <path d="M160 250h80" stroke="#EAF1F8" stroke-width="4"/>
+  </svg>
+</template>
+<div id="stage">
+  <canvas id="map"></canvas>
+  <div class="layer">
+    <div class="side">
+      <div class="brand"><span></span>ParkEasy</div>
+      <div class="headline">
+        <h1>Every space Northern Ireland <em>already has.</em></h1>
+        <p class="lede">Free bays, hidden gems, paid car parks and host sites — on one map, with the local businesses beside them.</p>
+      </div>
+      <div class="search">
+        <input id="q" type="search" placeholder="Search a town, space or partner" autocomplete="off" aria-label="Search">
+        <button id="clear" type="button" title="Clear">CLEAR</button>
+      </div>
+      <div class="filters" id="filters"></div>
+      <div class="results" id="results"></div>
+      <div class="detail" id="detail" hidden></div>
+    </div>
+    <div class="toggle" role="group" aria-label="View">
+      <button id="btn-globe" aria-pressed="true">Globe</button>
+      <button id="btn-ni" aria-pressed="false">Northern Ireland</button>
+    </div>
+    <div class="foot">
+      <div class="rule"></div>
+      <div class="footrow">
+        <div class="stats">
+          <!-- Replaced by paintStats() from the generated counts. Left empty
+               rather than pre-filled: the shipped version had 741 / 88 / 25
+               typed in, and all three were wrong. -->
+        </div>
+        <div class="credit">parkeasy.uk · Belfast</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BELFAST = [-5.9301, 54.5973];
+const TYPES = {
+  host:    { label: 'Host',       plural: 'Host car parks' },
+  partner: { label: 'Partner',    plural: 'Local partners' },
+  paid:    { label: 'Paid',       plural: 'Paid car parks' },
+  free:    { label: 'Free',       plural: 'Free bays' },
+  gem:     { label: 'Hidden gem', plural: 'Hidden gems' }
+};
+const filters = { host: true, partner: true, paid: true, free: true, gem: true };
+
+const TOWNS = [
+  { n: "Belfast", c: [-5.9301, 54.5973], rank: 0 },
+  { n: "Derry~Londonderry", c: [-7.3186, 55.0068], rank: 0 },
+  { n: "Lisburn", c: [-6.0580, 54.5162], rank: 1 },
+  { n: "Newry", c: [-6.3402, 54.1751], rank: 1 },
+  { n: "Bangor", c: [-5.6683, 54.6538], rank: 1 },
+  { n: "Ballymena", c: [-6.2758, 54.8643], rank: 1 },
+  { n: "Coleraine", c: [-6.6685, 55.1326], rank: 1 },
+  { n: "Omagh", c: [-7.3097, 54.5977], rank: 1 },
+  { n: "Newtownabbey", c: [-5.9480, 54.6790], rank: 2 },
+  { n: "Carrickfergus", c: [-5.8060, 54.7150], rank: 2 },
+  { n: "Antrim", c: [-6.2100, 54.7200], rank: 2 },
+  { n: "Larne", c: [-5.8230, 54.8500], rank: 2 },
+  { n: "Ballycastle", c: [-6.2450, 55.2030], rank: 2 },
+  { n: "Portrush", c: [-6.6530, 55.2050], rank: 2 },
+  { n: "Strabane", c: [-7.4640, 54.8270], rank: 2 },
+  { n: "Magherafelt", c: [-6.6070, 54.7550], rank: 2 },
+  { n: "Cookstown", c: [-6.7450, 54.6420], rank: 2 },
+  { n: "Dungannon", c: [-6.7660, 54.5090], rank: 2 },
+  { n: "Enniskillen", c: [-7.6316, 54.3438], rank: 2 },
+  { n: "Armagh", c: [-6.6528, 54.3503], rank: 2 },
+  { n: "Portadown", c: [-6.4500, 54.4200], rank: 2, dy: 10 },
+  { n: "Craigavon", c: [-6.3870, 54.4470], rank: 2, dy: -10 },
+  { n: "Banbridge", c: [-6.2700, 54.3490], rank: 2 },
+  { n: "Downpatrick", c: [-5.7169, 54.3287], rank: 2 },
+  { n: "Newcastle", c: [-5.8890, 54.2170], rank: 2 }
+];
+const townByName = Object.fromEntries(TOWNS.map(t => [t.n, t]));
+
+const ARCS = TOWNS.filter(t => t.n !== "Belfast").map(t => {
+  const inter = d3.geoInterpolate(t.c, BELFAST);
+  const pts = d3.range(0, 1.0001, 0.02).map(inter);
+  return { pts, full: { type: 'LineString', coordinates: pts } };
+});
+
+const cv = document.getElementById('map');
+const ctx = cv.getContext('2d');
+const projection = d3.geoOrthographic().clipAngle(90).precision(0.3);
+const path = d3.geoPath(projection, ctx);
+const graticule = d3.geoGraticule10();
+
+let W = 0, H = 0, DPR = 1;
+let land = null, ni = null, ireland = null;
+let PLACES = [], AREAS = {};
+let mode = 'globe', city = null, selected = null;
+let spin = -8;
+let view = { lambda: 8, phi: -18, scale: 249.5, tx: 0, ty: 0 };
+let tween = null, cityBase = null, cityT0 = 0;
+let niFit = null, globeFit = null, cityScale = 1;
+let t0 = performance.now();
+
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const clamp01 = v => Math.max(0, Math.min(1, v));
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  computeFits();
+  if (!tween) view = cameraFor(mode, city);
+}
+
+function mapLeft() {
+  if (W <= 820) return 0;
+  const side = document.querySelector('.side');
+  return side ? side.getBoundingClientRect().right + 18 : 0;
+}
+
+function computeFits() {
+  const wide = W > 820;
+  const ml = mapLeft();
+  globeFit = {
+    translate: [ml + (W - ml) / 2, wide ? H * 0.5 : H * 0.66],
+    scale: Math.min(W - ml, H) * (wide ? 0.42 : 0.32)
+  };
+  if (ni) {
+    const l = wide ? ml + 12 : W * 0.08, t = wide ? H * 0.10 : H * 0.42;
+    const p = d3.geoOrthographic().clipAngle(90).rotate([-BELFAST[0], -BELFAST[1]]);
+    p.fitExtent([[l, t], [W - W * 0.06, H - H * 0.18]], ni);
+    niFit = { translate: p.translate(), scale: p.scale() };
+  }
+  cityScale = (Math.min(W, H) * 0.78) / (30 / 6371);
+}
+
+function cameraFor(m, target) {
+  const wide = W > 820, ml = mapLeft();
+  if (m === 'city' && target) {
+    return { lambda: -target.c[0], phi: -target.c[1], scale: cityScale,
+      tx: ml + (W - ml) * 0.48, ty: wide ? H * 0.5 : H * 0.66 };
+  }
+  if (m === 'ni' && niFit) {
+    return { lambda: -BELFAST[0], phi: -BELFAST[1], scale: niFit.scale,
+      tx: niFit.translate[0], ty: niFit.translate[1] };
+  }
+  return { lambda: spin, phi: -18, scale: globeFit.scale,
+    tx: globeFit.translate[0], ty: globeFit.translate[1] };
+}
+
+function goTo(m, target) {
+  mode = m;
+  city = m === 'city' ? target : null;
+  if (m !== 'city') selected = null;
+  document.body.dataset.mode = m;
+  document.getElementById('btn-globe').setAttribute('aria-pressed', String(m === 'globe'));
+  document.getElementById('btn-ni').setAttribute('aria-pressed', String(m !== 'globe'));
+  const to = cameraFor(m, target);
+  if (m === 'city') { cityBase = { ...to }; cityT0 = performance.now() + 1800; }
+  tween = { from: { ...view }, to, start: performance.now(), dur: m === 'city' ? 1800 : 1400, dive: m === 'city' };
+  schedule();
+}
+
+/* ---------- sidebar ---------- */
+
+function buildFilters() {
+  const wrap = document.getElementById('filters');
+  wrap.innerHTML = Object.keys(TYPES).map(k =>
+    '<button data-t="' + k + '" aria-pressed="true"><i class="sw-' + k + '"></i>' + TYPES[k].label + '</button>').join('');
+  wrap.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const k = b.dataset.t;
+    filters[k] = !filters[k];
+    b.setAttribute('aria-pressed', String(filters[k]));
+    renderList();
+  });
+}
+
+function matches(q) {
+  const towns = TOWNS.filter(t => t.n.toLowerCase().includes(q));
+  const places = PLACES.filter(p => filters[p.t] &&
+    (p.n.toLowerCase().includes(q) || p.town.toLowerCase().includes(q)));
+  return { towns, places };
+}
+
+function renderList() {
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const el = document.getElementById('results');
+  document.body.dataset.searching = q ? '1' : '0';
+  let towns, places;
+  if (q) {
+    ({ towns, places } = matches(q));
+    places = places.sort((a, b) => (a.t === 'partner' ? -1 : 0) - (b.t === 'partner' ? -1 : 0)).slice(0, 60);
+  } else if (mode === 'city' && city) {
+    towns = [];
+    places = PLACES.filter(p => p.town === city.n && filters[p.t]);
+  } else {
+    towns = TOWNS;
+    places = PLACES.filter(p => (p.t === 'host' || p.t === 'partner') && filters[p.t]);
+  }
+  let html = '';
+  if (towns.length) {
+    html += '<div class="grp">Towns</div>' + towns.map(t =>
+      '<button class="row" data-town="' + t.n + '"><i style="background:rgba(234,241,248,.7)"></i>' +
+      t.n + '<s>' + countIn(t.n) + ' spaces</s></button>').join('');
+  }
+  if (places.length) {
+    const byType = {};
+    places.forEach(p => (byType[p.t] = byType[p.t] || []).push(p));
+    Object.keys(TYPES).filter(k => byType[k]).forEach(k => {
+      html += '<div class="grp">' + TYPES[k].plural + '</div>' + byType[k].map(p =>
+        '<button class="row" data-id="' + p.id + '"><i class="sw-' + k + '"></i>' +
+        p.n + '<s>' + p.town + '</s></button>').join('');
+    });
+  }
+  if (!html) html = '<div class="empty">Nothing matches that. Try a town name — Belfast, Newry, Portrush — or a partner.</div>';
+  el.innerHTML = html;
+  el.hidden = false;
+  document.getElementById('detail').hidden = true;
+  el.querySelectorAll('[data-town]').forEach(b => b.onclick = () => selectTown(townByName[b.dataset.town]));
+  el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => selectPlace(PLACES.find(p => p.id === b.dataset.id)));
+}
+
+function countIn(town) { return PLACES.filter(p => p.town === town).length; }
+
+function selectTown(t) {
+  selected = null;
+  goTo('city', t);
+  document.getElementById('q').value = '';
+  renderList();
+}
+
+function selectPlace(p) {
+  if (!p) return;
+  selected = p;
+  const t = townByName[p.town] || TOWNS[0];
+  goTo('city', t);
+  selected = p;
+  renderDetail(p);
+}
+
+function renderDetail(p) {
+  const el = document.getElementById('detail');
+  const isPartner = p.t === 'partner';
+  el.innerHTML =
+    '<button class="back" id="d-back">← All spaces</button>' +
+    '<div><span class="badge"><i class="sw-' + p.t + '" style="width:9px;height:9px;display:block"></i>' +
+      TYPES[p.t].label + '</span></div>' +
+    '<h2>' + p.n + '</h2>' +
+    '<p class="note">' + (p.note || (isPartner ? 'Listed in the ParkEasy partner directory.' : p.town)) + '</p>' +
+    '<div class="photo"><image-slot id="ph-' + slug(p.n) + '" shape="rect" fit="cover" placeholder="Drop a photo of ' + p.n + '"></image-slot></div>' +
+    (isPartner ? '<a class="cta" href="https://parkeasy.uk/" target="_blank" rel="noopener">View on parkeasy.uk →</a>' : '') +
+    '<div class="kv"><div><b>' + p.town + '</b><i>Town</i></div><div><b>' +
+      p.c[1].toFixed(3) + ', ' + p.c[0].toFixed(3) + '</b><i>Position</i></div></div>';
+  el.hidden = false;
+  document.getElementById('results').hidden = true;
+  document.getElementById('d-back').onclick = () => { selected = null; renderList(); };
+}
+
+document.getElementById('q').addEventListener('input', renderList);
+document.getElementById('q').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) return;
+  const { towns, places } = matches(q);
+  if (towns.length) selectTown(towns[0]);
+  else if (places.length) selectPlace(places[0]);
+});
+document.getElementById('clear').onclick = () => {
+  document.getElementById('q').value = '';
+  renderList();
+};
+document.getElementById('btn-globe').onclick = () => { if (mode !== 'globe') goTo('globe'); renderList(); };
+document.getElementById('btn-ni').onclick = () => { if (mode !== 'ni') goTo('ni'); renderList(); };
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && mode === 'city') { goTo('ni'); renderList(); }
+});
+
+/* ---------- interaction on the map ---------- */
+
+function hitAt(x, y) {
+  if (mode === 'globe' || !land) return null;
+  let best = null, bd = 22;
+  if (mode === 'city') {
+    PLACES.forEach(p => {
+      if (!filters[p.t]) return;
+      const q = projection(p.c);
+      const d = Math.hypot(q[0] - x, q[1] - y);
+      if (d < bd) { bd = d; best = { kind: 'place', ref: p }; }
+    });
+    if (best) return best;
+  }
+  bd = 24;
+  TOWNS.forEach(t => {
+    const q = projection(t.c);
+    const d = Math.hypot(q[0] - x, q[1] - y);
+    if (d < bd) { bd = d; best = { kind: 'town', ref: t }; }
+  });
+  return best;
+}
+
+cv.addEventListener('mousemove', e => {
+  const r = cv.getBoundingClientRect();
+  cv.style.cursor = hitAt(e.clientX - r.left, e.clientY - r.top) ? 'pointer' : 'default';
+});
+cv.addEventListener('click', e => {
+  const r = cv.getBoundingClientRect();
+  const h = hitAt(e.clientX - r.left, e.clientY - r.top);
+  if (!h) return;
+  if (h.kind === 'place') selectPlace(h.ref);
+  else selectTown(h.ref);
+});
+
+/* ---------- loop ---------- */
+
+function frame(now) {
+  const dt = Math.min(now - t0, 60); t0 = now;
+  if (tween) {
+    const k = Math.min(1, (now - tween.start) / tween.dur);
+    const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    const a = tween.from, b = tween.to;
+    let dl = b.lambda - a.lambda;
+    while (dl > 180) dl -= 360; while (dl < -180) dl += 360;
+    const dive = tween.dive ? 1 + 0.10 * Math.sin(Math.PI * e) : 1;
+    view = {
+      lambda: a.lambda + dl * e,
+      phi: a.phi + (b.phi - a.phi) * e,
+      scale: a.scale * Math.pow(b.scale / a.scale, e) * dive,
+      tx: a.tx + (b.tx - a.tx) * e,
+      ty: a.ty + (b.ty - a.ty) * e
+    };
+    if (k === 1) { tween = null; if (mode === 'globe') spin = view.lambda; }
+  } else if (mode === 'globe') {
+    spin += dt * 0.0055;
+    view = cameraFor('globe');
+  } else if (mode === 'city' && cityBase) {
+    // slow flyover: the camera circles the town and breathes, never quite settling
+    const s = (now - cityT0) / 1000;
+    const lonScale = 1 / Math.max(0.2, Math.cos(city.c[1] * Math.PI / 180));
+    view = {
+      lambda: cityBase.lambda + Math.cos(s * 0.14) * 0.009 * lonScale,
+      phi: cityBase.phi + Math.sin(s * 0.14) * 0.006,
+      scale: cityBase.scale * (1 + 0.045 * Math.sin(s * 0.10) + Math.min(0.10, s * 0.0016)),
+      tx: cityBase.tx + Math.sin(s * 0.09) * 6,
+      ty: cityBase.ty + Math.cos(s * 0.11) * 4
+    };
+  }
+  projection.rotate([view.lambda, view.phi, 0]).scale(view.scale).translate([view.tx, view.ty]);
+  draw(now);
+  lastFrame = now;
+  schedule();
+}
+
+let lastFrame = 0, rafId = 0, timerId = 0;
+function schedule() {
+  cancelAnimationFrame(rafId); clearTimeout(timerId);
+  rafId = requestAnimationFrame(frame);
+  timerId = setTimeout(() => {
+    if (performance.now() - lastFrame > 90) frame(performance.now());
+    else schedule();
+  }, 100);
+}
+
+/* ---------- drawing ---------- */
+
+function draw(now) {
+  ctx.clearRect(0, 0, W, H);
+  if (!land) return;
+  // keep the map out from under the sidebar
+  const clipLeft = mapLeft();
+  ctx.save();
+  ctx.beginPath(); ctx.rect(clipLeft, 0, W - clipLeft, H); ctx.clip();
+  const c = [view.tx, view.ty], r = view.scale;
+  const zoom = clamp01(Math.log(r / globeFit.scale) / Math.log(niFit.scale / globeFit.scale));
+  const cz = clamp01(Math.log(r / niFit.scale) / Math.log(cityScale / niFit.scale));
+
+  const g = ctx.createRadialGradient(c[0] - r * .35, c[1] - r * .45, r * .1, c[0], c[1], r * 1.05);
+  g.addColorStop(0, '#16233a'); g.addColorStop(1, '#0B1220');
+  ctx.beginPath(); path({ type: 'Sphere' }); ctx.fillStyle = g; ctx.fill();
+
+  ctx.beginPath(); path(graticule);
+  ctx.strokeStyle = 'rgba(234,241,248,' + (0.07 - 0.05 * zoom) + ')'; ctx.lineWidth = 1; ctx.stroke();
+
+  ctx.beginPath(); path(land);
+  ctx.fillStyle = '#1B2739'; ctx.fill();
+  ctx.strokeStyle = 'rgba(234,241,248,.20)'; ctx.lineWidth = 1; ctx.stroke();
+
+  if (ireland) { ctx.beginPath(); path(ireland); ctx.fillStyle = '#22334A'; ctx.fill(); }
+  if (ni) {
+    const fade = 1 - cz;
+    ctx.save();
+    if (cz > 0.02) {
+      ctx.beginPath(); path(ni);
+      ctx.fillStyle = 'rgba(35,54,77,' + cz.toFixed(2) + ')'; ctx.fill();
+    }
+    ctx.beginPath(); path(ni);
+    ctx.fillStyle = zoom > 0.02 ? 'rgba(46,211,198,' + (0.045 + 0.085 * fade).toFixed(3) + ')' : 'rgba(46,211,198,.55)';
+    ctx.shadowColor = 'rgba(46,211,198,.45)'; ctx.shadowBlur = (26 * zoom + 6) * fade;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(46,211,198,' + (0.3 + 0.7 * fade).toFixed(2) + ')';
+    ctx.lineWidth = zoom > 0.02 ? 1.6 : 1.2; ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.beginPath(); path({ type: 'Sphere' });
+  ctx.strokeStyle = 'rgba(46,211,198,' + (0.55 - 0.5 * zoom) + ')'; ctx.lineWidth = 2; ctx.stroke();
+
+  if (zoom < 0.35) beacon(now, 1 - zoom / 0.35);
+  if (zoom > 0.25 && cz < 0.85) regional(now, clamp01((zoom - 0.25) / 0.75) * (1 - cz / 0.85));
+  if (cz > 0.2) closeUp(now, clamp01((cz - 0.2) / 0.8));
+  ctx.restore();
+  if (clipLeft > 0) { // the clip edge reads as a deliberate rule, not a seam
+    ctx.beginPath(); ctx.moveTo(clipLeft - 9, 0); ctx.lineTo(clipLeft - 9, H);
+    ctx.strokeStyle = 'rgba(234,241,248,.9)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+}
+
+function beacon(now, a) {
+  const rot = projection.rotate();
+  if (d3.geoDistance(BELFAST, [-rot[0], -rot[1]]) > Math.PI / 2 - 0.02) return;
+  const p = projection(BELFAST);
+  const k = (now % 2600) / 2600;
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.beginPath(); ctx.arc(p[0], p[1], 6 + k * 46, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(46,211,198,' + (0.6 * (1 - k)) + ')'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(p[0], p[1], 4.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#2ED3C6'; ctx.fill();
+  ctx.font = '600 12px Manrope, sans-serif'; ctx.fillStyle = '#EAF1F8';
+  ctx.fillText('BELFAST', p[0] + 14, p[1] + 4);
+  ctx.restore();
+}
+
+function marker(p, type, now, big) {
+  const s = big ? 1.35 : 1;
+  if (type === 'host' || type === 'partner') {
+    const k = ((now % 2200) / 2200 + (p[0] % 7) / 7) % 1;
+    ctx.beginPath(); ctx.arc(p[0], p[1], (5 + k * 24) * s, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(46,211,198,' + (0.4 * (1 - k)) + ')'; ctx.lineWidth = 1.4; ctx.stroke();
+  }
+  if (type === 'partner') {
+    const r = 6 * s;
+    ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = '#2ED3C6'; ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.fillStyle = '#0d1626'; ctx.fillRect(-r * 0.34, -r * 0.34, r * 0.68, r * 0.68);
+    ctx.restore();
+  } else if (type === 'host') {
+    ctx.beginPath(); ctx.arc(p[0], p[1], 5.5 * s, 0, Math.PI * 2);
+    ctx.fillStyle = '#2ED3C6'; ctx.fill();
+  } else if (type === 'paid') {
+    ctx.beginPath(); ctx.arc(p[0], p[1], 4.6 * s, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(46,211,198,.9)'; ctx.lineWidth = 2; ctx.stroke();
+  } else if (type === 'free') {
+    ctx.beginPath(); ctx.arc(p[0], p[1], 3 * s, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(234,241,248,.85)'; ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(p[0], p[1], 3.4 * s, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(234,241,248,.7)'; ctx.lineWidth = 1.2; ctx.stroke();
+  }
+}
+
+function regional(now, a) {
+  ctx.save(); ctx.globalAlpha = a;
+
+  ctx.beginPath();
+  ARCS.forEach(arc => path(arc.full));
+  ctx.strokeStyle = 'rgba(46,211,198,.13)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.beginPath();
+  ARCS.forEach((arc, i) => {
+    const prog = ((now / 4200) + i / ARCS.length) % 1;
+    const n = arc.pts.length - 1;
+    const hi = Math.round(prog * n), lo = Math.max(0, hi - Math.round(0.18 * n));
+    if (hi - lo > 1) path({ type: 'LineString', coordinates: arc.pts.slice(lo, hi + 1) });
+  });
+  ctx.strokeStyle = 'rgba(46,211,198,.75)'; ctx.lineWidth = 1.8; ctx.stroke();
+
+  // at this scale only the gems, hosts and partners are legible
+  PLACES.forEach((p, i) => {
+    if (!filters[p.t]) return;
+    if (p.t === 'free' || p.t === 'paid') return;
+    const q = projection(p.c);
+    if (p.t === 'gem') {
+      const tw = 0.4 + 0.4 * Math.sin(now / 900 + i * 1.7);
+      ctx.beginPath(); ctx.arc(q[0], q[1], 2.2, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(234,241,248,' + tw.toFixed(2) + ')'; ctx.lineWidth = 1; ctx.stroke();
+    } else marker(q, p.t, now);
+  });
+
+  const placed = [];
+  TOWNS.forEach(t => {
+    const q = projection(t.c);
+    const r = t.rank === 0 ? 4 : t.rank === 1 ? 3 : 2.2;
+    ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, Math.PI * 2);
+    ctx.fillStyle = t.rank === 0 ? '#EAF1F8' : t.rank === 1 ? 'rgba(234,241,248,.8)' : 'rgba(234,241,248,.5)';
+    ctx.fill();
+  });
+  TOWNS.slice().sort((x, y) => x.rank - y.rank).forEach(t => {
+    label(t.n.toUpperCase(), projection(t.c), placed, {
+      size: t.rank === 0 ? 12 : t.rank === 1 ? 11 : 10,
+      weight: t.rank === 0 ? 700 : 600,
+      colour: t.rank === 0 ? '#EAF1F8' : t.rank === 1 ? 'rgba(226,233,242,.92)' : 'rgba(160,173,190,.85)',
+      nudge: t.dy || 0
+    });
+  });
+  ctx.restore();
+}
+
+function closeUp(now, a) {
+  if (!city) return;
+  const centre = projection(city.c);
+  ctx.save(); ctx.globalAlpha = a;
+
+  const kmPx = view.scale / 6371;
+  [2, 5, 10].forEach(km => {
+    ctx.beginPath(); ctx.arc(centre[0], centre[1], km * kmPx, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(234,241,248,.10)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.font = '600 9px Manrope, sans-serif'; ctx.fillStyle = 'rgba(124,139,161,.85)';
+    ctx.fillText(km + ' KM', centre[0] + 5, centre[1] - km * kmPx - 4);
+  });
+
+  const placed = [];
+  ctx.beginPath(); ctx.arc(centre[0], centre[1], 5, 0, Math.PI * 2);
+  ctx.fillStyle = '#EAF1F8'; ctx.fill();
+  label(city.n.toUpperCase(), centre, placed, { size: 13, weight: 700, colour: '#EAF1F8' });
+
+  (AREAS[city.n] || []).forEach(area => {
+    const q = projection(area.c);
+    ctx.beginPath(); ctx.arc(q[0], q[1], 3, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(183,194,208,.55)'; ctx.lineWidth = 1.2; ctx.stroke();
+    label(area.n.toUpperCase(), q, placed, { size: 10, weight: 600, colour: 'rgba(160,173,190,.8)' });
+  });
+
+  const here = PLACES.filter(p => filters[p.t] && d3.geoDistance(p.c, city.c) * 6371 < 26);
+  const order = { free: 0, gem: 1, paid: 2, host: 3, partner: 4 };
+  here.sort((x, y) => order[x.t] - order[y.t]).forEach((p, i) => {
+    const q = projection(p.c);
+    const isSel = selected && selected.id === p.id;
+    if (isSel) {
+      const k = (now % 1600) / 1600;
+      ctx.beginPath(); ctx.arc(q[0], q[1], 12 + k * 26, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(234,241,248,' + (0.6 * (1 - k)) + ')'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    marker(q, p.t, now, isSel);
+    if (p.t === 'host' || p.t === 'partner' || isSel) {
+      label(p.n.toUpperCase(), q, placed, {
+        size: p.t === 'partner' ? 11 : 11,
+        weight: 700,
+        colour: p.t === 'partner' ? '#BFF1EC' : '#8BEFE4',
+        gap: 12
+      });
+    }
+  });
+  ctx.restore();
+}
+
+function label(text, p, placed, o) {
+  const size = o.size, gap = o.gap || (size > 11 ? 10 : 7);
+  ctx.font = o.weight + ' ' + size + 'px Manrope, sans-serif';
+  const w = ctx.measureText(text).width;
+  const box = (x1, dy) => ({ x1: x1 - 2, y1: p[1] + dy - size * 0.7, x2: x1 + w + 2, y2: p[1] + dy + size * 0.45 });
+  const hits = r => placed.some(q => !(r.x2 < q.x1 || r.x1 > q.x2 || r.y2 < q.y1 || r.y1 > q.y2));
+  const n = o.nudge || 0;
+  const tries = [
+    [p[0] + gap, n], [p[0] - gap - w, n], [p[0] + gap, 0], [p[0] - gap - w, 0],
+    [p[0] - w / 2, -gap - size * 0.5], [p[0] - w / 2, gap + size * 0.6],
+    [p[0] + gap, -size - 1], [p[0] - gap - w, -size - 1],
+    [p[0] + gap, size + 1], [p[0] - gap - w, size + 1]
+  ];
+  let found = tries.map(([x, dy]) => ({ x, dy, r: box(x, dy) })).find(t => !hits(t.r));
+  if (!found) {
+    outer:
+    for (let d = 18; d <= 72; d += 10) {
+      for (let i = 0; i < 8; i++) {
+        const ang = i * Math.PI / 4;
+        const dx = Math.cos(ang) * d, dy = Math.sin(ang) * d;
+        const x = dx < 0 ? p[0] + dx - w : p[0] + dx;
+        const r = box(x, dy);
+        if (!hits(r)) { found = { x, dy, r, leader: true }; break outer; }
+      }
+    }
+  }
+  if (!found) return;
+  placed.push(found.r);
+  if (found.leader) {
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]);
+    ctx.lineTo(found.x < p[0] ? found.x + w + 3 : found.x - 3, p[1] + found.dy);
+    ctx.strokeStyle = 'rgba(160,173,190,.4)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  ctx.fillStyle = o.colour;
+  ctx.fillText(text, found.x, p[1] + found.dy + size * 0.35);
+}
+
+window.addEventListener('resize', resize);
+document.addEventListener('visibilitychange', schedule);
+
+const res = (id, fallback) => (window.__resources && window.__resources[id]) || fallback;
+
+// ── LIVE LAYERS ──────────────────────────────────────────────────────────────
+// Partners and host car parks live in the database, not in this repo. Baking
+// them into places.json would mean a partner who ends their placement stays
+// pinned on the globe until somebody remembers to rebuild — the same staleness
+// that had the shipped version showing "APCOA pilot" for two listings that are
+// unsigned drafts.
+//
+// So they are fetched at load, through the same public REST endpoint and anon
+// key the app itself uses, with RLS deciding what is visible. If the request
+// fails or the config is absent, these layers are simply MISSING rather than
+// wrong: the 745 generated spaces still render and the page still works.
+const CFG = window.__PARKEASY__ || {};
+
+async function fetchJSON(path) {
+  if (!CFG.url || !CFG.key) return [];
+  try {
+    const r = await fetch(CFG.url + path, {
+      headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key },
+    });
+    return r.ok ? await r.json() : [];
+  } catch { return []; }
+}
+
+async function livePartners() {
+  const [partners, listings] = await Promise.all([
+    // Only what is drawable: a partner with no trusted pin carries the
+    // city-centre placeholder its NOT NULL columns demand, and plotting that
+    // would put a business on a street it has nothing to do with.
+    fetchJSON('/rest/v1/partners?select=name,lat,lng,geo_verified,is_online&active=is.true&geo_verified=is.true&is_online=is.false'),
+    fetchJSON('/rest/v1/listings_public?select=title,lat,lng,status&status=eq.active'),
+  ]);
+  return [
+    ...partners.filter(p => Number.isFinite(p.lat)).map(p => ({ t: 'partner', n: p.name, c: [p.lng, p.lat] })),
+    ...listings.filter(l => Number.isFinite(l.lat)).map(l => ({ t: 'host', n: l.title, c: [l.lng, l.lat] })),
+  ];
+}
+
+// Counted at build time from the same arrays the app renders, never typed.
+function paintStats(stats) {
+  if (!stats) return;
+  const row = document.querySelector('.stats');
+  if (!row) return;
+  const cells = [
+    [stats.spaces, 'Spaces mapped'],
+    [stats.gems, 'Hidden gems'],
+    [stats.towns, 'Towns covered'],
+    [stats.hostShare + '%', 'Kept by the host'],
+  ];
+  row.innerHTML = cells.map(([v, l]) => `<div class="stat"><b>${v}</b><i>${l}</i></div>`).join('');
+}
+
+Promise.all([
+  d3.json('./countries-110m.json'),
+  d3.json('./ni-ireland.json'),
+  d3.json('./places.json'),
+  livePartners()
+]).then(([topo, local, places, partners]) => {
+  land = topojson.merge(topo, topo.objects.countries.geometries);
+  ni = local.ni;
+  ireland = local.ireland;
+  AREAS = places.areas || {};
+  let i = 0;
+  PLACES = [
+    // Partners come from the database at load, not from a generated file:
+    // they change without a deploy, and a partner page that has been taken
+    // down should not go on being pinned here. Absent rather than stale when
+    // the fetch fails.
+    ...partners,
+    // The real name when the generator supplied one — 743 of 745 do, and
+    // "Twin Spires Complex car park" is a far better search result than
+    // "Free space". Hidden gems fall back to their AREA label or the generic,
+    // never their name: that is what Premium buys.
+    ...places.spaces.map(s => ({ ...s, n: s.n || (TYPES[s.t].label + ' space') }))
+  ].map(p => ({ ...p, id: p.t + '-' + (i++) }));
+  paintStats(places.stats);
+  buildFilters();
+  renderList();
+  resize();
+  view = cameraFor('globe');
+  schedule();
+});
+resize();
+</script>
+</body>
+</html>
