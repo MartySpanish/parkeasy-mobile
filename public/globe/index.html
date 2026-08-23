@@ -10,9 +10,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="./config.js"></script>
-<script src="./d3.min.js"></script>
-<script src="./topojson-client.min.js"></script>
+<!-- ABSOLUTE PATHS, NOT RELATIVE — and they have to stay that way.
+     vercel.json rewrites /globe to /globe/index.html. A rewrite is not a
+     redirect: the browser's URL stays "/globe", with no trailing slash, so a
+     relative "./d3.min.js" resolves against "/" and asks for "/d3.min.js" at
+     the site root. That 404s, d3 is never defined, and the page renders its
+     chrome — heading, buttons, legend — with an empty canvas where the globe
+     should be. It looks like a broken globe rather than a broken path, which
+     is why it survived a deploy.
+     The same applies to the three d3.json() loads further down. -->
+<script src="/globe/config.js"></script>
+<script src="/globe/d3.min.js"></script>
+<script src="/globe/topojson-client.min.js"></script>
 <style>
   :root{
     --bg:#0d1626;--ink:#EAF1F8;--muted:#8b9bb0;--accent:#2ED3C6;
@@ -955,15 +964,21 @@ function paintStats(stats) {
     [stats.spaces, 'Spaces mapped'],
     [stats.gems, 'Hidden gems'],
     [stats.towns, 'Towns covered'],
-    [stats.hostShare + '%', 'Kept by the host'],
+    // The split used to be the fourth tile, quoting the host's percentage.
+    // Marty pulled it, here and from the in-app hosts card, for one reason: a
+    // treasurer reading a percentage is doing arithmetic, not signing up. The
+    // number is not a secret and it is still on /hosts, in full, next to the
+    // worked examples where somebody deciding actually wants it. This tile now
+    // says the thing that gets them to look.
+    ['Free', 'To list a space'],
   ];
   row.innerHTML = cells.map(([v, l]) => `<div class="stat"><b>${v}</b><i>${l}</i></div>`).join('');
 }
 
 Promise.all([
-  d3.json('./countries-110m.json'),
-  d3.json('./ni-ireland.json'),
-  d3.json('./places.json'),
+  d3.json('/globe/countries-110m.json'),
+  d3.json('/globe/ni-ireland.json'),
+  d3.json('/globe/places.json'),
   livePartners()
 ]).then(([topo, local, places, partners]) => {
   land = topojson.merge(topo, topo.objects.countries.geometries);

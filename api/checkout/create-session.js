@@ -98,13 +98,24 @@ export default async function handler(req, res) {
     // would undercut the rate the Academy actually agreed. So when a listing is
     // day-priced, durationHours is read as a number of DAYS and the slot is the
     // gate window rather than an arbitrary span.
-    const dayPriced = (!listing.price_per_hour || Number(listing.price_per_hour) <= 0)
-                      && Number(listing.price_per_day) > 0;
-    let pricePerHour = Number(listing.price_per_hour);
-    let pricePerDay  = Number(listing.price_per_day);
-    if (!dayPriced && (!pricePerHour || pricePerHour <= 0)) {
+    //
+    // A listing may now carry BOTH rates — a club that will sell you an hour
+    // for the shops or the whole matchday. When both exist the driver's choice
+    // decides, and it arrives as `unit`. It is read as an enum with 'hour' as
+    // the default, never trusted as a price: the amount still comes from the
+    // listing row, so the worst a forged `unit` can do is buy the OTHER rate
+    // this host published, at that rate's own terms.
+    const hasHour = Number(listing.price_per_hour) > 0;
+    const hasDay  = Number(listing.price_per_day)  > 0;
+    if (!hasHour && !hasDay) {
       return res.status(400).json({ error: 'This listing has no price set' });
     }
+    // Only a listing that HAS a day rate can be booked by the day, and a
+    // listing with no hourly rate can only ever be booked by the day.
+    const wantsDay  = String(req.body?.unit || '').toLowerCase() === 'day';
+    const dayPriced = hasDay && (!hasHour || wantsDay);
+    let pricePerHour = Number(listing.price_per_hour);
+    let pricePerDay  = Number(listing.price_per_day);
 
     // Event pricing: a per-date override replaces the base hourly price.
     if (startsAt) {

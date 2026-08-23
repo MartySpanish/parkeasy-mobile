@@ -71,13 +71,18 @@ export async function claimListings(token) {
 // Create a Stripe Checkout Session for a booking and return the hosted payment
 // URL. Price/fees are computed server-side from the listing — the client only
 // says which listing and for how long. Token is optional (guest checkout ok).
-export async function createBookingSession({ listingId, durationHours, startsAt, token, marketingOptIn, repeatWeeks, vehicleReg }) {
+export async function createBookingSession({ listingId, durationHours, startsAt, token, marketingOptIn, repeatWeeks, vehicleReg, unit }) {
   const r = await apiFetch('/api/checkout/create-session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({
       listingId, durationHours, startsAt, marketingOptIn: !!marketingOptIn,
       repeatWeeks: repeatWeeks || 1, vehicleReg: vehicleReg || null,
+      // 'hour' or 'day', and only meaningful on a listing that publishes both
+      // rates. The server treats it as an enum and re-reads the price from the
+      // listing row, so this cannot set a price — only choose between two the
+      // host already set. durationHours carries DAYS when this is 'day'.
+      unit: unit === 'day' ? 'day' : 'hour',
       // Whether this booking started at a free spot, so bookings.from_hotspot
       // records it server-side. A client analytics event fired after the Stripe
       // redirect is lost whenever somebody closes the tab on the receipt page.
