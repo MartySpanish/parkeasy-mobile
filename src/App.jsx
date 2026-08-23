@@ -4898,7 +4898,19 @@ const BookingSheet = ({ listing, onClose }) => {
   // rate. The driver picks a DATE and how many days, and the gates decide the
   // window — asking them to choose a start time would be meaningless when the
   // site opens at 8 and locks at 5 regardless.
-  const dayPriced = !(Number(listing.price_per_hour) > 0) && Number(listing.price_per_day) > 0;
+  //
+  // A host may now publish BOTH — an hourly rate for someone nipping to the
+  // shops and a day rate for the whole matchday. Where both exist the driver
+  // chooses, and that choice has to be the same variable the rest of this
+  // sheet already branches on, or the summary, the minimum and the gate-window
+  // copy all quietly describe a different booking than the one being paid for.
+  const hasHour = Number(listing.price_per_hour) > 0;
+  const hasDay  = Number(listing.price_per_day)  > 0;
+  const bothRates = hasHour && hasDay;
+  // Defaults to the hourly rate when there is a choice: it is the smaller
+  // commitment, and it is what the server defaults to if `unit` never arrives.
+  const [unit, setUnit] = useState(hasHour ? 'hour' : 'day');
+  const dayPriced = hasDay && (!hasHour || unit === 'day');
   const baseRate = dayPriced ? Number(listing.price_per_day) : (Number(listing.price_per_hour) || 0);
   const today = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(() => firstOpenDate(listing, today));
@@ -5005,7 +5017,8 @@ const BookingSheet = ({ listing, onClose }) => {
       const startTime = dayPriced ? String(listing.gate_opens_at || '08:00').slice(0,5) : time;
       const startsAt = date && startTime ? new Date(`${date}T${startTime}`).toISOString() : null;
       ls.set('pe_vehicle_reg', regClean);
-      const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks, vehicleReg: regClean });
+      const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks, vehicleReg: regClean,
+        unit: dayPriced ? 'day' : 'hour' });
       window.location.href = url;   // full-page redirect to Stripe Checkout
     } catch (e) { setErr(paymentError(e.message)); setBusy(false); }
   };
@@ -5036,6 +5049,32 @@ const BookingSheet = ({ listing, onClose }) => {
           <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
             {closedReason || spanReason}
           </p>
+        )}
+        {/* Only where the host published both rates. One rate and there is no
+            choice to offer, so none is shown. Switching resets the quantity:
+            "2" means two hours on one side of this toggle and two DAYS on the
+            other, and carrying it across silently turns a 2-hour booking into
+            a two-day one at the day rate. */}
+        {bothRates && (
+          <div className="mt-3">
+            <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5">How do you want it</label>
+            <div className="flex gap-2">
+              {[
+                { k:'hour', label:'By the hour', sub:`£${Number(listing.price_per_hour).toFixed(2)}/hr` },
+                { k:'day',  label:'All day',     sub:`£${Number(listing.price_per_day).toFixed(2)}/day` },
+              ].map(o => (
+                <button key={o.k} type="button"
+                  onClick={()=>{ if (unit !== o.k) { setUnit(o.k); setHours(o.k === 'day' ? 1 : 2); } }}
+                  aria-pressed={unit === o.k}
+                  className={`flex-1 rounded-xl border px-3 py-2.5 text-left transition ${unit===o.k
+                    ? 'teal-grad text-[#06231f] border-transparent'
+                    : 'bg-white/[0.05] border-white/12 text-[#cdd9e8]'}`}>
+                  <span className="block text-[12.5px] font-bold">{o.label}</span>
+                  <span className={`block text-[11px] font-semibold ${unit===o.k?'text-[#06231f]/70':'text-[#8da2bd]'}`}>{o.sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {dayPriced ? (
           <>
@@ -5815,6 +5854,11 @@ const suggestedPrice = (lat, lng) => {
 // Floor for a listing's hourly rate. Anything under this can't reach the £4
 // minimum booking in a sensible number of hours.
 const MIN_PRICE_PER_HOUR = 1.5;
+// A day rate is a different shape of thing, not 24 x the hourly one: the sites
+// that use it are clubs and schools selling a fixed gate window for a matchday.
+// Davitt Park is £20 and Belfast Royal Academy £15, so the floor is set below
+// both — it exists to catch a typo (£3 for a whole day), not to set the market.
+const MIN_PRICE_PER_DAY = 5;
 
 // Restriction wording a submitter picks -> public map badge. Anything that
 // isn't clearly unrestricted is shown as timed rather than free, so an
@@ -5835,8 +5879,18 @@ const checkRequirements = (l) => {
   if (photos.length > 10) missing.push('Maximum 10 photos');
   if ((l.instructions||'').trim().length < 30) missing.push(`"How to find it" too short — ${(l.instructions||'').trim().length}/30 characters`);
   if (l.lat == null || l.lng == null) missing.push('Verified address (pick a suggestion)');
+  // A listing needs at least one rate and may carry both. Each is checked on
+  // its own: publishing a sound hourly rate alongside a mistyped day rate has
+  // to fail, or the day rate goes live at the typo.
   if (!(l.price_per_hour ?? l.price_per_day ?? l.price_per_month)) missing.push('A price');
-  else if (l.price_per_hour != null && Number(l.price_per_hour) < MIN_PRICE_PER_HOUR) missing.push(`Price of at least £${MIN_PRICE_PER_HOUR.toFixed(2)}/hr`);
+  if (l.price_per_hour != null && Number(l.price_per_hour) < MIN_PRICE_PER_HOUR) missing.push(`Hourly price of at least £${MIN_PRICE_PER_HOUR.toFixed(2)}`);
+  if (l.price_per_day  != null && Number(l.price_per_day)  < MIN_PRICE_PER_DAY)  missing.push(`Day price of at least £${MIN_PRICE_PER_DAY.toFixed(2)}`);
+  // Both rates are allowed, but the day rate has to beat buying the same hours
+  // one at a time or it is a worse deal that the sheet still offers as "all day".
+  if (Number(l.price_per_hour) > 0 && Number(l.price_per_day) > 0
+      && Number(l.price_per_day) <= Number(l.price_per_hour)) {
+    missing.push('Day price higher than the hourly price');
+  }
   if (!l.availability) missing.push('Availability preset');
   if (!(l.contact_phone||'').trim()) missing.push('Your mobile number');
   const cap = l.spaces ?? 1;
@@ -5950,7 +6004,8 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   const [extras, setExtras]   = useState([]);           // extra photo urls
   const [uploading, setUploading] = useState(null);     // slotKey while uploading
   const [f, setF]             = useState({ title:'', description:'', address:'', lat:null, lng:null,
-    space_type:'driveway', price_per_hour:'', spaces:1, contact_phone:'', contact_email:user?.email||'',
+    space_type:'driveway', price_per_hour:'', price_per_day:'', price_mode:'hour',
+    spaces:1, contact_phone:'', contact_email:user?.email||'',
     instructions:'', availability:null, org_name:'', org_type:null, org_registration:'',
     access_contact_name:'', access_contact_phone:'', access_method:'', ev_speed:null, ev_connector:null });
   const [addrSugs, setAddrSugs] = useState([]);
@@ -5969,15 +6024,23 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   const evAmenities = f.space_type==='ev_charger'
     ? ['ev_charging', ...(f.ev_speed?[`speed:${f.ev_speed}`]:[]), ...(f.ev_connector?[`connector:${f.ev_connector}`]:[])]
     : [];
+  // The MODE decides which rates exist, not merely which inputs are on screen.
+  // A host who types an hourly rate, switches to "per day" and publishes must
+  // not ship the hourly rate they abandoned — it would be the rate the server
+  // picks by default and the one the driver is charged.
+  const wantsHour = f.price_mode === 'hour' || f.price_mode === 'both';
+  const wantsDay  = f.price_mode === 'day'  || f.price_mode === 'both';
+  const num = (v) => (v !== '' && v != null && Number.isFinite(parseFloat(v)) ? parseFloat(v) : null);
   const listingShape = { ...f, host_type: hostType, photos, amenities: evAmenities,
-    price_per_hour: f.price_per_hour ? parseFloat(f.price_per_hour) : null,
+    price_per_hour: wantsHour ? num(f.price_per_hour) : null,
+    price_per_day:  wantsDay  ? num(f.price_per_day)  : null,
     spaces: hostType==='organization' ? (parseInt(f.spaces)||1) : 1 };
   const missing = checkRequirements(listingShape);
   const canPublish = missing.length === 0;
   // Which verb-first step is the host on? Derived from what's actually done,
   // so the header can't disagree with the form's own requirements checklist.
   const photosDone = photos.length >= requiredSlots.length;
-  const priceDone  = !!(f.price_per_hour && parseFloat(f.price_per_hour) > 0);
+  const priceDone  = (listingShape.price_per_hour > 0) || (listingShape.price_per_day > 0);
   const datesDone  = !!f.availability;
   const stepIdx = !photosDone ? 0 : !priceDone ? 1 : !datesDone ? 2 : 3;
 
@@ -5994,7 +6057,7 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
     const loc = await resolvePlace(sug);
     if (loc) {
       setF(p => ({ ...p, address: sug.sub ? `${sug.label}, ${sug.sub}` : sug.label, lat: loc.lat, lng: loc.lng,
-        price_per_hour: p.price_per_hour || String(suggestedPrice(loc.lat, loc.lng).toFixed(2)) }));
+        price_per_hour: p.price_per_hour || String(suggestedPrice(loc.lat, loc.lng).toFixed(2)) }));   // hourly only — there is no area benchmark for a day rate
     }
   };
 
@@ -6016,6 +6079,7 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
     description: f.description.trim() || null,
     address: f.address.trim(), lat: f.lat, lng: f.lng,
     space_type: f.space_type, price_per_hour: listingShape.price_per_hour,
+    price_per_day: listingShape.price_per_day,
     spaces: listingShape.spaces, photos, amenities: evAmenities,
     contact_email: (f.contact_email || user.email || '').trim(), contact_phone: f.contact_phone.trim() || null,
     instructions: f.instructions.trim() || null, availability: f.availability,
@@ -6060,7 +6124,9 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
       const d = await r.json().catch(()=>({}));
       if (!r.ok) { setErr(d.missing ? 'Still missing: ' + d.missing.join(' · ') : (d.error || 'Publish failed')); setBusy(false); return; }
       notify('listing', { title: buildRow('x').title, address: f.address, spaceType: f.space_type,
-        price: listingShape.price_per_hour ? `£${listingShape.price_per_hour}/hr` : '—', email: user.email });
+        price: [listingShape.price_per_hour ? `£${listingShape.price_per_hour}/hr` : null,
+                listingShape.price_per_day  ? `£${listingShape.price_per_day}/day` : null]
+               .filter(Boolean).join(' · ') || '—', email: user.email });
       onSuccess(hostType, d.status);
     } catch (ex) { setErr(ex.message || 'Publish failed'); }
     setBusy(false);
@@ -6217,18 +6283,54 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
       <label className={lbl}>How to find it * <span className="normal-case font-medium text-[#6b7d96]">({(f.instructions||'').trim().length}/30 min)</span></label>
       <textarea className={inp} rows={3} placeholder="e.g. Turn right at the red gate, first driveway on the left. Ring the doorbell if the gate is closed." value={f.instructions} onChange={e=>set('instructions',e.target.value)}/>
 
-      <label className={lbl}>Price (£/hour) * <span className="normal-case font-medium text-[#6b7d96]">{f.lat!=null?`· suggested £${suggestedPrice(f.lat,f.lng).toFixed(2)} for this area`:''}</span></label>
-      <input className={inp} type="number" min={MIN_PRICE_PER_HOUR} step="0.10" placeholder={suggestedPrice(f.lat,f.lng).toFixed(2)} value={f.price_per_hour} onChange={e=>set('price_per_hour',e.target.value)}/>
+      {/* HOW THEY CHARGE, before what they charge. A driveway sells hours; a
+          club selling a matchday sells the gate window and an hourly rate on it
+          would undercut the day rate they actually agreed. Both is for a site
+          that wants each — an hour for the shops, or the whole day. */}
+      <label className={lbl}>How you want to charge *</label>
+      <div className="flex gap-2">
+        {[
+          { k:'hour', label:'By the hour', sub:'A driveway or a bay' },
+          { k:'day',  label:'Per day',     sub:'A matchday or event' },
+          { k:'both', label:'Both',        sub:'Driver chooses' },
+        ].map(o=>(
+          <button key={o.k} type="button" onClick={()=>set('price_mode',o.k)}
+            aria-pressed={f.price_mode===o.k}
+            className={`flex-1 rounded-xl border px-2.5 py-2.5 text-left transition ${f.price_mode===o.k
+              ? 'teal-grad text-[#06231f] border-transparent'
+              : 'bg-white/[0.05] border-white/12 text-[#cdd9e8]'}`}>
+            <span className="block text-[12px] font-bold leading-tight">{o.label}</span>
+            <span className={`block text-[10px] font-semibold mt-0.5 ${f.price_mode===o.k?'text-[#06231f]/70':'text-[#8da2bd]'}`}>{o.sub}</span>
+          </button>
+        ))}
+      </div>
+
+      {wantsHour && (<>
+        <label className={lbl}>Price (£/hour) * <span className="normal-case font-medium text-[#6b7d96]">{f.lat!=null?`· suggested £${suggestedPrice(f.lat,f.lng).toFixed(2)} for this area`:''}</span></label>
+        <input className={inp} type="number" min={MIN_PRICE_PER_HOUR} step="0.10" placeholder={suggestedPrice(f.lat,f.lng).toFixed(2)} value={f.price_per_hour} onChange={e=>set('price_per_hour',e.target.value)}/>
+      </>)}
+      {wantsDay && (<>
+        <label className={lbl}>Price (£/day) * <span className="normal-case font-medium text-[#6b7d96]">· for your whole gate window</span></label>
+        <input className={inp} type="number" min={MIN_PRICE_PER_DAY} step="0.50" placeholder="15.00" value={f.price_per_day} onChange={e=>set('price_per_day',e.target.value)}/>
+      </>)}
       {/* Hosts consistently underprice, so give them a real benchmark to price
           against rather than leaving them to guess from nothing. */}
       <div className="mt-1.5 rounded-xl bg-[#2ED3C6]/8 border border-[#2ED3C6]/20 px-3 py-2.5">
         <p className="text-[11.5px] text-[#cdd9e8] leading-snug">
           <strong className="text-[#5BE7DA]">Most first-time hosts charge too little.</strong> The official event park-and-ride is <strong className="text-[#EAF1F8]">£10 a day</strong> — from a car park miles out that still needs a bus. A space someone can walk from is worth more than that.
         </p>
-        {f.price_per_hour && parseFloat(f.price_per_hour) > 0 && (
+        {wantsHour && listingShape.price_per_hour > 0 && (
           <p className="text-[11.5px] text-[#8da2bd] mt-1.5">
-            At £{parseFloat(f.price_per_hour).toFixed(2)}/hr you keep <strong className="text-[#6BEFB9]">£{(parseFloat(f.price_per_hour) * 4 * 0.85).toFixed(2)}</strong> of a 4-hour booking, after our 15%.
-            {parseFloat(f.price_per_hour) < MIN_PRICE_PER_HOUR && <span className="text-[#FFD27A]"> Minimum is £{MIN_PRICE_PER_HOUR.toFixed(2)}/hr.</span>}
+            At £{listingShape.price_per_hour.toFixed(2)}/hr you keep <strong className="text-[#6BEFB9]">£{(listingShape.price_per_hour * 4 * 0.85).toFixed(2)}</strong> of a 4-hour booking, after our 15%.
+            {listingShape.price_per_hour < MIN_PRICE_PER_HOUR && <span className="text-[#FFD27A]"> Minimum is £{MIN_PRICE_PER_HOUR.toFixed(2)}/hr.</span>}
+          </p>
+        )}
+        {wantsDay && listingShape.price_per_day > 0 && (
+          <p className="text-[11.5px] text-[#8da2bd] mt-1.5">
+            At £{listingShape.price_per_day.toFixed(2)}/day you keep <strong className="text-[#6BEFB9]">£{(listingShape.price_per_day * 0.85).toFixed(2)}</strong> per space, per day, after our 15%.
+            {listingShape.price_per_day < MIN_PRICE_PER_DAY && <span className="text-[#FFD27A]"> Minimum is £{MIN_PRICE_PER_DAY.toFixed(2)}/day.</span>}
+            {listingShape.price_per_hour > 0 && listingShape.price_per_day <= listingShape.price_per_hour
+              && <span className="text-[#FFD27A]"> A day has to cost more than an hour.</span>}
           </p>
         )}
       </div>

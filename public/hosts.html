@@ -63,6 +63,12 @@
   section h2{font-size:clamp(21px,4.6vw,27px); line-height:1.15}
   section p{color:var(--muted); margin:12px 0 0}
 
+  .calclbl{display:block;font-size:.82rem;font-weight:700;margin-bottom:.5rem}
+  .modes{display:flex;gap:.5rem}
+  .mode{flex:1;padding:.6rem .5rem;border-radius:.6rem;border:1px solid rgba(255,255,255,.16);
+        background:rgba(255,255,255,.04);color:inherit;font:inherit;font-size:.82rem;font-weight:700;
+        cursor:pointer}
+  .mode.on{background:#2ED3C6;border-color:transparent;color:#06231f}
   /* calculator */
   .calc{background:var(--surface); border:1px solid var(--hairline); border-radius:20px; padding:20px; margin-top:20px}
   .field{margin-bottom:18px}
@@ -144,20 +150,31 @@
 
   <section id="calculator">
     <h2>What could it raise?</h2>
-    <p>Drag the three sliders. This is an estimate, not a quote — real income depends on
+    <p>Drag the sliders. This is an estimate, not a quote — real income depends on
       how often your spaces actually sell.</p>
 
     <div class="calc">
+      <div class="field">
+        <span class="calclbl">How you'd charge</span>
+        <div class="modes" role="group" aria-label="Pricing model">
+          <button type="button" id="mDay"  class="mode on"  aria-pressed="true">Per day or event</button>
+          <button type="button" id="mHour" class="mode"     aria-pressed="false">By the hour</button>
+        </div>
+      </div>
       <div class="field">
         <label for="spaces">Spaces you'd release <b><span id="spacesV">20</span></b></label>
         <input type="range" id="spaces" min="1" max="150" value="20" step="1">
       </div>
       <div class="field">
-        <label for="events">Days or events you'd open per week <b><span id="eventsV">2</span></b></label>
+        <label for="events"><span id="eventsLbl">Days or events you'd open per week</span> <b><span id="eventsV">2</span></b></label>
         <input type="range" id="events" min="1" max="7" value="2" step="1">
       </div>
+      <div class="field" id="hoursField" hidden>
+        <label for="hours">Hours a space is booked, on a day you're open <b><span id="hoursV">4</span></b></label>
+        <input type="range" id="hours" min="1" max="12" value="4" step="1">
+      </div>
       <div class="field">
-        <label for="price">Price per space <b>£<span id="priceV">5</span></b></label>
+        <label for="price"><span id="priceLbl">Price per space</span> <b>£<span id="priceV">5</span></b></label>
         <input type="range" id="price" min="2" max="25" value="5" step="1">
       </div>
 
@@ -169,7 +186,7 @@
         </div>
       </div>
 
-      <p class="note">
+      <p class="note" id="calcNote">
         Assumes every space sells every time you open, 52 weeks a year — so treat it as a
         ceiling, not a forecast. A club opening 20 spaces for two matchdays a week at £5
         is the middle of the range we'd expect.
@@ -347,18 +364,63 @@
   var el = function (id) { return document.getElementById(id); };
   var gbp = function (n) { return '£' + Math.round(n).toLocaleString('en-GB'); };
 
+  // TWO MODELS, because hosts genuinely have two. A club sells a matchday: one
+  // price, one gate window, done. A driveway sells hours. The difference in the
+  // arithmetic is a single extra factor — hours booked per open day — so the
+  // slider appears rather than the calculator forking.
+  var mode = 'day';
+
   function recalc() {
-    var spaces = +el('spaces').value, events = +el('events').value, price = +el('price').value;
+    var spaces = +el('spaces').value, events = +el('events').value,
+        price  = +el('price').value,  hours  = +el('hours').value;
     el('spacesV').textContent = spaces;
     el('eventsV').textContent = events;
-    el('priceV').textContent = price;
-    var gross = spaces * events * 52 * price;
+    el('hoursV').textContent  = hours;
+    el('priceV').textContent  = price;
+
+    var perOpening = mode === 'hour' ? price * hours : price;
+    var gross = spaces * events * 52 * perOpening;
     var net = gross * HOST_SHARE;
     el('net').textContent = gbp(net);
     el('split').textContent =
       'Drivers pay ' + gbp(gross) + ' · ParkEasy keeps ' + gbp(gross - net) + ' · you keep ' + gbp(net);
+
+    el('calcNote').textContent = mode === 'hour'
+      ? 'Assumes every space is booked for that many hours every day you open, 52 weeks a '
+        + 'year — so treat it as a ceiling, not a forecast. At £' + price + ' an hour that is £'
+        + (price * hours).toFixed(0) + ' from one space on one day.'
+      : 'Assumes every space sells every time you open, 52 weeks a year — so treat it as a '
+        + 'ceiling, not a forecast. A club opening 20 spaces for two matchdays a week at £5 '
+        + 'is the middle of the range we\'d expect.';
   }
-  ['spaces', 'events', 'price'].forEach(function (id) {
+
+  function setMode(next) {
+    mode = next;
+    var hourly = next === 'hour';
+    el('mHour').classList.toggle('on',  hourly);
+    el('mDay') .classList.toggle('on', !hourly);
+    el('mHour').setAttribute('aria-pressed', String(hourly));
+    el('mDay') .setAttribute('aria-pressed', String(!hourly));
+    el('hoursField').hidden = !hourly;
+    el('priceLbl').textContent = hourly ? 'Price per hour' : 'Price per space';
+    // "or events" belongs to the matchday model. Hourly, it is just days open.
+    el('eventsLbl').textContent = hourly
+      ? "Days you'd open per week"
+      : "Days or events you'd open per week";
+    // An hourly rate and a day rate do not live on the same scale. £5/hr for
+    // twelve hours is £60 a space; leaving the day slider's 2–25 range in place
+    // would let somebody drag to a number that means nothing hourly.
+    var p = el('price');
+    p.max = hourly ? 12 : 25;
+    p.min = hourly ? 1 : 2;
+    if (+p.value > +p.max) p.value = p.max;
+    if (+p.value < +p.min) p.value = p.min;
+    recalc();
+  }
+
+  el('mHour').addEventListener('click', function () { setMode('hour'); });
+  el('mDay') .addEventListener('click', function () { setMode('day'); });
+  ['spaces', 'events', 'price', 'hours'].forEach(function (id) {
     el(id).addEventListener('input', recalc);
   });
   recalc();
