@@ -688,12 +688,26 @@ const WELCOME_STATS = [
 ];
 
 // ── Free hidden-gem taster ────────────────────────────────────────────────────
-// Every hidden gem is Premium EXCEPT five, app-wide, which stay open to everyone.
-// A free user who has never seen a gem has no reason to believe the locked ones
-// are worth paying for, so the five best-rated are given away as proof and the
-// rest stay behind the paywall.
+// How many gems are given away, app-wide, to somebody who has not paid.
+//
+// NOW ZERO, at Marty's call. The argument for five was that a free user who has
+// never seen a gem has no reason to believe the locked ones are worth paying
+// for, so the five best-rated were handed over as proof. What that actually
+// produced was the highest-voted gem in the country — Ormeau Embankment
+// riverside, 67 votes — sitting open on the results list with its name, notes
+// and exact pin readable. The gems ARE the subscription; giving away the five
+// best is giving away the pitch.
+//
+// The mechanism stays, because this is a business dial rather than a fact about
+// the code: raise this number and the top-N by votes open up again, no other
+// change needed. At 0 the set is empty and every gem is Premium.
+//
+// The database has the same dial in hidden_gems.is_taster, and it is
+// authoritative — see isTasterGem(). Both were set to zero together, in
+// 20260823_no_free_tasters.sql. Change one without the other and a subscriber's
+// screen stops matching a free user's.
 // Ranked by votes, then id, so the set is stable between renders and deploys.
-const FREE_GEMS_TOTAL = 5;
+const FREE_GEMS_TOTAL = 0;
 const TASTER_GEM_IDS = new Set(
   ALL_SPOTS_STATS
     .filter(s => s.badge === 'hidden_gem')
@@ -2471,8 +2485,12 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
               {holdCopy(bookable)} Outside the closed zone.
             </p>
             <div className="space-y-3">
+              {/* isPremium is passed through rather than forced. These are
+                  bookable rental spaces — priced, so isGated() returns false
+                  for them either way — but a hardcoded `true` here is a
+                  loaded gun aimed at whatever ends up in this list later. */}
               {bookable.map(s=>(
-                <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={true} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
+                <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
               ))}
             </div>
           </>
@@ -2483,7 +2501,7 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
               {/* Fallback only. Event parking is a safety feature — never locked,
                   even for free users — so this page is never left empty. */}
               {walkIns.map(s=>(
-                <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={true} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
+                <SpotCard key={s.id} spot={s} saved={saved.has(s.id)} onSave={onSave} isPremium={isPremium} onUpgrade={onUpgrade} onOpen={onOpenSpot}/>
               ))}
             </div>
           </>
@@ -3747,7 +3765,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
             style={{background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.10)'}}>
             <Building2 size={15} className="text-[#5BE7DA] flex-shrink-0"/>
             <span className="text-[12.5px] leading-snug text-[#cdd9e8] flex-1 min-w-0">
-              Got a car park sitting empty? <strong className="text-[#EAF1F8]">Clubs keep 85%.</strong>
+              Got a car park sitting empty? <strong className="text-[#EAF1F8]">Earn from it.</strong>
             </span>
             <ChevronRight size={15} className="text-[rgba(234,241,248,0.4)] flex-shrink-0"/>
           </a>

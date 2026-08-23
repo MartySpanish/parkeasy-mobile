@@ -91,6 +91,28 @@ it('the badge and the card agree on which gems are free', () => {
     'the taster badge still calls a free spot Premium');
 });
 
+it('no gem is given away for free', () => {
+  // Set to 5 once, which put the highest-voted gem in the country on the
+  // results list in full. The gems are the subscription; this is the dial that
+  // decides how much of it is free, and it is zero on both sides — here and in
+  // hidden_gems.is_taster (20260823_no_free_tasters.sql). Raising one without
+  // the other makes a free user's screen disagree with what the server sends.
+  const n = /const FREE_GEMS_TOTAL = (\d+);/.exec(src)?.[1]
+    ?? assert.fail('FREE_GEMS_TOTAL not found');
+  assert.equal(Number(n), 0, `FREE_GEMS_TOTAL is ${n} — that many gems are free`);
+});
+
+it('the event overlay does not force gems open', () => {
+  // walkIns is a hand-written id list that contains a gem (36). It rendered
+  // with isPremium={true} so the event page could never be empty, which also
+  // unlocked whatever gem happened to be in the list.
+  const at = src.indexOf('const EventOverlay = ({');
+  assert.ok(at !== -1, 'EventOverlay not found');
+  const body = src.slice(at, src.indexOf('\nconst ', at + 10));
+  assert.ok(!/isPremium=\{true\}/.test(body),
+    'EventOverlay still hardcodes isPremium={true} — that opens any gem in walkIns');
+});
+
 it('a database is_taster:false is not re-opened by the bundled id list', () => {
   // The fallback set is keyed on ids that predate the database. If it were
   // consulted whenever is_taster was merely falsy, retiring a taster in the
