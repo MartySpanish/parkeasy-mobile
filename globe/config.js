@@ -1,0 +1,1 @@
+window.__PARKEASY__={"url":"https://bbgqregyogtjzaustbng.supabase.co","key":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJiZ3FyZWd5b2d0anphdXN0Ym5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDA1OTYsImV4cCI6MjA5NjE3NjU5Nn0.0-ENztySNpzpUVPS6jHUWdH-5mDsBzFr1wrb7Zr8XWU"};
