@@ -702,6 +702,22 @@ const TASTER_GEM_IDS = new Set(
     .map(s => s.id)
 );
 
+// Is this gem one of the five given away?
+//
+// TWO SOURCES, and the order matters. is_taster comes off the database row and
+// is authoritative; TASTER_GEM_IDS is the bundled fallback, used only when the
+// spot never came from the database at all (offline, or the gem query failed).
+// A database gem that says is_taster:false must NOT then be re-opened by the
+// bundled id set, which is why the fallback is gated on `undefined` rather than
+// on falsiness.
+//
+// Shared by isGated (which of the two cards to render) and TypeBadge (what the
+// pill on the open card says). Those two answers have to come from the same
+// test, or a card opens for free and still calls itself Premium.
+const isTasterGem = (spot) =>
+  spot.isTaster === true ||
+  (spot.isTaster === undefined && TASTER_GEM_IDS.has(spot.id));
+
 const BUSINESSES = [
   { id:1,  name:"Tommy's Barber",       area:'Glen Road',         addr:'245 Glen Road, West Belfast BT11',    cat:'Barber',         icon:'✂️',  key:'glen road barber',   lat:54.5935, lng:-6.0012 },
   // Was "Gransha Road, BT17, Hannahstown". Marty confirmed the real address is
@@ -789,8 +805,23 @@ const TYPE_BADGES = {
   paid:       { label:'Pay & Display',  c:'#FF9D4B' },
   official:   { label:'Car park',       c:'#7CC4FF' },
 };
-const TypeBadge = ({ badge }) => {
-  const b = TYPE_BADGES[badge]; if (!b) return null;
+// On a FREE user's screen, the only gem that ever reaches this component is one
+// of the five tasters — the other 84 return the locked card and never render a
+// badge at all. So "· Premium" on an open card was, for that user, only ever
+// shown on the giveaway: a gem sitting there with its name, notes and exact pin
+// readable, wearing a pill that says it is behind the paywall. That reads as
+// the paywall having failed, and it is exactly how it was reported. A taster
+// now says what it actually is.
+//
+// Keyed off the SPOT, not the viewer, on purpose. A taster is a taster for
+// everybody, so a subscriber sees the same honest label on the same five spots
+// and no isPremium prop has to be threaded down to the detail sheet.
+const TASTER_BADGE = { label:'✨ Hidden gem · Free taster', c:'#5BE7DA' };
+const TypeBadge = ({ badge, spot }) => {
+  const b = (badge === 'hidden_gem' && spot && isTasterGem(spot))
+    ? TASTER_BADGE
+    : TYPE_BADGES[badge];
+  if (!b) return null;
   return <span className="inline-flex items-center text-[11px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
     style={{color:b.c, border:`1px solid ${b.c}59`, background:`${b.c}1a`}}>{b.label}</span>;
 };
@@ -1868,7 +1899,7 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
         <div className="overflow-auto p-5" style={{maxHeight:'calc(92vh - 112px)'}}>
           <h2 className="font-display font-bold text-2xl text-[#EAF1F8] leading-tight">{spot.name}</h2>
           <div className="flex items-center gap-1.5 mt-1.5 text-sm text-[rgba(234,241,248,0.55)]"><MapPin size={14}/>{spot.near}</div>
-          <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/><PartnerOperatorBadge spot={spot}/><InUseBadge spot={spot}/></div>
+          <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge} spot={spot}/><FreeNowBadge spot={spot}/><PartnerOperatorBadge spot={spot}/><InUseBadge spot={spot}/></div>
           <div className="flex items-center gap-4 mt-4 p-4 rounded-2xl bg-white/5 border border-white/10">
             <div className="relative w-16 h-16 flex-shrink-0">
               <svg width="64" height="64" viewBox="0 0 64 64">
@@ -2729,10 +2760,7 @@ const walkFromMiles = (mi) => {
 // exact location or notes.
 const isGated = (spot) => {
   if (spot.mine) return false;                                         // community submissions
-  // is_taster comes off the database row now; TASTER_GEM_IDS is the fallback
-  // for the bundled list, and for a session where the gem query failed.
-  if (spot.isTaster === true) return false;                            // taster, per the database
-  if (spot.isTaster === undefined && TASTER_GEM_IDS.has(spot.id)) return false;  // bundled fallback
+  if (isTasterGem(spot)) return false;                                 // one of the five tasters
   if (spot.badge === 'hidden_gem') return true;                        // every other hidden gem is Premium
   if (spot.price) return false;                                        // paid to park → free to view
   if (['official','timed','paid'].includes(spot.badge)) return false;  // car parks, P&R, on-street
@@ -2802,7 +2830,7 @@ const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
           </span>
         </div>
       </div>
-      <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge}/><FreeNowBadge spot={spot}/><PartnerOperatorBadge spot={spot}/><InUseBadge spot={spot}/></div>
+      <div className="flex flex-wrap gap-1.5 mt-2.5"><TypeBadge badge={spot.badge} spot={spot}/><FreeNowBadge spot={spot}/><PartnerOperatorBadge spot={spot}/><InUseBadge spot={spot}/></div>
       <div className="flex items-center gap-2.5 mt-3">
         <div className="flex-1 h-[7px] rounded-full bg-white/10 overflow-hidden"><div style={{width:`${Math.round(occ.pct*100)}%`,background:occ.grad}} className="h-full rounded-full"/></div>
         <span className={`text-[12px] font-bold whitespace-nowrap ${occCls}`}>{occ.label}</span>
