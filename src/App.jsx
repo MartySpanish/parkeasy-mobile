@@ -461,7 +461,24 @@ const LARNE_SPOTS = [
   { id:726, name:'Inver Road Free Car Park', near:'Curran Park', tags:['larne','inver road','curran park','free parking','seafront'], badge:'free', dist:0, walk:'6 min', restriction:'Free all day', notes:'Free council car park on Inver Road near Curran Park and the seafront. Quiet spot with less footfall than town centre car parks.', lat:54.8472, lng:-5.8200, by:'Larne Local', votes:0, photo:null, price:null, spaces:50 },
   { id:727, name:'Main Street On-Street Parking', near:'Larne Main Street shops', tags:['larne','main street','town centre','on-street','timed','shopping'], badge:'timed', dist:0, walk:'Right there', restriction:'Mon-Sat 9am-6pm, 1 hr max; free evenings & Sundays', notes:'On-street parking bays running along Larne Main Street. Free after 6pm and all day Sunday. Get here early on a weekday morning.', lat:54.8502, lng:-5.8195, by:'Larne Local', votes:0, photo:null, price:null, spaces:null },
   { id:728, name:'Victoria Road On-Street (The Roddens end)', near:'Larne Museum & Arts Centre', tags:['larne','victoria road','the roddens','free on-street','museum','hidden gem'], badge:'hidden_gem', dist:0, walk:'~5 min', restriction:'Free all day', notes:'Free unrestricted on-street parking along Victoria Road near The Roddens. Confirmed by the council as an alternative to the Fairhill Pay & Display. Most visitors pay at Fairhill instead.', lat:54.8555, lng:-5.8210, by:'Larne Local', votes:0, photo:null, price:null, spaces:null, premium:true },
-  { id:729, name:'Riverdale Car Park', near:'Larne Town Centre (west side)', tags:['larne','riverdale','free parking','town centre','hidden gem'], badge:'hidden_gem', dist:0, walk:'4 min', restriction:'Free all day', notes:'Lesser-known free council car park on the western fringe of Larne town centre. Locals use it to avoid the paid car parks — a genuine free alternative just a short walk from Main Street.', lat:54.8510, lng:-5.8240, by:'Larne Local', votes:0, photo:null, price:null, spaces:55, premium:true },
+  // ONE ENTRY, NOT TWO. Riverdale was in the dataset twice — this gem and EV
+  // spot 3127, 340m apart, same name, same car park. Found by the globe's
+  // gem-name assertion on 23 Aug 2026; Marty's call was to keep it as the gem.
+  //
+  // THE TWO ROWS CONTRADICTED EACH OTHER ON PRICE, which is the part that
+  // mattered. This one said "Free all day". 3127 said "Pay to park — site
+  // tariff applies", and its notes explained why both were true: Riverdale has
+  // a free section AND a pay-and-display section. Keeping only the cheerful
+  // half would send somebody to park free in a paid bay and collect a ticket —
+  // the asymmetric error this file keeps warning about. The restriction now
+  // says both, and leads with the free part because that is what the gem is.
+  //
+  // The ESB charger comes across too. It is real public infrastructure and
+  // deleting 3127 would have quietly removed the only 22kW post in Larne from
+  // the app. ⚠️ It is now behind Premium, because gems are: a non-subscriber
+  // sees a blurred pin rather than a named charger. That is the cost of the
+  // merge and it was a deliberate choice, not an oversight.
+  { id:729, name:'Riverdale Car Park', near:'Larne Town Centre (west side)', tags:['larne','riverdale','town centre','free parking','main street','ev charger','ev charging','esb ecars','electric'], badge:'hidden_gem', dist:0, walk:'4 min', restriction:'Free in the free section — parts are pay-and-display, check the signage', notes:'Lesser-known free council car park on the western fringe of Larne town centre, about 55 spaces. Locals use it to avoid the paid car parks — a genuine free alternative a short walk from Main Street. Riverdale has BOTH free and pay-and-display areas, so read the signs on the bay before you walk away. There is also an ESB NI fast AC charger on site (BT40 1LB, recently upgraded) — community estimate on availability, so check your charging app before travelling.', lat:54.851, lng:-5.824, by:'Larne Local', votes:0, photo:null, price:null, spaces:55, ev:{available:true, ports:2, speed:'22kW'}, premium:true },
   { id:730, name:'Larne Town Park Car Park', near:'Larne Town Park & Chaine Park', tags:['larne','town park','chaine park','glenarm road','seafront','free parking'], badge:'free', dist:0, walk:'~10 min', restriction:'Free all day', notes:'Free parking beside Larne Town Park and Chaine Park accessed from Old Glenarm Road. Popular with walkers, cyclists and families visiting the seafront promenade.', lat:54.8568, lng:-5.8082, by:'Official', votes:0, photo:null, price:null, spaces:40 },
 ];
 
