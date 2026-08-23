@@ -65,6 +65,12 @@
   .sw-paid{border:2px solid var(--accent);border-radius:50%}
   .sw-free{background:rgba(234,241,248,.85);border-radius:50%}
   .sw-gem{border:1.5px solid rgba(234,241,248,.8);border-radius:50%}
+  /* Partners read as partners at a glance — a teal edge and a lift off the
+     background. Labelled too, in the row's caption; a highlight that is only a
+     colour is an advert pretending to be a search result. */
+  .row.is-partner{background:rgba(46,211,198,.07);box-shadow:inset 2px 0 0 var(--accent)}
+  .row.is-partner:hover{background:rgba(46,211,198,.13)}
+  .row.is-partner s{color:var(--accent)}
 
   .results{margin-top:14px;overflow-y:auto;min-height:0;flex:1 1 auto;
     scrollbar-width:thin;scrollbar-color:rgba(234,241,248,.25) transparent;
@@ -332,13 +338,15 @@ function renderList() {
   let towns, places;
   if (q) {
     ({ towns, places } = matches(q));
-    places = places.sort((a, b) => (a.t === 'partner' ? -1 : 0) - (b.t === 'partner' ? -1 : 0)).slice(0, 60);
+    places = places.sort(byPartnerFirst).slice(0, 60);
   } else if (mode === 'city' && city) {
     towns = [];
-    places = PLACES.filter(p => p.town === city.n && filters[p.t]);
+    // Partners in this town lead it. Everything else keeps its place — the
+    // list is reordered, never trimmed.
+    places = PLACES.filter(p => p.town === city.n && filters[p.t]).sort(byPartnerFirst);
   } else {
     towns = TOWNS;
-    places = PLACES.filter(p => (p.t === 'host' || p.t === 'partner') && filters[p.t]);
+    places = PLACES.filter(p => (p.t === 'host' || p.t === 'partner') && filters[p.t]).sort(byPartnerFirst);
   }
   let html = '';
   if (towns.length) {
@@ -350,9 +358,20 @@ function renderList() {
     const byType = {};
     places.forEach(p => (byType[p.t] = byType[p.t] || []).push(p));
     Object.keys(TYPES).filter(k => byType[k]).forEach(k => {
-      html += '<div class="grp">' + TYPES[k].plural + '</div>' + byType[k].map(p =>
-        '<button class="row" data-id="' + p.id + '"><i class="sw-' + k + '"></i>' +
-        p.n + '<s>' + p.town + '</s></button>').join('');
+      html += '<div class="grp">' + TYPES[k].plural + '</div>' + byType[k].map(p => {
+        // The right-hand caption is the ARGUMENT, not decoration. For a
+        // partner it answers the only question a driver on a parking map has
+        // about a business — can I park there — with a counted number rather
+        // than an adjective.
+        let s = p.town;
+        if ((p.t === 'partner' || p.t === 'host') && p.nearby > 0) {
+          s = p.nearby + ' space' + (p.nearby === 1 ? '' : 's') + ' · ' + p.walkMin + ' min walk';
+        } else if (p.online) {
+          s = 'Online';
+        }
+        return '<button class="row' + (p.t === 'partner' ? ' is-partner' : '') + '" data-id="' + p.id + '">' +
+          '<i class="sw-' + k + '"></i>' + p.n + '<s>' + s + '</s></button>';
+      }).join('');
     });
   }
   if (!html) html = '<div class="empty">Nothing matches that. Try a town name — Belfast, Newry, Portrush — or a partner.</div>';
@@ -381,6 +400,29 @@ function selectPlace(p) {
   renderDetail(p);
 }
 
+// What to say about partners on a given place's panel.
+//   a partner  -> the parking around its door, counted
+//   a space    -> the partners within a short walk of it
+// Empty string when there is nothing true to say, rather than a filler line.
+function partnerBlock(p) {
+  if (p.t === 'partner' || p.t === 'host') {
+    if (!p.nearby) return '';
+    return '<div class="kv"><div><b>' + p.nearby + '</b><i>Spaces within 500m</i></div>' +
+      '<div><b>' + p.walkMin + ' min</b><i>To the nearest one</i></div></div>';
+  }
+  if (!Number.isFinite(p.c?.[0])) return '';
+  const near = PLACES
+    .filter(x => x.t === 'partner' && x.pinnable && metres(x.c, p.c) < 900)
+    .map(x => ({ x, d: metres(x.c, p.c) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 3);
+  if (!near.length) return '';
+  return '<div class="grp">Partners a short walk away</div>' +
+    near.map(({ x, d }) =>
+      '<button class="row is-partner" data-goto="' + x.id + '"><i class="sw-partner"></i>' +
+      x.n + '<s>' + Math.max(1, Math.round(d / WALK_M_PER_MIN)) + ' min walk</s></button>').join('');
+}
+
 function renderDetail(p) {
   const el = document.getElementById('detail');
   const isPartner = p.t === 'partner';
@@ -392,10 +434,23 @@ function renderDetail(p) {
     '<p class="note">' + (p.note || (isPartner ? 'Listed in the ParkEasy partner directory.' : p.town)) + '</p>' +
     '<div class="photo"><image-slot id="ph-' + slug(p.n) + '" shape="rect" fit="cover" placeholder="Drop a photo of ' + p.n + '"></image-slot></div>' +
     (isPartner ? '<a class="cta" href="https://parkeasy.uk/" target="_blank" rel="noopener">View on parkeasy.uk →</a>' : '') +
+    // ── THE FUNNEL, BOTH WAYS ────────────────────────────────────────────
+    // Open a PARTNER and it answers "can I park there" with a count off the
+    // real data. Open a SPACE and it names the partners you could walk to
+    // from it — which is the moment that actually moves somebody, because
+    // they have already decided where to leave the car and are now deciding
+    // what to do next.
+    //
+    // Labelled "Partners", never slipped in as if it were part of the space.
+    // An advert a driver can see is an advert; one they cannot is a trick,
+    // and this product runs on people trusting what it tells them.
+    partnerBlock(p) +
     '<div class="kv"><div><b>' + p.town + '</b><i>Town</i></div><div><b>' +
       p.c[1].toFixed(3) + ', ' + p.c[0].toFixed(3) + '</b><i>Position</i></div></div>';
   el.hidden = false;
   document.getElementById('results').hidden = true;
+  el.querySelectorAll('[data-goto]').forEach(b =>
+    b.onclick = () => selectPlace(PLACES.find(x => x.id === b.dataset.goto)));
   document.getElementById('d-back').onclick = () => { selected = null; renderList(); };
 }
 
@@ -616,15 +671,36 @@ function regional(now, a) {
   ctx.strokeStyle = 'rgba(46,211,198,.75)'; ctx.lineWidth = 1.8; ctx.stroke();
 
   // at this scale only the gems, hosts and partners are legible
+  // Gems and hosts first, partners last, so a partner is never painted over
+  // by a dot that happens to come later in the array. Ordering IS the
+  // highlight at this size — a 3px marker has nothing else to give.
   PLACES.forEach((p, i) => {
     if (!filters[p.t]) return;
-    if (p.t === 'free' || p.t === 'paid') return;
+    if (p.t === 'free' || p.t === 'paid' || p.t === 'partner') return;
     const q = projection(p.c);
     if (p.t === 'gem') {
       const tw = 0.4 + 0.4 * Math.sin(now / 900 + i * 1.7);
       ctx.beginPath(); ctx.arc(q[0], q[1], 2.2, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(234,241,248,' + tw.toFixed(2) + ')'; ctx.lineWidth = 1; ctx.stroke();
     } else marker(q, p.t, now);
+  });
+  // A car park an agreement covers, drawn as the operator's rather than as
+  // anonymous paid parking. APCOA's four sites are the live case.
+  PLACES.forEach(p => {
+    if (!p.op || !filters[p.t]) return;
+    const q = projection(p.c);
+    ctx.beginPath(); ctx.arc(q[0], q[1], 3.4, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(46,211,198,.9)'; ctx.lineWidth = 1.4; ctx.stroke();
+  });
+  PLACES.forEach(p => {
+    if (p.t !== 'partner' || !filters.partner || !p.pinnable) return;
+    const q = projection(p.c);
+    // A slow halo, so the eye finds them without the map turning into a
+    // disco. Partners are a handful of points among 744.
+    const pulse = 5.5 + 2.2 * (0.5 + 0.5 * Math.sin(now / 1100));
+    ctx.beginPath(); ctx.arc(q[0], q[1], pulse, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(46,211,198,.28)'; ctx.lineWidth = 1.2; ctx.stroke();
+    marker(q, 'partner', now);
   });
 
   const placed = [];
@@ -671,7 +747,14 @@ function closeUp(now, a) {
     label(area.n.toUpperCase(), q, placed, { size: 10, weight: 600, colour: 'rgba(160,173,190,.8)' });
   });
 
-  const here = PLACES.filter(p => filters[p.t] && d3.geoDistance(p.c, city.c) * 6371 < 26);
+  // pinnable !== false is the gate, and it belongs here as much as on the NI
+  // view. Without it the city zoom labelled MARCUS DONNELLY FITNESS on a
+  // Belfast street — an online-only coaching business with no premises, sitting
+  // on the city-centre placeholder its NOT NULL columns demand. A label on a
+  // map is a claim that something is THERE. He is in the list and the search,
+  // which is where a partner without a door belongs.
+  const here = PLACES.filter(p => filters[p.t] && p.pinnable !== false
+    && Number.isFinite(p.c?.[0]) && d3.geoDistance(p.c, city.c) * 6371 < 26);
   const order = { free: 0, gem: 1, paid: 2, host: 3, partner: 4 };
   here.sort((x, y) => order[x.t] - order[y.t]).forEach((p, i) => {
     const q = projection(p.c);
@@ -759,18 +842,108 @@ async function fetchJSON(path) {
   } catch { return []; }
 }
 
+function nearestTown(c) {
+  if (!Number.isFinite(c?.[0])) return TOWNS[0].n;
+  let best = TOWNS[0], bd = Infinity;
+  for (const t of TOWNS) { const d = d3.geoDistance(c, t.c); if (d < bd) { bd = d; best = t; } }
+  return best.n;
+}
+
 async function livePartners() {
   const [partners, listings] = await Promise.all([
-    // Only what is drawable: a partner with no trusted pin carries the
-    // city-centre placeholder its NOT NULL columns demand, and plotting that
-    // would put a business on a street it has nothing to do with.
-    fetchJSON('/rest/v1/partners?select=name,lat,lng,geo_verified,is_online&active=is.true&geo_verified=is.true&is_online=is.false'),
+    // EVERY active partner now, not only the pinnable ones. The two awkward
+    // cases are handled rather than filtered out, because dropping a partner
+    // off the partner map is the one outcome nobody wants:
+    //
+    //   NO TRUSTED PIN (geo_verified false) — the coordinate is the
+    //     city-centre placeholder the NOT NULL columns demand. Still listed and
+    //     searchable, but NOT drawn: a pin is a claim about a street. APCOA is
+    //     the live case and it loses nothing, because its four Northern Irish
+    //     car parks are already on the map with surveyed coordinates and are
+    //     badged as its own (see `op` in places.json).
+    //
+    //   ONLINE ONLY (is_online) — Marcus Donnelly Fitness has no premises at
+    //     all. Listed, labelled "Online", never pinned. Putting a dot on
+    //     Belfast city centre for a remote coaching business would be inventing
+    //     a place, which is the thing this whole page had to be rebuilt to stop.
+    fetchJSON('/rest/v1/partners?select=name,lat,lng,geo_verified,is_online,priority&active=is.true&order=priority.desc'),
     fetchJSON('/rest/v1/listings_public?select=title,lat,lng,status&status=eq.active'),
   ]);
   return [
-    ...partners.filter(p => Number.isFinite(p.lat)).map(p => ({ t: 'partner', n: p.name, c: [p.lng, p.lat] })),
-    ...listings.filter(l => Number.isFinite(l.lat)).map(l => ({ t: 'host', n: l.title, c: [l.lng, l.lat] })),
+    ...partners.map(p => ({
+      t: 'partner', n: p.name, c: [p.lng, p.lat], priority: p.priority || 0,
+      online: !!p.is_online,
+      // The partners table has no town column, and every list path calls
+      // p.town.toLowerCase() — so without this, typing anything into the
+      // search box threw and the results went blank. Nearest of the towns we
+      // already know, which is also the town panel a partner should appear in.
+      town: nearestTown([p.lng, p.lat]),
+      // pinnable decides whether it gets a dot. Everything unpinnable still
+      // reaches the list, the search and the town panel.
+      pinnable: !p.is_online && p.geo_verified === true && Number.isFinite(p.lat),
+    })),
+    ...listings.filter(l => Number.isFinite(l.lat))
+      .map(l => ({ t: 'host', n: l.title, c: [l.lng, l.lat],
+                   town: nearestTown([l.lng, l.lat]), pinnable: true })),
   ];
+}
+
+// ── WHY A DRIVER SHOULD PICK A PARTNER ───────────────────────────────────────
+// Not "because we were paid". Because parking there is already solved — which
+// is the entire thesis of the product and the only honest reason to push one
+// business over another on a parking map.
+//
+// So every partner is measured against the real spot data: how many spaces sit
+// within a few minutes' walk of its door. That number is computed from the 744
+// surveyed coordinates, it is shown on the row, and it is what the ordering
+// below is built on. A partner with parking round the corner earns its place at
+// the top; one with none does not get a fake one.
+//
+// WHAT THIS DELIBERATELY DOES NOT DO: hide, demote or degrade a non-partner
+// spot. Every free bay, gem and car park stays exactly where it was and ranks
+// exactly as it did. Partners gain PROMINENCE — a brighter marker, the top of
+// the list, a labelled badge — and never at the cost of the thing a driver
+// actually came for. A parking app that buries parking to sell adverts stops
+// being worth opening, and the trust is the moat.
+const WALK_M_PER_MIN = 80;                 // ~4.8 km/h, the usual planning figure
+const NEARBY_RADIUS_M = 500;               // about a six-minute walk
+
+function metres(a, b) {
+  return d3.geoDistance(a, b) * 6371000;
+}
+
+function attachParking(places) {
+  const spaces = places.filter(p => p.t === 'free' || p.t === 'paid' || p.t === 'gem');
+  places.filter(p => p.t === 'partner' || p.t === 'host').forEach(p => {
+    // ONLY WHERE THE PIN IS REAL. An unpinnable partner carries the
+    // city-centre placeholder its NOT NULL columns demand, so counting spaces
+    // around it measures the middle of Belfast and calls it that business's
+    // parking. The first run said "Marcus Donnelly Fitness: 21 spaces within
+    // 500m" — for a partner with no premises at all. Worse than useless: it is
+    // a specific, confident, invented number on the row a driver reads.
+    if (!p.pinnable || !Number.isFinite(p.c?.[0])) return;
+    let near = 0, closest = Infinity;
+    for (const s of spaces) {
+      const d = metres(p.c, s.c);
+      if (d < NEARBY_RADIUS_M) near++;
+      if (d < closest) closest = d;
+    }
+    p.nearby = near;
+    p.walkMin = Number.isFinite(closest) ? Math.max(1, Math.round(closest / WALK_M_PER_MIN)) : null;
+  });
+}
+
+// Partners first, then whatever has parking nearest, then the editorial order
+// Marty set in the database. Used for the list only — the map still draws
+// everything.
+function partnerRank(p) {
+  if (p.t !== 'partner' && p.t !== 'host') return 3;
+  return p.nearby > 0 ? 0 : (p.pinnable ? 1 : 2);
+}
+function byPartnerFirst(a, b) {
+  return partnerRank(a) - partnerRank(b)
+      || (b.nearby || 0) - (a.nearby || 0)
+      || (b.priority || 0) - (a.priority || 0);
 }
 
 // Counted at build time from the same arrays the app renders, never typed.
@@ -810,6 +983,7 @@ Promise.all([
     // never their name: that is what Premium buys.
     ...places.spaces.map(s => ({ ...s, n: s.n || (TYPES[s.t].label + ' space') }))
   ].map(p => ({ ...p, id: p.t + '-' + (i++) }));
+  attachParking(PLACES);
   paintStats(places.stats);
   buildFilters();
   renderList();

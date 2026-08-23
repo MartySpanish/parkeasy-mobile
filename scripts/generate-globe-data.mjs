@@ -104,6 +104,12 @@ for (const s of all) {
     : [Number(s.lng.toFixed(5)), Number(s.lat.toFixed(5))];
   spaces.push({
     t, town: townOf(s), c,
+    // The operator, when a car park belongs to a partner we have a deal with.
+    // APCOA's four Northern Irish sites carry partner:true in apcoaSpots.js and
+    // that flag is the line the data already draws between "we have an
+    // agreement here" and "we know this car park exists" — 21 more APCOA sites
+    // in pilotSpots.js are partner:false and must not be badged.
+    ...(s.partner === true && s.operator ? { op: s.operator } : {}),
     // The area, never the gem itself. `near` is what the locked card in the app
     // already prints on screen, so it gives away nothing new.
     n: gem ? (s.near && !gemNames.has(s.near) ? s.near : null) : (s.name || null),
