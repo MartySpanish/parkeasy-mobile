@@ -3062,7 +3062,7 @@ const RequestParking = ({ geo, cityName }) => {
 const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39, 44, 49];
 
 
-const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched }) => {
+const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched, initialGeo }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -3071,7 +3071,11 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
   const [evOnly,      setEvOnly]      = useState(false);
   const [userLoc,     setUserLoc]     = useState(null);
   const [focusSpot,   setFocusSpot]   = useState(null);
-  const [geo,         setGeo]         = useState(null);   // {lat,lng,label} of a searched location
+  // Seeded from ?near=lat,lng on arrival — see the deep-link effect in App().
+  // This is what "Find parking near {venue}" on /events/{slug} lands on, so the
+  // visitor sees the venue's spots rather than an empty search box and a
+  // question they have already answered.
+  const [geo,         setGeo]         = useState(initialGeo || null);   // {lat,lng,label} of a searched location
   const [geoBusy,     setGeoBusy]     = useState(false);
   const [locErr,      setLocErr]      = useState('');   // why "locate me" failed, in words
   const [locPromptOff, setLocPromptOff] = useState(false); // dismissed for this visit
@@ -8436,6 +8440,11 @@ const Footer = ({ onOpen }) => (
       {[['howitworks','How it works'],['faq','FAQ'],['about','About'],['privacy','Privacy'],['terms','Terms'],['contact','Contact'],['advertise','Advertise']].map(([id,label])=>(
         <button key={id} onClick={()=>onOpen(id)} className="hover:text-[#5BE7DA] transition font-medium">{label}</button>
       ))}
+      {/* A real href, unlike its neighbours. Everything else here opens an
+          in-app overlay; /events is a server-rendered page with its own URL,
+          which is the entire reason it exists. Placed after "How it works" and
+          before the host links, which is where the brief asked for it. */}
+      <a href="/events" className="hover:text-[#5BE7DA] transition font-medium">Events</a>
     </div>
     <p className="text-[10px] text-[rgba(234,241,248,0.3)] mt-3">© 2026 ParkEasy · Made in Northern Ireland</p>
     <p className="text-[9.5px] text-[rgba(234,241,248,0.25)] mt-1">Version {new Date(__BUILD_TIME__).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p>
@@ -8866,6 +8875,30 @@ export default function App() {
     window.addEventListener('hashchange', openIfAdmin);
     return () => window.removeEventListener('hashchange', openIfAdmin);
   }, [user]);
+
+  // parkeasy.uk/?near=54.5972,-5.9265&place=SSE%20Arena&event=<slug>
+  //
+  // The landing target for every "Find parking near {venue}" link on /events.
+  // The brief called for /park/{venue_slug}; there is no such route in this
+  // codebase because the app IS the parking finder, so the link opens the app
+  // already searched at the venue — the same result that page would have shown.
+  //
+  // Parsed once, on mount, and read straight into SearchTab's initial state
+  // rather than pushed in afterwards: setting it in an effect would render the
+  // unsearched list first and visibly re-shuffle underneath the visitor.
+  const [deepGeo] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const p = new URLSearchParams(window.location.search);
+    const near = p.get('near');
+    if (!near) return null;
+    const [lat, lng] = near.split(',').map(Number);
+    // A malformed or out-of-range pair is ignored rather than centring the map
+    // in the sea. NI sits well inside these bounds; the check is only there to
+    // reject nonsense, not to fence the product in.
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return { lat, lng, label: (p.get('place') || '').slice(0, 80) || 'this venue' };
+  });
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -9326,7 +9359,7 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)} initialGeo={deepGeo}/>}
         {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
         {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}

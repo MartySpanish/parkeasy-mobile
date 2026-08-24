@@ -33,6 +33,18 @@
       "destination": "/globe/index.html"
     },
     {
+      "source": "/events",
+      "destination": "/api/events"
+    },
+    {
+      "source": "/events/:slug",
+      "destination": "/api/events?slug=:slug"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
