@@ -18,6 +18,9 @@ import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
+// app_events. track() mirrors the overlapping names into funnel.js itself,
+// so a call site never wires up both instruments by hand. See src/analytics.js.
+import { track } from './analytics';
 import { paymentError } from './errors';
 import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
 import { splitPartnersByCategory } from './data/partnerCategories';
@@ -1459,7 +1462,7 @@ const amenitiesOf = (spot) => {
 const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) {
     return (
-      <button onClick={onUpgrade} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
+      <button onClick={() => { track('gem_locked_view', { surface: 'card' }); onUpgrade(); }} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
         <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
         <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p></div>
         <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal flex-shrink-0">Unlock &#9733;</span>
@@ -2605,7 +2608,7 @@ const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPr
             <div style={{minWidth:160}}>
               <p className="font-bold text-sm mb-1">{gatedLabel(s)}</p>
               <p className="text-xs text-[#8da2bd] leading-relaxed">Around {s.near}. Approximate area — the exact free spot is revealed with Premium.</p>
-              <button onClick={onUpgrade}
+              <button onClick={() => { track('gem_locked_view', { surface: 'map' }); onUpgrade(); }}
                 className="mt-2 block w-full text-center text-xs bg-[#5BE7DA] text-[#06231f] px-3 py-1.5 rounded-lg font-semibold">
                 Unlock Premium ★
               </button>
@@ -2798,7 +2801,7 @@ const approxCoord = (v) => Math.round(v * 200) / 200;
 // ── Sheet row (map screen): price chip | name + caption | availability dot ──
 const RowItem = ({ spot, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) return (
-    <button onClick={onUpgrade} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
+    <button onClick={() => { track('gem_locked_view', { surface: 'row' }); onUpgrade(); }} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
       <div className="min-w-[56px] h-[46px] rounded-[13px] flex items-center justify-center bg-[#2ED3C6]/12 border border-[#2ED3C6]/25 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
       <div className="flex-1 min-w-0"><p className="text-[14.5px] font-bold text-[#EAF1F8]">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — unlock the exact spot</p></div>
       <span className="text-[#5BE7DA] text-xs font-bold flex-shrink-0">Unlock ★</span>
@@ -2981,6 +2984,15 @@ const RequestParking = ({ geo, cityName }) => {
 
   const where = geo?.label?.split(',')[0] || cityName;
 
+  // The supply-acquisition signal: somebody looked here and there was nothing
+  // to book. Fired once per mount of the card, which is once per search that
+  // came up short. props.query is what they typed — a place name, never a
+  // position — which is the same line parking_requests draws.
+  useEffect(() => {
+    track('search_no_results', { query: where || 'unknown' },
+      { town: cityName || null });
+  }, [where, cityName]);
+
   const submit = async (e) => {
     e.preventDefault();
     const addr = email.trim();
@@ -3100,7 +3112,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     if (geo) { const c = nearestCity(geo.lat, geo.lng); if (c) onCityDetected?.(c.id); }
     // The app has just answered the question it was opened for. That — and
     // only that — is when it has earned the right to ask for an account.
-    if (geo) { onSearched?.(); trackSearch(geo.via || 'search'); }
+    if (geo) { onSearched?.(); track('search', { via: geo.via || 'search' }, { town: geo.label || null }); }
   }, [geo]);
 
   const viewOnMap = (spot) => {
@@ -5049,6 +5061,9 @@ const BookingSheet = ({ listing, onClose }) => {
       const startTime = dayPriced ? String(listing.gate_opens_at || '08:00').slice(0,5) : time;
       const startsAt = date && startTime ? new Date(`${date}T${startTime}`).toISOString() : null;
       ls.set('pe_vehicle_reg', regClean);
+      track('booking_start',
+        { unit: dayPriced ? 'day' : 'hour', hours: String(hours) },
+        { listingId: listing.id });
       const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks, vehicleReg: regClean,
         unit: dayPriced ? 'day' : 'hour' });
       window.location.href = url;   // full-page redirect to Stripe Checkout
@@ -7362,6 +7377,26 @@ const AdminOverlay = ({ onClose }) => {
       } catch (e) { setState({ loading:false, error: e.message || 'Failed to load' }); }
     })();
   }, [refresh]);
+  // ── /admin/metrics ────────────────────────────────────────────────────────
+  //
+  // Loaded on demand rather than with the rest of the dashboard. It is a
+  // 30-day aggregate over every event in the system, and the dashboard's other
+  // panels are what somebody opens this screen for.
+  const [metrics, setMetrics] = useState({ state: 'idle' });
+  const loadMetrics = async (days = 30) => {
+    setMetrics({ state: 'loading' });
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess?.session?.access_token;
+      const r = await apiFetch('/api/admin', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'metrics', days }) });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) { setMetrics({ state: 'error', error: j.error || 'Request failed' }); return; }
+      setMetrics({ state: 'done', summary: j.summary, days });
+    } catch (e) { setMetrics({ state: 'error', error: e.message || 'Request failed' }); }
+  };
+
   const d = state.data;
   const Tile = ({ label, value, accent }) => (
     <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-center">
@@ -7380,6 +7415,85 @@ const AdminOverlay = ({ onClose }) => {
           </div>
         </div>
         <div className="px-4 py-5 pb-16 space-y-5">
+          {/* ── Metrics ────────────────────────────────────────────────────
+              The two funnels and the supply list. A funnel step is counted in
+              SESSIONS, not taps: one person opening three locked gems is one
+              person who wanted them, and counting taps would make the paywall
+              look like it converts a third as well as it really does. */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-display font-bold text-[#EAF1F8]">Product metrics</p>
+                <p className="text-[11px] text-[rgba(234,241,248,0.5)]">app_events · last {metrics.days || 30} days</p>
+              </div>
+              <button onClick={() => loadMetrics(30)} disabled={metrics.state === 'loading'}
+                className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal disabled:opacity-50">
+                {metrics.state === 'loading' ? 'Loading…' : metrics.state === 'done' ? 'Refresh' : 'Load'}
+              </button>
+            </div>
+
+            {metrics.state === 'error' && (
+              <p className="text-xs text-[#ff9d9d] mt-3">{metrics.error}</p>
+            )}
+
+            {metrics.state === 'done' && (() => {
+              const m = metrics.summary || {};
+              const pf = m.premium_funnel || {}, bf = m.booking_funnel || {};
+              const pct = (a, b) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '—');
+              const Funnel = ({ title, steps }) => (
+                <div className="mt-3">
+                  <p className="text-[11px] font-semibold text-[#6b7d96] mb-1.5">{title}</p>
+                  {steps.map(([label, n], i) => (
+                    <div key={label} className="flex items-center justify-between text-[12.5px] py-1">
+                      <span className="text-[rgba(234,241,248,0.72)]">{label}</span>
+                      <span className="text-[#EAF1F8] font-semibold tabular-nums">
+                        {n}
+                        {i > 0 && <span className="text-[#6b7d96] font-normal ml-2">{pct(n, steps[i - 1][1])}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+              const noResults = m.no_results || [];
+              const total = (m.daily || []).reduce((t, r) => t + (r.n || 0), 0);
+              return (
+                <>
+                  {total === 0 && (
+                    <p className="text-xs text-[rgba(234,241,248,0.55)] mt-3">
+                      No events yet. They start arriving as soon as this build is live and somebody searches.
+                    </p>
+                  )}
+                  <Funnel title="Locked gem → Premium" steps={[
+                    ['Saw a locked gem', pf.gem_locked_view || 0],
+                    ['Opened the paywall', pf.premium_paywall_view || 0],
+                    ['Paid', pf.premium_paid || 0]]}/>
+                  <Funnel title="Listing → booking" steps={[
+                    ['Viewed a listing', bf.listing_view || 0],
+                    ['Started a booking', bf.booking_start || 0],
+                    ['Paid', bf.booking_paid || 0]]}/>
+
+                  {/* The one panel here meant to be acted on rather than watched:
+                      every place somebody looked and found nothing to book. */}
+                  <div className="mt-4">
+                    <p className="text-[11px] font-semibold text-[#6b7d96] mb-1.5">
+                      Searched, nothing to book — the supply list
+                    </p>
+                    {noResults.length === 0 ? (
+                      <p className="text-xs text-[rgba(234,241,248,0.5)]">Nothing yet.</p>
+                    ) : noResults.slice(0, 25).map((r, i) => (
+                      <div key={i} className="flex items-center justify-between text-[12.5px] py-1 border-t border-white/5">
+                        <span className="text-[rgba(234,241,248,0.72)] truncate pr-3">{r.query}</span>
+                        <span className="text-[#5BE7DA] font-semibold tabular-nums flex-shrink-0">
+                          {r.sessions}<span className="text-[#6b7d96] font-normal"> people</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
           {/* Client-side check — shows even if the server endpoint can't load,
               which is exactly the case when Supabase isn't configured. */}
           {!isSupabaseEnabled && (
@@ -8499,7 +8613,11 @@ export default function App() {
   // in one place. Closing passes null and is deliberately not an open.
   const openSpot = useCallback((sp) => {
     if (sp) {
-      trackSpotOpen(sp.badge);
+      // track() mirrors this to funnel.js's trackSpotOpen, so the Vercel
+      // dashboard keeps counting exactly what it counted before.
+      track(sp.rental ? 'listing_view' : 'gem_view',
+        { kind: sp.badge || 'unknown' },
+        { listingId: sp.listing?.id || null, town: sp.town || null });
       // The top of the free → paid funnel. Only free spots are in it; a paid
       // council car park is already somebody's paid choice.
       if (['free', 'hidden_gem'].includes(sp.badge)) {
@@ -8515,6 +8633,11 @@ export default function App() {
   const [isPremium,     setIsPremium]     = useState(()=>ls.get('pe_premium', false) || ls.get('pe_premium_until', 0) > Date.now());
   const [rewardUntil,   setRewardUntil]   = useState(null);   // timestamp → shows the congrats sheet
   const [showPricing,   setShowPricing]   = useState(false);
+  // The paywall opens from a dozen places — a locked gem card, the map popup,
+  // the row item, the user menu, the events overlay. Counting it here rather
+  // than at each of those is what makes gem_locked_view → premium_paywall_view
+  // → premium_paid a funnel instead of a dozen unrelated numbers.
+  useEffect(() => { if (showPricing) track('premium_paywall_view'); }, [showPricing]);
   const [infoPage,      setInfoPage]      = useState(null);
   const [cookieChoice,  setCookieChoice]  = useState(()=>ls.get('pe_cookie', null));
   const [detailSpot,    setDetailSpot]    = useState(null);
@@ -8933,6 +9056,11 @@ export default function App() {
     if (p.get('premium') === 'success') {
       setIsPremium(true);
       ls.set('pe_premium', true);
+      // Only here. The VIP list, the gem-approval reward and promo codes all
+      // call setIsPremium too, and counting those as premium_paid would put
+      // free grants in the conversion rate that decides whether the paywall
+      // works.
+      track('premium_paid');
       window.history.replaceState({}, '', window.location.pathname);
     }
     // Hidden-gem reward: when a community spot is approved, the founder emails
@@ -8991,7 +9119,8 @@ export default function App() {
       // anybody decides on; this is the analytics counterpart, and it is
       // cleared either way so one comparison card cannot claim a second
       // booking made later in the same tab.
-      if (cameFromHotspot()) trackBookingFromHotspot();
+      if (cameFromHotspot()) { trackBookingFromHotspot(); track('hotspot_to_booking_tap', { stage: 'paid' }); }
+      track('booking_paid', { from_hotspot: cameFromHotspot() ? 'yes' : 'no' });
       clearHotspotOrigin();
       setFlash({ tone: 'ok', msg: `✅ Booking confirmed — your payment went through.${reg ? ` Vehicle ${reg} — check it's right in Your bookings.` : ''}` });
       window.history.replaceState({}, '', window.location.pathname);
@@ -9139,6 +9268,8 @@ export default function App() {
   const toggleHeading = (spot, on) => {
     const k = String(spot.id);
     reportOccupancy(spot.id, on ? 'start' : 'end', currentCity.id, 'heading');
+    // Only the 'on' tap is an event. Cancelling is not a second signal.
+    if (on) track('heading_tap', { kind: spot.badge || 'unknown' }, { town: currentCity.name });
     // Optimistic, so the badge and the button move on the tap rather than on
     // the next 60-second poll.
     setHeading(h => {
@@ -9161,6 +9292,7 @@ export default function App() {
     // Tell the next driver this one is taken. Optimistically bump the local
     // count too, so the badge appears immediately rather than after the poll.
     reportOccupancy(spot.id, 'start', currentCity.id);
+    track('parked_tap', { kind: spot.badge || 'unknown' }, { town: currentCity.name });
     setOccupancy(o => ({ ...o, [String(spot.id)]: (o[String(spot.id)] || 0) + 1 }));
     // Arriving supersedes being on the way. Without this the same driver would
     // be counted twice on one spot — once as parked, once as still coming.

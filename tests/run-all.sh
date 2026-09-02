@@ -96,6 +96,11 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  apcoa publish gate     $(grep -c 'PASS  ' /tmp/pe-t8.log) checks" \
     || { fail=1; echo "  apcoa publish gate     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t8.log; }
 
+  tests/db/run.sh supabase/migrations/20260902_app_events_ingest.sql \
+                  tests/db/app_events.test.sql                      > /tmp/pe-t9.log 2>&1 \
+    && echo "  app events ingest      $(grep -c 'PASS  ' /tmp/pe-t9.log) checks" \
+    || { fail=1; echo "  app events ingest      FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t9.log; }
+
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
 else
