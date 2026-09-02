@@ -34,11 +34,29 @@ if (HEAD?.warning) console.warn('prerender: ' + HEAD.warning);
 // nothing. So it falls back to the product that IS selling: 9 of the 10 people
 // who have ever paid us bought Premium, not a booking.
 //
-// Counts are the app's own, from src/App.jsx + the spot modules:
-//   node -e "…" → TOTAL 741 | hidden gems 88 | EV 207
-// Re-run that if the datasets change. Understate rather than overstate: an
-// inflated number is the one mistake a stranger can catch you out on.
-const NETWORK = { spots: 741, gems: 88, ev: 207 };
+// COUNTED, NEVER TYPED — and this block is why that rule exists.
+//
+// These three were hardcoded, with a comment telling whoever changed the data
+// to re-run a one-liner and update them by hand. Nobody did, so the homepage
+// spent an unknown stretch of time telling Google and every visitor there were
+// 741 spots and 88 hidden gems when there were 744 and 89. It took the globe
+// card printing the real figures on the SAME PAGE for the contradiction to
+// become visible at all.
+//
+// They now come from public/globe/places.json, which scripts/generate-globe-data.mjs
+// writes from src/App.jsx and the spot modules earlier in the same `npm run
+// build`. Add a spot and every number on the page moves by itself.
+//
+// Failing loudly is deliberate. A missing or malformed stats block means the
+// build order changed, and quietly falling back to stale constants is exactly
+// the failure this is replacing.
+const places = JSON.parse(readFileSync('public/globe/places.json', 'utf8'));
+const NETWORK = { spots: places.stats.spaces, gems: places.stats.gems, ev: places.stats.ev };
+for (const [k, v] of Object.entries(NETWORK)) {
+  if (!Number.isInteger(v) || v <= 0) {
+    throw new Error(`prerender: ${k} is ${v} — generate-globe-data.mjs must run first`);
+  }
+}
 
 const distHtml = 'dist/index.html';
 let htmlDoc = readFileSync(distHtml, 'utf8');
@@ -122,6 +140,21 @@ const orgLd = `<script type="application/ld+json">${JSON.stringify({
     + 'the free and hidden-gem spots locals use.',
   areaServed: { '@type': 'AdministrativeArea', name: 'Northern Ireland' },
 })}</script>`;
+
+// The <meta> descriptions carried their own typed copies of these three
+// numbers, and prerender never touched them — so even after the body counts
+// started deriving, the description Google indexes still said 741 and 88.
+// index.html now holds {{SPOTS}}/{{GEMS}}/{{EV}} and they are filled here from
+// the same stats block, so there is exactly one place a count can come from.
+htmlDoc = htmlDoc
+  .replaceAll('{{SPOTS}}', String(NETWORK.spots))
+  .replaceAll('{{GEMS}}', String(NETWORK.gems))
+  .replaceAll('{{EV}}', String(NETWORK.ev));
+const leftover = htmlDoc.match(/\{\{[A-Z_]+\}\}/g);
+if (leftover) {
+  throw new Error(`prerender: unsubstituted token(s) ${[...new Set(leftover)].join(', ')} `
+    + '— add them to the replacement list above rather than shipping braces to Google');
+}
 
 if (htmlDoc.includes('<div id="root"></div>')) {
   htmlDoc = htmlDoc.replace('</head>', `${orgLd}</head>`);
