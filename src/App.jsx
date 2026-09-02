@@ -36,6 +36,10 @@ import CancelSubscription from './components/account/CancelSubscription';
 // driver will never open, and it has no business in the first paint of a
 // parking search.
 const CorporateScreen = React.lazy(() => import('./components/corporate/CorporateScreen'));
+// Lazy for the same reason CorporateScreen is, and more so: it pulls d3-geo and
+// a world outline that nobody searching for a parking space should download.
+// See the header of CoverageGlobe.jsx for what it does and does not cost.
+const CoverageGlobe = React.lazy(() => import('./components/home/CoverageGlobe'));
 import useBackButton from './useBackButton';
 import EventsScreen from './components/events/EventsScreen';
 
@@ -3940,6 +3944,30 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
                       answer, and before the scroll gets long enough to give up
                       on. Landing state only — once somebody is searching, the
                       page belongs to their results. */}
+                  {/* THE GLOBE, AND WHY IT IS HERE AND NOT AT THE TOP.
+                      It is a coverage picture, so it belongs with the claim it
+                      illustrates and immediately before the section that asks a
+                      club to join the network — a treasurer deciding whether
+                      this is a real thing is exactly who it is for.
+
+                      NOT the hero. The block above the search box was
+                      deliberately stripped once already to move that box ~140px
+                      up the screen, and a spinning canvas is the last thing that
+                      should undo it: the first job of this page is still a
+                      driver finding a space fast. Down here it is below the
+                      fold, costs nothing until it is scrolled to, and stops
+                      moving the moment it leaves the screen.
+
+                      Numbers are derived from the same arrays the app renders,
+                      never typed, so they cannot drift from the product. */}
+                  {i===1 && !isSearching && (
+                    <React.Suspense fallback={null}>
+                      <CoverageGlobe
+                        spaces={ALL_SPOTS_STATS.length}
+                        gems={ALL_SPOTS_STATS.filter(s => s.badge === 'hidden_gem').length}
+                        towns={CITIES.length}/>
+                    </React.Suspense>
+                  )}
                   {i===1 && !isSearching && <WorkWithUs/>}
                   {/* Spaced out so they read as "while you're here" rather than
                       a block of adverts. Index maths, not a filter, so a second
