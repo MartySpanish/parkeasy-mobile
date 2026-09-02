@@ -2,6 +2,7 @@
 // on a nearby bookable space (contextual, one card per space). Kept tiny on
 // purpose — fewer than fifty partners, so distance is computed in JS, no PostGIS.
 import { supabase, isSupabaseEnabled } from './supabase';
+import { track } from './analytics';
 
 const EARTH_RADIUS_M = 6_371_000;
 
@@ -37,9 +38,20 @@ export async function findPartnerForListing(listingLat, listingLng) {
 }
 
 // Fire-and-forget impression/click tracking. Never surfaces to the user.
+//
+// Writes BOTH stores on purpose. partner_events is what the existing partner
+// stats card reads and it has 2,000-odd rows of history that would be orphaned
+// by a switch; app_events is what lets a partner impression sit in the same
+// table as the booking it may have led to. Dropping either would cost
+// something real, so this one function keeps them in step.
 export function trackPartnerEvent(partnerId, listingId, eventType) {
   if (!isSupabaseEnabled) return;
   try {
     supabase.from('partner_events').insert({ partner_id: partnerId, listing_id: listingId || null, event_type: eventType }).then(() => {}, () => {});
+  } catch { /* analytics must never block */ }
+  try {
+    const name = eventType === 'click' ? 'partner_click'
+      : eventType === 'impression' ? 'partner_impression' : null;
+    if (name) track(name, {}, { partnerId, listingId: listingId || null });
   } catch { /* analytics must never block */ }
 }

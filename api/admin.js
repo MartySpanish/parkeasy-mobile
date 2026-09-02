@@ -157,6 +157,30 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     let p = req.body;
     if (typeof p === 'string') { try { p = JSON.parse(p); } catch { p = {}; } }
+    // ── /admin/metrics ──────────────────────────────────────────────────
+    //
+    // One RPC. The aggregation is app_events_summary() in the database,
+    // granted to service_role only, because doing it here would mean pulling
+    // every event row over the wire to count it — which stops working at
+    // exactly the volume that makes the numbers worth looking at.
+    //
+    // The caller has already been checked against ADMINS above; this endpoint
+    // is the only thing on the internet holding a key that can run it.
+    if (p?.action === 'metrics') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel — the metrics query needs it.' });
+      const days = Math.max(1, Math.min(Number(p.days) || 30, 365));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/app_events_summary`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, summary: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'metrics query failed' });
+      }
+    }
+
     if (p?.action === 'sync-partners') {
       const steps = [];
       const run = async (label, url, method, payload, extraHeaders) => {

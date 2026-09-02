@@ -171,6 +171,11 @@ const stats = {
   spaces: spaces.length,
   gems: counts.gem || 0,
   towns: towns.size,
+  // Counted from the source arrays, not from EV_SPOTS.length: a charger can be
+  // recorded on a spot in any of the five modules, and the app's own EV filter
+  // is this same test. scripts/prerender.mjs reads it from here so the homepage
+  // and the globe cannot print two different numbers for one thing.
+  ev: all.filter(s => s.ev?.available).length,
   hostShare: 85,
   generatedAt: new Date().toISOString().slice(0, 10),
 };
