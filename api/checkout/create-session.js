@@ -335,6 +335,13 @@ export default async function handler(req, res) {
     // from_hotspot: whether this booking started at a free spot. Stripe metadata
     // values are strings, so it is read back with === 'true' below.
     const fromHotspot = body?.fromHotspot === true || body?.fromHotspot === 'true';
+    // WHICH free spot sent them. Same text shape as spot_occupancy.spot_id — a
+    // gem's legacy id, or 'rental-<uuid>' — so a booking joins back to the gem.
+    // Bounded and stripped: it is a client-supplied string that lands in a
+    // column the admin screen groups by.
+    const fromHotspotSpotId = fromHotspot
+      ? (String(body?.fromHotspotSpotId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || null)
+      : null;
     // ── Does this space need the host to say yes first? ────────────────────
     //
     // A club car park with forty spaces is instant. Somebody's driveway is a
@@ -363,6 +370,7 @@ export default async function handler(req, res) {
       listing_id: listing.id, host_id: listing.owner_id,
       duration: String(durationHours), weeks: String(repeatWeeks),
       from_hotspot: String(fromHotspot),
+      from_hotspot_spot: fromHotspotSpotId || '',
       // Read by the webhook, which decides between 'paid' and 'awaiting_host'
       // without having to re-read the listing (which may have changed).
       needs_approval: String(needsApproval),
@@ -455,6 +463,9 @@ export default async function handler(req, res) {
       // is one conversion from one comparison card, and counting it seven times
       // would flatter the funnel it exists to measure.
       from_hotspot: i === 0 ? fromHotspot : false,
+      // On the first occurrence only, same rule as the money: one comparison
+      // card produced one conversion, not seven.
+      from_hotspot_spot_id: i === 0 ? fromHotspotSpotId : null,
       recurrence_group: recurrenceGroup, recurrence_index: i,
     }));
     // The response here was previously ignored. If the insert failed we still

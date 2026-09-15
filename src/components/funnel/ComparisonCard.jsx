@@ -15,6 +15,7 @@
 import React, { useEffect, useRef } from 'react';
 import { ChevronRight, Check, AlertCircle } from 'lucide-react';
 import { trackFunnelCardShown, trackPaidListingClicked, markHotspotOrigin } from '../../funnel';
+import { track } from '../../analytics';
 
 const walkMinutes = (metres) => Math.max(1, Math.round(metres / 80));
 
@@ -41,11 +42,16 @@ export default function ComparisonCard({ spot, paid, reason, claim, onOpenPaid }
   }, [reason, walk]);
 
   const freeWalk = spot.walk || 'On the street';
+  // Each heading says only what we can actually see. "Every space we can see"
+  // is doing real work in the first one — we see ParkEasy users and nobody
+  // else, and none of these may claim the spot is full. See data/spotClaims.js.
   const heading = reason === 'taken'
     ? 'Every space we can see here is spoken for'
-    : reason === 'contested'
-      ? 'Someone else is already heading here'
-      : 'There is a space you can book nearby';
+    : reason === 'crowded'
+      ? `${claim?.parked || 2} drivers are parked here right now`
+      : reason === 'contested'
+        ? 'Someone else is already heading here'
+        : 'There is a space you can book nearby';
 
   return (
     <div className="mt-4 rounded-2xl overflow-hidden" style={{border:'1px solid rgba(255,255,255,0.12)'}}>
@@ -83,7 +89,20 @@ export default function ComparisonCard({ spot, paid, reason, claim, onOpenPaid }
       </div>
 
       {/* THE PAID OPTION. */}
-      <button onClick={() => { trackPaidListingClicked(reason, walk); markHotspotOrigin(); onOpenPaid?.(paid); }}
+      <button onClick={() => {
+          trackPaidListingClicked(reason, walk);
+          // The tap itself, not just the booking that may follow it. A driver
+          // who taps through and then does not pay is the interesting half of
+          // this funnel — bookings.from_hotspot only ever records the ones who
+          // did, so without this the drop-off is invisible.
+          track('hotspot_to_booking_tap',
+            { reason, walk_min: String(walk), spot: String(spot?.id ?? 'unknown') },
+            { listingId: paid?.listing?.id || null });
+          // The spot id travels with the mark, so the booking that may follow
+          // can be attributed to THIS hotspot rather than to "a free spot".
+          markHotspotOrigin(spot?.id);
+          onOpenPaid?.(paid);
+        }}
         className="w-full text-left px-4 py-3.5 active:scale-[0.995] transition"
         style={{background:'rgba(46,211,198,0.10)', borderTop:'1px solid rgba(255,255,255,0.10)'}}>
         <div className="flex items-baseline justify-between gap-2">

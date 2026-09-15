@@ -143,6 +143,20 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  event pricing          $(grep -c 'PASS  ' /tmp/pe-t15.log) checks" \
     || { fail=1; echo "  event pricing          FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t15.log; }
 
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260725_bookings_functional.sql \
+                  supabase/migrations/20260728_booking_vehicle_reg.sql \
+                  supabase/migrations/20260820_booking_from_hotspot.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  tests/db/hotspot_conversion_seed.sql \
+                  supabase/migrations/20260915_hotspot_conversion.sql \
+                  tests/db/hotspot_conversion.test.sql             > /tmp/pe-t16.log 2>&1 \
+    && echo "  hotspot conversion     $(grep -c 'PASS  ' /tmp/pe-t16.log) checks" \
+    || { fail=1; echo "  hotspot conversion     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t16.log; }
+
   tests/db/run.sh tests/db/qr_landing_seed.sql \
                   supabase/migrations/20260907_qr_landing.sql \
                   tests/db/qr_landing.test.sql                     > /tmp/pe-t14.log 2>&1 \

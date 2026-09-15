@@ -6,17 +6,23 @@
 // So it appears only when there is a genuine decision to make:
 //
 //   'taken'      every space ParkEasy can see is claimed
+//   'crowded'    others are parked here right now, on a spot with no recorded
+//                capacity — a third of the gems. Deliberately NOT called
+//                "likely full": see the note in data/spotClaims.js.
 //   'contested'  somebody else is already on their way
 //   'nearby'     neither of those, but a bookable space is close enough to be a
-//                real option — 800m, which is a ten-minute walk
+//                real option
 //
 // AND NEVER on a spot that is itself bookable, because comparing a paid space
 // with itself is nonsense.
 //
-// 800m is the brief's number and it is a good one: far enough that most city
-// searches have a candidate, near enough that the walk is not the reason it
-// gets ignored.
-export const NEARBY_RADIUS_M = 800;
+// 1km, raised from 800m. With three active listings, 800m meant most free
+// spots had no candidate at all and the funnel simply never appeared — the
+// same problem the event-pricing radius had. 1km is a twelve-minute walk,
+// still near enough that the distance is not the reason it gets ignored, and
+// the card shows the real walk time either way so nobody is misled about it.
+// Worth tightening again once there are spaces to be choosy about.
+export const NEARBY_RADIUS_M = 1000;
 
 const metresBetween = (aLat, aLng, bLat, bLng) =>
   Math.hypot((aLat - bLat) * 111320, (aLng - bLng) * 65000);
@@ -53,7 +59,13 @@ export function paidAlternativeFor(spot, bookableSpots = [], claim = {}, sellabl
   const paid = candidates[0];
   if (!paid) return null;
 
-  const reason = claim.atCapacity ? 'taken' : claim.contested ? 'contested' : 'nearby';
+  // Ordered by how strong the signal is. atCapacity is a fact about a known
+  // capacity; crowded is other drivers parked on a spot whose size nobody
+  // recorded; contested is somebody merely on their way.
+  const reason = claim.atCapacity ? 'taken'
+    : claim.crowded ? 'crowded'
+    : claim.contested ? 'contested'
+    : 'nearby';
   return { ...paid, reason };
 }
 

@@ -7549,6 +7549,17 @@ const AdminOverlay = ({ onClose }) => {
     } else { alert(j.error || 'Could not set the price'); }
   };
 
+  // ── Which hotspots produce bookings ───────────────────────────────────────
+  // The free → paid funnel, per free spot. A spot with taps and no bookings is
+  // the row worth opening this for: the card is read and the paid space is not
+  // bought, which is the wrong alternative or the wrong price.
+  const [hot, setHot] = useState({ state: 'idle' });
+  const loadHot = async (days = 90) => {
+    setHot({ state: 'loading' });
+    const j = await adminPost({ action: 'hotspot-stats', days }).catch(e => ({ ok: false, error: e.message }));
+    setHot(j.ok ? { state: 'done', rows: j.spots || [], days: j.days } : { state: 'error', error: j.error });
+  };
+
   const d = state.data;
   const Tile = ({ label, value, accent }) => (
     <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-center">
@@ -7567,6 +7578,82 @@ const AdminOverlay = ({ onClose }) => {
           </div>
         </div>
         <div className="px-4 py-5 pb-16 space-y-5">
+          {/* ── Hotspot conversion ─────────────────────────────────────────
+              Which free spots send people to a paid space. Taps come from
+              app_events; bookings come from bookings.from_hotspot_spot_id,
+              written server-side, which is why a booking can appear with no
+              tap beside it — a client event after a Stripe redirect is lost
+              every time somebody closes the receipt tab. */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-display font-bold text-[#EAF1F8]">Hotspots → bookings</p>
+                <p className="text-[11px] text-[rgba(234,241,248,0.5)]">Which free spots sell a paid space · last {hot.days || 90} days</p>
+              </div>
+              <button onClick={() => loadHot(90)} disabled={hot.state === 'loading'}
+                className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal disabled:opacity-50">
+                {hot.state === 'loading' ? 'Loading…' : hot.state === 'done' ? 'Refresh' : 'Load'}
+              </button>
+            </div>
+
+            {hot.state === 'error' && <p className="text-xs text-[#ff9d9d] mt-3">{hot.error}</p>}
+
+            {hot.state === 'done' && (hot.rows.length === 0 ? (
+              <p className="text-xs text-[rgba(234,241,248,0.55)] mt-3">
+                Nothing yet. Rows appear once a driver taps from a free spot through to a
+                bookable one — the comparison card only shows where there is a real choice.
+              </p>
+            ) : (() => {
+              const rows = hot.rows;
+              const taps = rows.reduce((t, r) => t + (r.tap_sessions || 0), 0);
+              const books = rows.reduce((t, r) => t + (r.bookings || 0), 0);
+              const gross = rows.reduce((t, r) => t + (r.gross_pence || 0), 0);
+              const dead = rows.filter(r => (r.taps || 0) > 0 && (r.bookings || 0) === 0).length;
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    <Tile label="People tapped" value={taps.toLocaleString('en-GB')} accent="#5BE7DA"/>
+                    <Tile label="Booked" value={books.toLocaleString('en-GB')} accent="#C9A7FF"/>
+                    <Tile label="Gross" value={`£${(gross / 100).toFixed(0)}`} accent="#6BEFB9"/>
+                  </div>
+                  {taps > 0 && (
+                    <p className="text-[11px] text-[rgba(234,241,248,0.45)] mt-2">
+                      {Math.round((books / taps) * 100)}% of people who tapped through went on to book
+                      {dead > 0 && ` · ${dead} spot${dead === 1 ? '' : 's'} tapped but never booked`}
+                    </p>
+                  )}
+
+                  <div className="mt-3 space-y-1.5">
+                    {rows.slice(0, 30).map(r => {
+                      const never = (r.taps || 0) > 0 && (r.bookings || 0) === 0;
+                      return (
+                        <div key={r.spot_id} className="flex items-start justify-between gap-2 py-1.5 border-t border-white/5">
+                          <div className="min-w-0">
+                            <p className="text-[12.5px] text-[#EAF1F8] font-semibold truncate">
+                              {r.name}{!r.is_gem && <span className="text-[rgba(234,241,248,0.4)] font-normal"> · not a gem</span>}
+                            </p>
+                            <p className="text-[11px] text-[rgba(234,241,248,0.45)]">
+                              {r.tap_sessions || 0} tapped
+                              {r.town ? ` · ${r.town}` : ''}
+                            </p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className={`text-[14px] font-bold ${never ? 'text-[#FFD27A]' : 'text-[#6BEFB9]'}`}>
+                              {r.bookings || 0}
+                            </p>
+                            <p className="text-[10px] text-[rgba(234,241,248,0.4)]">
+                              {r.gross_pence ? `£${(r.gross_pence / 100).toFixed(0)}` : 'no booking'}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })())}
+          </div>
+
           {/* ── Event-day pricing ──────────────────────────────────────────
               JustPark's own figure: hosts near big venues using event pricing
               earn about 57% more a year. Nothing here applies automatically. */}
@@ -7822,6 +7909,31 @@ const AdminOverlay = ({ onClose }) => {
                     ['Viewed a listing', bf.listing_view || 0],
                     ['Started a booking', bf.booking_start || 0],
                     ['Paid', bf.booking_paid || 0]]}/>
+
+                  {/* The free → paid funnel. The tap comes from app_events; the
+                      booking comes from bookings.from_hotspot, written
+                      server-side, because a client event after a Stripe
+                      redirect is lost every time somebody closes the receipt
+                      tab — which is exactly when a booking is most complete. */}
+                  {metrics.hotspot && (
+                    <div className="mt-4">
+                      <p className="text-[11px] font-semibold text-[#6b7d96] mb-1.5">Free spot → paid booking</p>
+                      <div className="flex items-center justify-between text-[12.5px] py-1">
+                        <span className="text-[rgba(234,241,248,0.72)]">Tapped through to a paid space</span>
+                        <span className="text-[#EAF1F8] font-semibold tabular-nums">
+                          {(m.daily || []).filter(r => r.event_name === 'hotspot_to_booking_tap')
+                            .reduce((t, r) => t + (r.n || 0), 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[12.5px] py-1">
+                        <span className="text-[rgba(234,241,248,0.72)]">Paid bookings that started at a free spot</span>
+                        <span className="text-[#5BE7DA] font-semibold tabular-nums">
+                          {metrics.hotspot.paidFromHotspot}
+                          <span className="text-[#6b7d96] font-normal"> of {metrics.hotspot.paidTotal}</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* The one panel here meant to be acted on rather than watched:
                       every place somebody looked and found nothing to book. */}

@@ -175,7 +175,33 @@ export default async function handler(req, res) {
         });
         const text = await r.text().catch(() => '');
         if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
-        return res.status(200).json({ ok: true, summary: JSON.parse(text) });
+
+        // The free -> paid funnel, from the AUTHORITATIVE side.
+        //
+        // app_events counts the card being shown and the tap; bookings.from_hotspot
+        // counts the ones that actually paid, written server-side from checkout
+        // metadata. A client event after a Stripe redirect is lost every time
+        // somebody closes the receipt tab, which is exactly when a booking is
+        // most complete — so the money number comes from the database.
+        const countOf = async (query) => {
+          try {
+            const c = await fetch(`${URL_}/rest/v1/bookings?${query}&select=id`, {
+              headers: { ...svcH, Prefer: 'count=exact', Range: '0-0' },
+            });
+            const range = c.headers.get('content-range') || '';
+            return Number(range.split('/')[1]) || 0;
+          } catch { return 0; }
+        };
+        const [paidTotal, paidFromHotspot] = await Promise.all([
+          countOf('status=eq.paid'),
+          countOf('status=eq.paid&from_hotspot=is.true'),
+        ]);
+
+        return res.status(200).json({
+          ok: true,
+          summary: JSON.parse(text),
+          hotspot: { paidTotal, paidFromHotspot },
+        });
       } catch (e) {
         return res.status(200).json({ ok: false, error: e.message || 'metrics query failed' });
       }
@@ -286,6 +312,22 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, pricePence });
       } catch (e) {
         return res.status(200).json({ ok: false, error: e.message || 'could not set the price' });
+      }
+    }
+
+    // Per-hotspot conversion: which free spots send people to a paid space.
+    if (p?.action === 'hotspot-stats') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const days = Math.max(1, Math.min(Number(p.days) || 90, 365));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/hotspot_conversion_stats`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, days, spots: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'hotspot stats failed' });
       }
     }
 
