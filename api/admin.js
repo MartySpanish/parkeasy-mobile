@@ -331,6 +331,23 @@ export default async function handler(req, res) {
       }
     }
 
+    // The demand map. Where people want parking and cannot get it — the page
+    // you put in front of a church committee.
+    if (p?.action === 'demand') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const days = Math.max(1, Math.min(Number(p.days) || 90, 365));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/demand_points`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, days, points: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'demand query failed' });
+      }
+    }
+
     if (p?.action === 'sync-partners') {
       const steps = [];
       const run = async (label, url, method, payload, extraHeaders) => {

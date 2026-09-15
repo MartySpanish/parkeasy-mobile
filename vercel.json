@@ -275,6 +275,10 @@
     {
       "path": "/api/cron/expire-approvals",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/notify-waitlist",
+      "schedule": "0 10 * * *"
     }
   ]
 }

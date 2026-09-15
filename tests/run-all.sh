@@ -157,6 +157,19 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  hotspot conversion     $(grep -c 'PASS  ' /tmp/pe-t16.log) checks" \
     || { fail=1; echo "  hotspot conversion     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t16.log; }
 
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260819_parking_requests.sql \
+                  supabase/migrations/20260728_spot_occupancy.sql \
+                  supabase/migrations/20260812_spot_claims_heading.sql \
+                  tests/db/demand_map_seed.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  supabase/migrations/20260915_demand_map.sql \
+                  tests/db/demand_map.test.sql                     > /tmp/pe-t17.log 2>&1 \
+    && echo "  demand map             $(grep -c 'PASS  ' /tmp/pe-t17.log) checks" \
+    || { fail=1; echo "  demand map             FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t17.log; }
+
   tests/db/run.sh tests/db/qr_landing_seed.sql \
                   supabase/migrations/20260907_qr_landing.sql \
                   tests/db/qr_landing.test.sql                     > /tmp/pe-t14.log 2>&1 \

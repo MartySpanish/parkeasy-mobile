@@ -3003,12 +3003,24 @@ const RequestParking = ({ geo, cityName }) => {
 
   // The supply-acquisition signal: somebody looked here and there was nothing
   // to book. Fired once per mount of the card, which is once per search that
-  // came up short. props.query is what they typed — a place name, never a
-  // position — which is the same line parking_requests draws.
+  // came up short.
+  //
+  // WHAT THE COORDINATES ARE. props.query is what they typed, and lat/lng are
+  // the coordinates OF THAT PLACE — the searched destination, not the driver's
+  // position. That is the same line parking_requests already draws, and the
+  // reason it is safe to keep: it says "people want parking near Botanic", not
+  // "this person was at Botanic".
+  //
+  // Rounded to three decimals, about 110 metres. Enough to cluster a demand
+  // map and to tell a club their car park is in the right place; not enough to
+  // be a doorstep.
   useEffect(() => {
-    track('search_no_results', { query: where || 'unknown' },
-      { town: cityName || null });
-  }, [where, cityName]);
+    const round = (n) => (typeof n === 'number' ? Math.round(n * 1000) / 1000 : null);
+    track('search_no_results', {
+      query: where || 'unknown',
+      ...(geo?.lat != null ? { lat: String(round(geo.lat)), lng: String(round(geo.lng)) } : {}),
+    }, { town: cityName || null });
+  }, [where, cityName, geo?.lat, geo?.lng]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -7560,6 +7572,16 @@ const AdminOverlay = ({ onClose }) => {
     setHot(j.ok ? { state: 'done', rows: j.spots || [], days: j.days } : { state: 'error', error: j.error });
   };
 
+  // ── Demand map ────────────────────────────────────────────────────────────
+  // Where people want parking and cannot get it. The rows with demand and NO
+  // listing are the supply-acquisition list — that is the whole point.
+  const [demand, setDemand] = useState({ state: 'idle' });
+  const loadDemand = async (days = 90) => {
+    setDemand({ state: 'loading' });
+    const j = await adminPost({ action: 'demand', days }).catch(e => ({ ok: false, error: e.message }));
+    setDemand(j.ok ? { state: 'done', rows: j.points || [], days: j.days } : { state: 'error', error: j.error });
+  };
+
   const d = state.data;
   const Tile = ({ label, value, accent }) => (
     <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-center">
@@ -7578,6 +7600,73 @@ const AdminOverlay = ({ onClose }) => {
           </div>
         </div>
         <div className="px-4 py-5 pb-16 space-y-5">
+          {/* ── Demand map ─────────────────────────────────────────────────
+              "Eleven people looked for parking near your club last month."
+              The unserved rows come first because they are the ones to act on. */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-display font-bold text-[#EAF1F8]">Demand</p>
+                <p className="text-[11px] text-[rgba(234,241,248,0.5)]">Where people want parking · last {demand.days || 90} days</p>
+              </div>
+              <button onClick={() => loadDemand(90)} disabled={demand.state === 'loading'}
+                className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal disabled:opacity-50">
+                {demand.state === 'loading' ? 'Loading…' : demand.state === 'done' ? 'Refresh' : 'Load'}
+              </button>
+            </div>
+
+            {demand.state === 'error' && <p className="text-xs text-[#ff9d9d] mt-3">{demand.error}</p>}
+
+            {demand.state === 'done' && (demand.rows.length === 0 ? (
+              <p className="text-xs text-[rgba(234,241,248,0.55)] mt-3">
+                Nothing yet. Rows appear as people leave emails, search for somewhere with
+                nothing to book, or park at a free spot.
+              </p>
+            ) : (() => {
+              // Unserved first: a cluster with demand and no bookable space is
+              // the reason to open this screen.
+              const rows = [...demand.rows].sort((a, b) =>
+                (a.has_listing === b.has_listing ? 0 : a.has_listing ? 1 : -1)
+                || (b.requests - a.requests) || (b.total - a.total));
+              const emails = rows.reduce((t, r) => t + (r.requests || 0), 0);
+              const gaps = rows.filter(r => !r.has_listing).length;
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    <Tile label="Left an email" value={emails} accent="#C9A7FF"/>
+                    <Tile label="Areas" value={rows.length} accent="#5BE7DA"/>
+                    <Tile label="No space yet" value={gaps} accent={gaps ? '#FFD27A' : '#6BEFB9'}/>
+                  </div>
+
+                  <div className="mt-3 space-y-1.5">
+                    {rows.slice(0, 30).map(r => (
+                      <div key={`${r.lat},${r.lng}`} className="flex items-start justify-between gap-2 py-1.5 border-t border-white/5">
+                        <div className="min-w-0">
+                          <p className="text-[12.5px] text-[#EAF1F8] font-semibold truncate">
+                            {r.label || `${r.lat}, ${r.lng}`}
+                            {r.venue && <span className="text-[rgba(234,241,248,0.45)] font-normal"> · near {r.venue}</span>}
+                          </p>
+                          {/* Counted separately, never summed. An email address and
+                              a map pan are not the same evidence. */}
+                          <p className="text-[11px] text-[rgba(234,241,248,0.45)]">
+                            {r.requests > 0 && `${r.requests} left an email`}
+                            {r.requests > 0 && (r.no_results > 0 || r.parked > 0) && ' · '}
+                            {r.no_results > 0 && `${r.no_results} found nothing`}
+                            {r.no_results > 0 && r.parked > 0 && ' · '}
+                            {r.parked > 0 && `${r.parked} parked free`}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold uppercase flex-shrink-0 ${r.has_listing ? 'text-[#6BEFB9]' : 'text-[#FFD27A]'}`}>
+                          {r.has_listing ? 'served' : 'no space'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })())}
+          </div>
+
           {/* ── Hotspot conversion ─────────────────────────────────────────
               Which free spots send people to a paid space. Taps come from
               app_events; bookings come from bookings.from_hotspot_spot_id,
