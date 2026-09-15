@@ -170,6 +170,18 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  demand map             $(grep -c 'PASS  ' /tmp/pe-t17.log) checks" \
     || { fail=1; echo "  demand map             FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t17.log; }
 
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260725_bookings_functional.sql \
+                  supabase/migrations/20260725_season_passes.sql \
+                  supabase/migrations/20260728_booking_vehicle_reg.sql \
+                  supabase/migrations/20260820_booking_from_hotspot.sql \
+                  supabase/migrations/20260907_host_approval.sql \
+                  supabase/migrations/20260915_pass_approval.sql \
+                  tests/db/pass_approval.test.sql                  > /tmp/pe-t18.log 2>&1 \
+    && echo "  pass approval          $(grep -c 'PASS  ' /tmp/pe-t18.log) checks" \
+    || { fail=1; echo "  pass approval          FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t18.log; }
+
   tests/db/run.sh tests/db/qr_landing_seed.sql \
                   supabase/migrations/20260907_qr_landing.sql \
                   tests/db/qr_landing.test.sql                     > /tmp/pe-t14.log 2>&1 \

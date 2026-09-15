@@ -123,6 +123,14 @@ export default async function handler(req, res) {
       method: 'PATCH', headers: svc,
       body: JSON.stringify({ status: 'declined', host_responded_at: now, host_decline_reason: reason, updated_at: now }),
     });
+    // A pass booking has no card to release — the money was taken when the pass
+    // was bought. What has to come back is the CREDIT: a host saying no must not
+    // cost the driver one of the ten they paid for.
+    if (booking.pass_purchase_id) {
+      await fetch(`${URL_}/rest/v1/rpc/restore_pass_credit`, {
+        method: 'POST', headers: svc, body: JSON.stringify({ p_purchase: booking.pass_purchase_id }),
+      }).catch(e => console.error('pass credit NOT restored on decline', booking.id, String(e)));
+    }
     return send(200, page('Declined',
       `<p>Thanks for answering. The driver has been told and <strong>nothing was
           charged</strong> — the hold on their card is released.</p>

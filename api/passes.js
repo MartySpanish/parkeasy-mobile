@@ -133,7 +133,7 @@ async function handleRedeem(req, res) {
     const today = new Date().toISOString().slice(0, 10);
     if (pass?.valid_to && pass.valid_to < today) return res.status(400).json({ error: 'This pass has expired (unused credits aren’t refundable)' });
 
-    const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${pass.listing_id}&select=id,title,owner_id,status,spaces`, { headers: svc });
+    const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${pass.listing_id}&select=id,title,owner_id,status,spaces,requires_host_approval`, { headers: svc });
     const listing = (await lr.json())?.[0];
     if (!listing || listing.status !== 'active') return res.status(400).json({ error: 'Listing not bookable' });
 
@@ -155,7 +155,24 @@ async function handleRedeem(req, res) {
       return res.status(409).json({ error: 'Could not redeem a credit — try again' });
     }
 
+    // A PASS CREDIT DOES NOT BYPASS THE HOST.
+    //
+    // A driveway is somebody's home, and a booking on one is a REQUEST
+    // (20260907_host_approval.sql). This path used to insert 'paid' directly
+    // without reading the flag, so a season pass booked a stranger's drive and
+    // the first they heard was a car arriving. Nobody has bought a pass yet, so
+    // it never happened — it would have, the first time one was sold against a
+    // driveway.
+    //
+    // There is no card to authorise here: the money was taken when the pass was
+    // bought. What is at stake is the CREDIT, which is restored if the host says
+    // no or never answers.
+    const needsApproval = listing.requires_host_approval === true;
     const cutoffHours = parseInt(process.env.CANCEL_CUTOFF_HOURS || '24', 10);
+    const approvalDeadline = needsApproval
+      ? new Date(Math.min(Date.now() + 24 * 3600000, startMs)).toISOString()
+      : null;
+
     const ins = await fetch(`${URL_}/rest/v1/bookings`, {
       method: 'POST', headers: { ...svc, Prefer: 'return=representation' },
       body: JSON.stringify({
@@ -165,13 +182,30 @@ async function handleRedeem(req, res) {
         cancellation_deadline: new Date(startMs - cutoffHours * 3600000).toISOString(),
         currency: 'gbp', amount_total_pence: 0, booking_price_pence: 0,
         application_fee_pence: 0, service_fee_pence: 0,
-        pass_purchase_id: purchase.id, status: 'paid',
+        pass_purchase_id: purchase.id,
+        status: needsApproval ? 'awaiting_host' : 'paid',
+        requires_host_approval: needsApproval,
+        approval_deadline: approvalDeadline,
       }),
     });
-    if (!ins.ok) return res.status(502).json({ error: 'Could not create the booking' });
+    if (!ins.ok) {
+      // THE CREDIT COMES BACK. It was decremented before the insert — the right
+      // order, because the other one hands out a free booking when the
+      // decrement fails — but that means a failed insert used to eat it, and
+      // the driver had paid for ten and could use nine.
+      await fetch(`${URL_}/rest/v1/rpc/restore_pass_credit`, {
+        method: 'POST', headers: svc, body: JSON.stringify({ p_purchase: purchase.id }),
+      }).catch(e => console.error('pass credit NOT restored', purchase.id, String(e)));
+      console.error('passes/redeem: booking insert failed, credit restored', purchase.id,
+        ins.status, await ins.text().catch(() => ''));
+      return res.status(502).json({ error: 'Could not create the booking — your credit has not been used.' });
+    }
     const bookingRow = (await ins.json())?.[0];
 
-    return res.status(200).json({ ok: true, creditsRemaining: remaining, bookingId: bookingRow?.id });
+    return res.status(200).json({
+      ok: true, creditsRemaining: remaining, bookingId: bookingRow?.id,
+      awaitingHost: needsApproval,
+    });
   } catch (e) {
     console.error('passes/redeem', e);
     return res.status(500).json({ error: e.message || 'Redemption failed' });

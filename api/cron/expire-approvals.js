@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     // to answer.
     const q = `${URL_}/rest/v1/bookings`
       + `?status=eq.awaiting_host&approval_deadline=lt.${encodeURIComponent(nowIso)}`
-      + `&select=id,stripe_payment_intent,driver_email&limit=${MAX_PER_RUN}`;
+      + `&select=id,stripe_payment_intent,driver_email,pass_purchase_id&limit=${MAX_PER_RUN}`;
     const r = await fetch(q, { headers: svc });
     if (!r.ok) throw new Error(`lookup failed: ${r.status}`);
     const due = await r.json();
@@ -70,6 +70,14 @@ export default async function handler(req, res) {
             continue;
           }
         }
+      }
+      // Same as a decline: a pass booking has no authorisation to release, but
+      // the credit must come back. A host who never answered must not cost the
+      // driver one of the credits they paid for.
+      if (b.pass_purchase_id) {
+        await fetch(`${URL_}/rest/v1/rpc/restore_pass_credit`, {
+          method: 'POST', headers: svc, body: JSON.stringify({ p_purchase: b.pass_purchase_id }),
+        }).catch(e => console.error('pass credit NOT restored on expiry', b.id, String(e)));
       }
       const patch = await fetch(`${URL_}/rest/v1/bookings?id=eq.${b.id}`, {
         method: 'PATCH', headers: svc,
