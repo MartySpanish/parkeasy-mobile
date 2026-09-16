@@ -94,8 +94,32 @@ export async function createBookingSession({ listingId, durationHours, startsAt,
     }),
   });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.url) throw new Error(d.error || 'Could not start checkout');
+  if (!r.ok || !d.url) {
+    // The CODE, not just the sentence. Without it errors.js cannot tell one of
+    // our own refusals — "this host hasn't set up payouts" — from a card
+    // decline, and it used to show card advice for both.
+    const err = new Error(d.error || 'Could not start checkout');
+    if (d.code) err.code = d.code;
+    throw err;
+  }
   return d.url;
+}
+
+/**
+ * Whether a listing can actually take a booking, asked before the Pay button
+ * is offered. Returns { bookable, reason, message }; bookable is null when the
+ * question could not be answered, which must never be treated as "no" — the
+ * flow still works, it just refuses later with an honest message.
+ */
+export async function fetchBookable(listingId) {
+  try {
+    const r = await apiFetch(`/api/listings/bookable?listingId=${encodeURIComponent(listingId)}`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok && r.status !== 404) return { bookable: null, reason: 'unknown' };
+    return { bookable: d.bookable ?? null, reason: d.reason || null, message: d.message || null };
+  } catch {
+    return { bookable: null, reason: 'unknown' };
+  }
 }
 
 // Buy a season/bundle pass → returns the Stripe Checkout URL.

@@ -15,7 +15,7 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
+import { notify, apiFetch, fetchBookable, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { tileLayerProps, tileThemeClass } from './mapTiles';
 import { pushSupport, isPushEnabled, enablePush, disablePush } from './push';
@@ -5107,6 +5107,23 @@ const BookingSheet = ({ listing, onClose }) => {
     return () => { live = false; };
   }, [listing.id]);
   const rate = override ?? baseRate;
+  // CAN this space take money at all — asked when the panel opens rather than
+  // when Pay is tapped. A driveway published in July had a host who never
+  // finished Stripe onboarding, so the refusal arrived at the card step and the
+  // app read it as a declined card. Nobody's card was the problem.
+  //
+  // null means "we could not find out", and that is NOT the same as no: the
+  // Pay button stays exactly as it was and the honest refusal comes from the
+  // server, as it does now. A network blip must not make every space on the
+  // map look unbookable.
+  const [payable, setPayable] = useState({ bookable: null, reason: null, message: null });
+  useEffect(() => {
+    let live = true;
+    setPayable({ bookable: null, reason: null, message: null });
+    fetchBookable(listing.id).then(r => { if (live) setPayable(r); });
+    return () => { live = false; };
+  }, [listing.id]);
+  const notPayable = payable.bookable === false;
   const [time, setTime] = useState('09:00');
   const [hours, setHours] = useState(2);
   const [busy, setBusy] = useState(false);
@@ -5191,7 +5208,11 @@ const BookingSheet = ({ listing, onClose }) => {
       const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks, vehicleReg: regClean,
         unit: dayPriced ? 'day' : 'hour' });
       window.location.href = url;   // full-page redirect to Stripe Checkout
-    } catch (e) { setErr(paymentError(e.message)); setBusy(false); }
+    } catch (e) {
+      // The error OBJECT: it carries the server's refusal code, and passing
+      // only the message is what made a payouts problem read as a card decline.
+      setErr(paymentError(e)); setBusy(false);
+    }
   };
 
   const field = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3.5 py-3 min-h-[44px] text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
@@ -5219,6 +5240,16 @@ const BookingSheet = ({ listing, onClose }) => {
         {closedDay && (
           <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
             {closedReason || spanReason}
+          </p>
+        )}
+        {/* Said once, at the top, before any of the fields below are filled
+            in. The old behaviour let somebody pick a date, type their
+            registration and tap Pay before finding out. */}
+        {notPayable && (
+          <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
+            {payable.reason === 'host_payouts_incomplete'
+              ? <>This host hasn&rsquo;t finished setting up payments yet, so we can&rsquo;t take a booking for this space. Nothing you do here will charge you — try one of the spaces nearby.</>
+              : (payable.message || <>This space isn&rsquo;t taking bookings just now.</>)}
           </p>
         )}
         {/* Only where the host published both rates. One rate and there is no
@@ -5342,14 +5373,18 @@ const BookingSheet = ({ listing, onClose }) => {
                 alert(`Booked with your ${credit.passName} — ${r.creditsRemaining} credit${r.creditsRemaining!==1?'s':''} left.`);
                 onClose();
               } catch (e) { setErr(e.message || 'Could not redeem'); setBusy(false); }
-            }} disabled={busy || closedDay}
+            }} disabled={busy || closedDay || notPayable}
             className="mt-4 w-full font-display font-bold py-3 rounded-2xl text-sm text-[#06231f] disabled:opacity-50" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
-            {busy ? 'Booking…' : closedDay ? 'Closed on that date' : `Use pass credit (${credit.remaining} left) — free`}
+            {busy ? 'Booking…'
+              : notPayable ? 'Not taking bookings yet'
+              : closedDay ? 'Closed on that date'
+              : `Use pass credit (${credit.remaining} left) — free`}
           </button>
         )}
-        <button onClick={pay} disabled={busy || rate<=0 || belowMin || !regValid || closedDay}
+        <button onClick={pay} disabled={busy || rate<=0 || belowMin || !regValid || closedDay || notPayable}
           className={`${credit ? 'mt-2' : 'mt-4'} w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50`}>
           {busy ? 'Opening secure payment…'
+            : notPayable ? 'Not taking bookings yet'
             : spanReason ? 'Covers a date this space is closed'
             : closedDay ? 'Closed on that date — pick another'
             : belowMin ? `Add ${hoursForMin - hours} more hour${hoursForMin - hours !== 1 ? 's' : ''} to book`
@@ -7096,6 +7131,13 @@ const PayoutSetup = ({ user }) => {
   const [acct, setAcct] = useState(undefined);   // undefined = loading, null = none
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState('');
+  // How many of this host's spaces are live. It changes what this card has to
+  // say: with no live space, payout setup is housekeeping for later. With one,
+  // it is the reason nobody can book it — a driveway sat live since July with
+  // an unfinished Stripe account, every booking attempt refused, and this card
+  // said only "get set up to receive payments". It never mentioned that the
+  // space was unbookable until it was done.
+  const [liveSpaces, setLiveSpaces] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -7103,6 +7145,10 @@ const PayoutSetup = ({ user }) => {
       if (!isSupabaseEnabled || !user?.id) { setAcct(null); return; }
       const { data } = await supabase.from('host_accounts').select('onboarding_status,transfers_active').eq('host_id', user.id).maybeSingle();
       if (active) setAcct(data || null);
+      const { count } = await supabase.from('rental_listings')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', user.id).eq('status', 'active');
+      if (active) setLiveSpaces(count || 0);
     })();
     return () => { active = false; };
   }, [user?.id]);
@@ -7139,7 +7185,7 @@ const PayoutSetup = ({ user }) => {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-5">
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{background: active ? 'linear-gradient(135deg,#34E0A0,#059669)' : 'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
+        <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{background: active ? 'linear-gradient(135deg,#34E0A0,#059669)' : liveSpaces > 0 ? 'linear-gradient(135deg,#FFD27A,#FFC24B)' : 'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
           {active ? <Check size={18} className="text-[#06231f]"/> : <Receipt size={18} className="text-[#06231f]"/>}
         </div>
         <div className="flex-1 min-w-0">
@@ -7150,8 +7196,16 @@ const PayoutSetup = ({ user }) => {
             </>
           ) : (
             <>
-              <p className="font-display font-bold text-[14px] text-[#EAF1F8]">{started ? 'Finish setting up payouts' : 'Get set up to receive payments'}</p>
-              <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-0.5">Add your details with Stripe so booking money can be paid to you (minus ParkEasy’s 15% fee). Takes a couple of minutes.</p>
+              <p className="font-display font-bold text-[14px] text-[#EAF1F8]">
+                {liveSpaces > 0
+                  ? (liveSpaces === 1 ? 'Your space can’t be booked yet' : 'Your spaces can’t be booked yet')
+                  : started ? 'Finish setting up payouts' : 'Get set up to receive payments'}
+              </p>
+              <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-0.5">
+                {liveSpaces > 0
+                  ? <>{liveSpaces === 1 ? 'Your space is live and drivers can see it, but we can’t take money for it' : `Your ${liveSpaces} spaces are live and drivers can see them, but we can’t take money for them`} until your payout details are set up — so every booking gets turned away. Takes a couple of minutes with Stripe, and you keep 85% of the space price.</>
+                  : <>Add your details with Stripe so booking money can be paid to you (minus ParkEasy’s 15% fee). Takes a couple of minutes.</>}
+              </p>
               {err && <p className="text-[12px] text-red-300 mt-1.5">{err}</p>}
               <button onClick={go} disabled={busy}
                 className="mt-2.5 inline-flex items-center gap-2 btn-teal text-[#06231f] font-bold text-[13px] px-4 py-2 rounded-xl disabled:opacity-50">
