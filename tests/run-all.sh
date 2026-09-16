@@ -193,6 +193,12 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  app events ingest      $(grep -c 'PASS  ' /tmp/pe-t9.log) checks" \
     || { fail=1; echo "  app events ingest      FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t9.log; }
 
+  tests/db/run.sh tests/db/push_subscriptions_seed.sql \
+                  supabase/migrations/20260915_push_subscriptions.sql \
+                  tests/db/push_subscriptions.test.sql             > /tmp/pe-t19.log 2>&1 \
+    && echo "  push subscriptions     $(grep -c 'PASS  ' /tmp/pe-t19.log) checks" \
+    || { fail=1; echo "  push subscriptions     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t19.log; }
+
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
 else

@@ -18,6 +18,7 @@ import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { tileLayerProps, tileThemeClass } from './mapTiles';
+import { pushSupport, isPushEnabled, enablePush, disablePush } from './push';
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
 // app_events. track() mirrors the overlapping names into funnel.js itself,
 // so a call site never wires up both instruments by hand. See src/analytics.js.
@@ -1369,6 +1370,92 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
   );
 };
 
+// ── Notifications toggle ──────────────────────────────────────────────────────
+//
+// The whole point of the permission prompt is that it is asked ONCE, and only
+// after somebody has tapped something that obviously wants a notification.
+// "Block" is permanent and cannot be undone from inside the page, so a prompt
+// fired on page load is the channel thrown away. This control is that tap.
+//
+// It renders nothing at all where push cannot work, rather than a dead switch:
+//
+//   not configured  — no VAPID key on this deployment. Nothing to offer.
+//   no push api     — iOS Safari in a tab. Says how to get it (install the PWA),
+//                     because that is a real instruction and not an excuse.
+//   denied          — blocked already. Says so, and says where to undo it,
+//                     because we are not allowed to ask again.
+const PushToggle = () => {
+  const [support, setSupport] = useState(null);
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const s = pushSupport();
+      const enabled = await isPushEnabled();
+      if (alive) { setSupport(s); setOn(enabled); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  if (!support) return null;
+  if (support.reason === 'not-configured' || support.reason === 'no-window') return null;
+
+  // iOS gives a tab no Push API at all; an installed PWA gets one. Worth
+  // saying, since it is the single commonest reason this is missing.
+  if (support.reason === 'no-push' || support.reason === 'no-service-worker'
+      || support.reason === 'no-notification') {
+    return (
+      <p className="text-[11px] text-[#6b7d96] leading-snug">
+        Alerts need ParkEasy on your home screen — tap Share then &ldquo;Add to Home Screen&rdquo;.
+      </p>
+    );
+  }
+
+  if (support.reason === 'denied') {
+    return (
+      <p className="text-[11px] text-[#6b7d96] leading-snug">
+        Alerts are blocked for parkeasy.uk. Turn them back on in your browser&rsquo;s site settings —
+        we can&rsquo;t ask again from here.
+      </p>
+    );
+  }
+
+  const flip = async () => {
+    setBusy(true);
+    try {
+      if (on) {
+        await disablePush();
+        setOn(await isPushEnabled());
+        notify('Alerts off');
+      } else {
+        const r = await enablePush({ userGesture: true });
+        setOn(await isPushEnabled());
+        // Each branch says what actually happened. "Something went wrong" on a
+        // permission prompt the driver themselves dismissed is a lie.
+        if (r.ok) notify('Alerts on — we\u2019ll tell you when it matters');
+        else if (r.reason === 'denied') notify('Alerts blocked. You can undo that in your browser\u2019s site settings.');
+        else if (r.reason === 'default') notify('No bother — ask again any time');
+        else notify('Couldn\u2019t turn alerts on. Try again in a moment.');
+      }
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <button onClick={flip} disabled={busy}
+      className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl font-bold text-xs text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition disabled:opacity-60">
+      <span className="flex items-center gap-2">
+        <Megaphone size={14} className="text-[#5BE7DA]"/>
+        {on ? 'Alerts on' : 'Turn on alerts'}
+      </span>
+      <span className={`text-[10px] font-extrabold ${on ? 'text-[#6BEFB9]' : 'text-[#6b7d96]'}`}>
+        {busy ? '…' : on ? 'ON' : 'OFF'}
+      </span>
+    </button>
+  );
+};
+
 // ── User Menu ─────────────────────────────────────────────────────────────────
 const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin, onCorporate }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
@@ -1419,6 +1506,7 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             be "contact ParkEasy", which is a liability and a slow one. Renders
             nothing at all for somebody with no subscription. */}
         {isPremium && <CancelSubscription/>}
+        <PushToggle/>
         <div className="border-t border-white/10 pt-2">
           <button onClick={onSignOut} className="w-full flex items-center gap-2 text-sm text-red-300 hover:text-red-300 font-medium py-1 transition-colors">
             <LogOut size={15}/> Sign out
@@ -8077,6 +8165,16 @@ const AdminOverlay = ({ onClose }) => {
                   <Row ok={e.contactEmail} label={`CONTACT_EMAIL${e.contactEmailMasked?` · ${e.contactEmailMasked}`:''}`} hint="Not set — the app has nowhere to deliver signup/listing alerts." />
                   <Row ok={e.emailFromCustom} label={`EMAIL_FROM · ${e.emailFrom}`} hint="Using Resend's shared test sender — it ONLY delivers to your own Resend account email. Verify parkeasy.uk in Resend and set EMAIL_FROM to noreply@parkeasy.uk to reach everyone." />
                   <Row ok={e.serviceKey} label="SUPABASE_SERVICE_ROLE_KEY" hint="Not set — user counts & the signups list below stay empty. Supabase → Settings → API → service_role." />
+                  {/* Three rows and not one, because "push is broken" has
+                      three different causes and only one of them is visible
+                      from the app: a mismatched pair delivers nothing while
+                      every screen says alerts are on. See docs/push.md. */}
+                  <Row ok={e.pushKeys} label="VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY"
+                    hint="Not set — the app cannot send a notification to anybody. Run `npx web-push generate-vapid-keys` and add both to Vercel." />
+                  <Row ok={e.pushClientKey} label="VITE_VAPID_PUBLIC_KEY"
+                    hint="Not set — no browser can subscribe, so the send list stays empty. Set it to the SAME public key and redeploy (a VITE_ variable is baked into the build)." />
+                  <Row ok={e.pushKeysMatch} label="Push keys match"
+                    hint="VAPID_PUBLIC_KEY and VITE_VAPID_PUBLIC_KEY are different keys. Browsers subscribe with one and we sign with the other, so every push is rejected 403 and nothing is delivered — while the app still says alerts are on." />
                 </div>
                 <button onClick={sendTestEmail} disabled={testing}
                   className="mt-3 w-full py-2.5 rounded-xl font-bold text-xs text-[#06231f] btn-teal disabled:opacity-50">

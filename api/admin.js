@@ -65,6 +65,15 @@ export default async function handler(req, res) {
     emailFrom: process.env.EMAIL_FROM || 'onboarding@resend.dev (Resend test sender)',
     emailFromCustom: !!process.env.EMAIL_FROM,
     serviceKey: !!SERVICE,
+    // Push: three variables that have to agree, and the one failure mode that
+    // says nothing. VITE_VAPID_PUBLIC_KEY is what the browser subscribes with
+    // and VAPID_PUBLIC_KEY is what signs the send; if they are not the same
+    // key, every push comes back 403 and no notification is ever delivered
+    // while every screen in the app says notifications are on.
+    pushKeys: !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+    pushClientKey: !!process.env.VITE_VAPID_PUBLIC_KEY,
+    pushKeysMatch: !!(process.env.VAPID_PUBLIC_KEY && process.env.VITE_VAPID_PUBLIC_KEY
+      && process.env.VAPID_PUBLIC_KEY === process.env.VITE_VAPID_PUBLIC_KEY),
   };
 
   // ── Live test email: sends to CONTACT_EMAIL and returns the REAL Resend
