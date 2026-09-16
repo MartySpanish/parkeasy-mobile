@@ -243,3 +243,31 @@ h1, h2, h3 { letter-spacing: -0.02em; }
    to look like a list of leftovers rather than a set of options. */
 .pe-offer-grid { grid-template-columns: 1fr; }
 @media (min-width: 480px) { .pe-offer-grid { grid-template-columns: 1fr 1fr; column-gap: 18px; } }
+
+/* Dark map tiles without a dark tile provider.
+ *
+ * OpenStreetMap's standard tiles are light-styled and there is no keyless dark
+ * equivalent, so the dark theme is produced here instead: invert, then rotate
+ * the hue back so greens and blues do not come out magenta. Applied to the
+ * Leaflet tile pane only — inverting the whole map would invert the pins and
+ * the popups with it.
+ *
+ * The .map-osm-tiles class says only which provider is serving the tiles; the
+ * theme half of the decision is right here, because a class computed in render
+ * goes stale the moment somebody toggles the theme and the map does not happen
+ * to re-render. Only ever present when there is no VITE_CARTO_API_KEY, since
+ * CARTO's dark_all is already dark. See src/mapTiles.js.
+ */
+.map-osm-tiles .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.92) saturate(0.85);
+}
+/* Light mode wants OSM's tiles exactly as they come. */
+[data-theme="light"] .map-osm-tiles .leaflet-tile-pane { filter: none; }
+
+/* The attribution sits inside the map but outside the tile pane, so it is not
+ * inverted — it just needs to be legible against a now-dark map. */
+.map-osm-tiles .leaflet-control-attribution {
+  background: rgba(11, 20, 32, 0.72);
+  color: rgba(234, 241, 248, 0.6);
+}
+.map-osm-tiles .leaflet-control-attribution a { color: rgba(91, 231, 218, 0.85); }

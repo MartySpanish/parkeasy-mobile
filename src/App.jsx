@@ -17,6 +17,7 @@ import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
+import { tileLayerProps, tileThemeClass } from './mapTiles';
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
 // app_events. track() mirrors the overlapping names into funnel.js itself,
 // so a call site never wires up both instruments by hand. See src/analytics.js.
@@ -1919,8 +1920,8 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               )}
             </>
           ) : (
-            <MapContainer key={spot.id} center={[spot.lat,spot.lng]} zoom={17} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
-              <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+            <MapContainer className={tileThemeClass()} key={spot.id} center={[spot.lat,spot.lng]} zoom={17} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
+              <TileLayer {...tileLayerProps()}/>
               <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
             </MapContainer>
           )}
@@ -2428,8 +2429,8 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
       <div className="relative h-80 flex-shrink-0">
         {/* zoomControl off: it renders top-left, exactly under the close button.
             Drag and pinch still work, which is what a phone uses anyway. */}
-        <MapContainer center={[54.6008,-5.9272]} zoom={14} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-          <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+        <MapContainer className={tileThemeClass()} center={[54.6008,-5.9272]} zoom={14} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
+          <TileLayer {...tileLayerProps()}/>
           <Polygon positions={zonePositions} pathOptions={{color:'#FF5C5C',weight:3,fillColor:'#FF5C5C',fillOpacity:0.30}}/>
           {FLEADH.zoneStreets.filter(s=>s.label).map((s,i)=>(
             <Marker key={'st'+i} position={[s.lat,s.lng]} icon={streetPin(s.name)}/>
@@ -2600,19 +2601,16 @@ const searchPin = (label) => L.divIcon({
 
 // isPremium defaults to true so existing call sites keep exact pins; screens
 // that can show gated spots pass the real flag + an upgrade handler.
-// Map base tiles — CARTO's free, polished styles that match the app theme
-// (dark map for dark mode, light "Voyager" for light mode). No per-view cost.
-const CARTO_DARK  = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png';
-const CARTO_LIGHT = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-const TILE_ATTR = '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
-const tileUrl = () => (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light') ? CARTO_LIGHT : CARTO_DARK;
+// Base tiles, attribution and the dark-tile class all come from src/mapTiles.js
+// — which provider is in use depends on VITE_CARTO_API_KEY, so none of it can
+// be a constant here.
 
 // `pin` (optional) marks a searched address location.
 const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPremium=true, onUpgrade, pin }) => (
   <div style={{height}} className={flat ? 'overflow-hidden border-y border-white/10' : 'rounded-2xl overflow-hidden border border-white/10 shadow-sm'}>
-    <MapContainer center={center || BELFAST_CENTER} zoom={zoom}
+    <MapContainer className={tileThemeClass()} center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
-      <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+      <TileLayer {...tileLayerProps()}/>
       {center && <RecenterMap center={center} zoom={zoom}/>}
       {pin && (
         <Marker position={[pin.lat, pin.lng]} icon={searchPin(pin.label)} zIndexOffset={1000}>
@@ -5509,12 +5507,12 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
                   Two sites 500m apart still overlap at a scale that also has to
                   show Newry; the list underneath is the unambiguous version,
                   and pinch-zoom separates them. */}
-              <MapContainer
+              <MapContainer className={tileThemeClass()}
                 bounds={sites.map(s => [s.lat, s.lng])}
                 boundsOptions={{ padding: [34, 34], maxZoom: 13 }}
                 style={{width:'100%',height:'100%'}}
                 scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-                <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+                <TileLayer {...tileLayerProps()}/>
                 {sites.map(s => (
                   <Marker key={s.id} position={[s.lat, s.lng]} icon={pricePin(s, false)}
                     eventHandlers={{ click: () => onOpenSpot?.(s) }}/>
@@ -5569,9 +5567,9 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
         <>
         <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2">Parking around {partner.name}</h3>
         <div className="rounded-2xl overflow-hidden border border-white/10" style={{height:230}}>
-          <MapContainer center={[partner.lat, partner.lng]} zoom={16} style={{width:'100%',height:'100%'}}
+          <MapContainer className={tileThemeClass()} center={[partner.lat, partner.lng]} zoom={16} style={{width:'100%',height:'100%'}}
             scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-            <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+            <TileLayer {...tileLayerProps()}/>
             {/* Above the parking pins: the business is the anchor of this map,
                 and a spot pin sitting on top of its name is confusing. */}
             <Marker position={[partner.lat, partner.lng]} icon={bizPin(partner.name)} zIndexOffset={1000}/>
