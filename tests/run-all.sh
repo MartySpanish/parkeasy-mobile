@@ -199,6 +199,15 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  push subscriptions     $(grep -c 'PASS  ' /tmp/pe-t19.log) checks" \
     || { fail=1; echo "  push subscriptions     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t19.log; }
 
+  tests/db/run.sh tests/db/spot_signals_seed.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260728_public_approved_spots.sql \
+                  supabase/migrations/20260820_hotspot_moderation.sql \
+                  supabase/migrations/20260917_spot_signals.sql \
+                  tests/db/spot_signals.test.sql                   > /tmp/pe-t21.log 2>&1 \
+    && echo "  spot signals           $(grep -c 'PASS  ' /tmp/pe-t21.log) checks" \
+    || { fail=1; echo "  spot signals           FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t21.log; }
+
   tests/db/run.sh tests/db/parking_timers_seed.sql \
                   supabase/migrations/20260917_parking_timers.sql \
                   tests/db/parking_timers.test.sql                 > /tmp/pe-t20.log 2>&1 \

@@ -1,0 +1,17 @@
+-- Supabase's default privileges, which the test cluster does not have.
+--
+-- A hosted Supabase project ships with
+--
+--   alter default privileges in schema public grant all on tables to anon, authenticated;
+--
+-- so EVERY new table in public is granted to both roles the moment it is
+-- created. Two things in this suite pass on nothing without it:
+--
+--   * spot_signals ends with a `revoke all`. On a bare cluster the grants were
+--     never there, so deleting the revoke changes neither the grants nor the
+--     test — and the table goes to production readable by anonymous callers.
+--   * spot_reports is granted by the same default and is then narrowed by this
+--     migration from "insert via a policy" to "nothing at all". Same trap.
+--
+-- Applied before the migrations, so the revokes have something to do.
+alter default privileges in schema public grant all on tables to anon, authenticated;

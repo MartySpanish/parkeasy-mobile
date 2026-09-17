@@ -7,7 +7,7 @@ import {
   Bookmark, Camera, Check, X, ChevronRight, ChevronLeft, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon, Sparkles,
-  Store, Briefcase,
+  Store, Briefcase, AlertTriangle, HelpCircle,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -37,6 +37,7 @@ import { holdCopy } from './data/spaceHold';
 import { eventsOn, whenWord, venueOf } from './data/events';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
+import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
 import { fetchPhotosForSpot, submitSpotPhoto, spotKeyOf } from './data/spotPhotos';
 import ComparisonCard from './components/funnel/ComparisonCard';
@@ -1864,7 +1865,7 @@ const AddPhotoSheet = ({ spot, user, onClose, onAdded }) => {
   );
 };
 
-const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot, reportFlagged, onReported, user }) => {
+const SpotDetail = ({ spot, saved, onSave, mySignal, onSignal, signalCounts, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot, reportFlagged, onReported, user }) => {
   // Featured Partner: a local business within its radius of this spot. Same
   // contextual placement as on bookable listings — community spots are where
   // the traffic is, so the partner is visible while supply is still growing.
@@ -1927,9 +1928,14 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   const hasPhoto = allPhotos.length > 0 && !photoBroken;
   const [confirmedAt,setConfirmedAt]=useState(()=> spot ? (ls.get('pe_confirmed_at',{})[spot.id]||null) : null);
   if (!spot) return null;
-  const confirmCount=(spot.votes||0)+(voted?1:0);
+  // WHAT OTHER DRIVERS SAID, from the server. This line used to read
+  // "Confirmed by 0 drivers" on every spot in the app: spot.votes is a seed
+  // field and all 744 of them are 0, and the only thing that could raise it
+  // was this browser's own localStorage. See data/spotSignalsCore.js.
+  const community = signalSummary(signalCounts, mySignal);
   const confirmedAgo=confirmedAt?timeAgo(confirmedAt):null;
-  const confirmStillHere=()=>{ onVote?.(spot.id); const m=ls.get('pe_confirmed_at',{}); m[spot.id]=Date.now(); ls.set('pe_confirmed_at',m); setConfirmedAt(m[spot.id]); };
+  const say=(signal)=>{ onSignal?.(spot.id, nextSignal(mySignal, signal));
+    if (signal === 'confirmed') { const m=ls.get('pe_confirmed_at',{}); m[spot.id]=Date.now(); ls.set('pe_confirmed_at',m); setConfirmedAt(m[spot.id]); } };
   const reportHref=`mailto:parkeasyuk@gmail.com?subject=${encodeURIComponent('Report wrong/gone: '+spot.name)}&body=${encodeURIComponent('This spot may be inaccurate or gone:\n\n'+spot.name+' — '+spot.near+'\nhttps://parkeasy.uk/\n\nWhat is wrong: ')}`;
   const occ = occupancyOf(spot); const pr = priceParts(spot);
   const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
@@ -2199,17 +2205,33 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
             </button>
           )}
           <div className="mt-4 pt-4 border-t border-white/10">
+            {/* The tick is earned now rather than printed. With nothing said
+                about a spot there is no tick and no number — the absence of
+                answers is not evidence about the spot, and dressing it as
+                "Confirmed by 0 drivers" was a verdict on all 744 of them. */}
             <p className="text-xs text-[rgba(234,241,248,0.55)] mb-2.5">
-              <Check size={11} className="inline -mt-0.5 text-[#6BEFB9]"/> Confirmed by <strong className="text-[#EAF1F8]">{confirmCount}</strong> driver{confirmCount!==1?'s':''}
-              {confirmedAgo && <span className="text-[rgba(234,241,248,0.4)]"> · you confirmed {confirmedAgo}</span>}
+              {community.tone === 'confirmed'
+                ? <Check size={11} className="inline -mt-0.5 text-[#6BEFB9]"/>
+                : community.tone === 'disputed'
+                  ? <AlertTriangle size={11} className="inline -mt-0.5 text-[#FFD27A]"/>
+                  : <HelpCircle size={11} className="inline -mt-0.5 text-[rgba(234,241,248,0.4)]"/>}{' '}
+              {community.text}
+              {/* Not beside "You said this one is still here" — the count has
+                  not caught up yet and the sentence already says it. */}
+              {confirmedAgo && community.mine === 'confirmed' && community.confirmed > 0
+                && <span className="text-[rgba(234,241,248,0.4)]"> · you confirmed {confirmedAgo}</span>}
             </p>
             <div className="flex items-center gap-2">
-              <button onClick={confirmStillHere} disabled={voted}
-                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${voted?'bg-[#34E0A0]/15 border-[#34E0A0]/50 text-[#6BEFB9]':'border-white/15 text-[#cdd9e8] hover:border-[#34E0A0]/40'}`}>
-                👍 {voted?'Confirmed':'Still here'}
+              {/* Both buttons toggle. Tapping the answer you already gave takes
+                  it back, because the alternative is a driver who mis-tapped
+                  being counted for good — and Still here used to disable
+                  itself on the first tap, which is exactly that. */}
+              <button onClick={()=>say('confirmed')} aria-pressed={community.mine === 'confirmed'}
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${community.mine === 'confirmed'?'bg-[#34E0A0]/15 border-[#34E0A0]/50 text-[#6BEFB9]':'border-white/15 text-[#cdd9e8] hover:border-[#34E0A0]/40'}`}>
+                👍 {community.mine === 'confirmed'?'Confirmed':'Still here'}
               </button>
-              <button onClick={()=>onRate?.(spot.id,'changed')}
-                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${rating==='changed'?'bg-[#FFC24B]/15 border-[#FFC24B]/50 text-[#FFD27A]':'border-white/15 text-[#cdd9e8] hover:border-[#FFC24B]/40'}`}>
+              <button onClick={()=>say('changed')} aria-pressed={community.mine === 'changed'}
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${community.mine === 'changed'?'bg-[#FFC24B]/15 border-[#FFC24B]/50 text-[#FFD27A]':'border-white/15 text-[#cdd9e8] hover:border-[#FFC24B]/40'}`}>
                 👎 Changed
               </button>
               {/* One tap, in the app. This was a mailto: link, which is a
@@ -2930,14 +2952,14 @@ const applyChip = (arr, chip) => {
 };
 
 const SORT_OPTIONS_FREE    = [
-  { id:'popular', label:'Most Popular' },
+  { id:'popular', label:'Recommended' },
   { id:'cheap',   label:'Cheapest' },
   { id:'spaces',  label:'Most spaces' },
   { id:'free',    label:'Free First' },
   { id:'alpha',   label:'A–Z' },
 ];
 const SORT_OPTIONS_PREMIUM = [
-  { id:'popular',  label:'Most Popular' },
+  { id:'popular',  label:'Recommended' },
   { id:'cheap',    label:'Cheapest' },
   { id:'spaces',   label:'Most spaces' },
   { id:'free',     label:'Free First' },
@@ -3347,7 +3369,7 @@ const RequestParking = ({ geo, cityName }) => {
 const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39, 44, 49];
 
 
-const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched, initialGeo }) => {
+const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched, initialGeo }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -3461,6 +3483,15 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       if (t) return t;
       if (sortBy === 'cheap') return priceVal(a) - priceVal(b);
       if (sortBy === 'spaces') return ((b.available??b.spaces)||0) - ((a.available??a.spaces)||0);
+      // ORDERED BY OUR RANKING, AND LABELLED AS OURS. `votes` is a weight in
+      // the seed data — a couple of thousand of them across 297 spots, none
+      // given by a driver — so calling this "Most Popular" claimed a
+      // popularity nobody measured. Real confirmations now exist
+      // (spot_signal_counts) and are shown on the spot's own sheet, where
+      // they can be read as the small number they honestly are; sorting the
+      // whole list by them on the day this ships would put every spot in id
+      // order. The weight stays as the ranking, and the label no longer
+      // attributes it to drivers.
       if (sortBy === 'popular') return b.votes - a.votes;
       if (sortBy === 'free') {
         const fa = ['free','hidden_gem'].includes(a.badge) ? 0 : 1;
@@ -4382,7 +4413,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
 
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
-const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, cityName, onCityDetected, userSpots = [], isPremium, onUpgrade, onOpenSpot }) => {
+const NearbyTab = ({ saved, onSave, cityName, onCityDetected, userSpots = [], isPremium, onUpgrade, onOpenSpot }) => {
   const [loc,     setLoc]     = useState(null);
   const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
@@ -4612,7 +4643,7 @@ const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
 };
 
 // ── SavedTab ──────────────────────────────────────────────────────────────────
-const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, allSpots = SPOTS, isPremium, onUpgrade, onOpenSpot }) => {
+const SavedTab = ({ saved, onSave, allSpots = SPOTS, isPremium, onUpgrade, onOpenSpot }) => {
   const spots = allSpots.filter(s => saved.has(s.id));
   const [focusSpot, setFocusSpot] = useState(null);
   const [shared, setShared] = useState(false);
@@ -9457,7 +9488,16 @@ export default function App() {
   const [tab,           setTab]           = useState('search');
   const [user,          setUser]          = useState(()=>ls.get('pe_user', null));
   const [saved,         setSaved]         = useState(()=>new Set(ls.get('pe_saved', [])));
-  const [ratings,       setRatings]       = useState(()=>ls.get('pe_ratings', {}));
+  // What THIS device said about each spot: { [spotId]: 'confirmed' | 'changed' }.
+  // Replaces pe_votes ({id: true}) and pe_ratings ({id: 'changed'}), which
+  // between them were the whole of the old feature: the first was read only by
+  // the reader's own screen and the second was never read at all. Both are
+  // migrated in so months of taps still show on the buttons — see
+  // mergeLegacySignals for why they are NOT replayed to the server.
+  const [signals,       setSignals]       = useState(() =>
+    mergeLegacySignals(ls.get('pe_signals', null), ls.get('pe_votes', {}), ls.get('pe_ratings', {})));
+  // And what every driver said, from the server.
+  const [signalCounts,  setSignalCounts]  = useState({});
   // NEVER on arrival. A search-first product whose first interaction is a
   // registration form throws away the top of its own funnel — and this one
   // asked for name, email, password and a promo code before a single parking
@@ -9540,7 +9580,6 @@ export default function App() {
       else if (location.hash.startsWith('#s=')) history.replaceState(null, '', location.pathname + location.search);
     } catch { /* ignore */ }
   }, [detailSpot]);
-  const [votes,          setVotes]          = useState(()=>ls.get('pe_votes', {}));
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstall,    setShowInstall]    = useState(false);
   const [showIOSGuide,   setShowIOSGuide]   = useState(false);
@@ -9601,6 +9640,11 @@ export default function App() {
   const [reportCounts, setReportCounts] = useState({});
   const loadReportCounts = useCallback(() => { fetchReportCounts().then(setReportCounts); }, []);
   useEffect(() => { loadReportCounts(); }, [loadReportCounts]);
+
+  // One read for the whole map. The view is a few hundred rows of integers, and
+  // a fetch per sheet opened is a fetch per sheet opened.
+  const loadSignalCounts = useCallback(() => { fetchSignalCounts().then(setSignalCounts); }, []);
+  useEffect(() => { loadSignalCounts(); }, [loadSignalCounts]);
 
   // ── HIDDEN GEMS, FROM THE DATABASE ───────────────────────────────────────
   // The 89 curated free spots now live in public.hidden_gems, so they can be
@@ -10089,24 +10133,30 @@ export default function App() {
     });
   };
 
-  const rateSpot = (id, val) => {
-    setRatings(prev => {
-      const next = {...prev};
-      next[id]===val ? delete next[id] : (next[id]=val);
-      ls.set('pe_ratings', next);
+  // "Still here" / "Changed", and this time the answer leaves the phone.
+  //
+  // The device's own record is written FIRST and kept whatever the network
+  // does: the button has to reflect what the driver just said, and a build with
+  // no database behind it still has to work. The count beside it comes back
+  // from the server — incrementing a local guess is exactly what made
+  // "Confirmed by 1 driver" true on one phone and false everywhere else.
+  const saySignal = useCallback(async (id, signal) => {
+    setSignals(prev => {
+      const next = { ...prev };
+      signal ? (next[id] = signal) : delete next[id];
+      ls.set('pe_signals', next);
       return next;
     });
-  };
-
-  const voteSpot = (id) => {
-    promptSignup();
-    setVotes(prev => {
-      if (prev[id]) return prev;
-      const next = { ...prev, [id]: true };
-      ls.set('pe_votes', next);
-      return next;
-    });
-  };
+    const fresh = signal ? await setSignal(id, signal) : (await clearSignal(id), null);
+    if (fresh) {
+      setSignalCounts(prev => ({ ...prev, [String(id)]: fresh }));
+    } else {
+      // Either it was taken back, or it did not reach the server. Re-read
+      // rather than guess: a stale count is a wrong count and this one is
+      // shown to everybody.
+      loadSignalCounts();
+    }
+  }, [loadSignalCounts]);
 
 
   // Parking session timer — tick every second while a session is active.
@@ -10256,7 +10306,7 @@ export default function App() {
         onWay: heading[String(detailSpot.id)]   || undefined,
         ...(typeof detailSpot.spaces !== 'number' && capacity[String(detailSpot.id)]
           ? { spaces: capacity[String(detailSpot.id)], spacesEstimated: true } : {}),
-      }} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
+      }} saved={saved.has(detailSpot.id)} onSave={toggleSave} mySignal={signals[detailSpot.id] || null} onSignal={saySignal} signalCounts={signalCounts[String(detailSpot.id)]} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
         onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}
         bookableSpots={rentalSpots} onOpenSpot={openSpot}
         reportFlagged={reportFlag(reportCounts, detailSpot.id)} onReported={loadReportCounts} user={user}/>}
@@ -10403,10 +10453,10 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)} initialGeo={deepGeo}/>}
-        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)} initialGeo={deepGeo}/>}
+        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
-        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
+        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
         {tab==='partner'    && <PartnerTab onOpenPartner={setDetailPartner}/>}
         {/* Not on Search, which carries its own copy near the top of the

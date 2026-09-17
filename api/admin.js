@@ -340,6 +340,44 @@ export default async function handler(req, res) {
       }
     }
 
+    // THE REPORT QUEUE, and the button that closes it.
+    //
+    // Reports had no way to be resolved, so a spot that was checked and found
+    // fine stayed flagged to every driver for good — and the flag is the useful
+    // half of reporting. After a year everything is flagged and the warning
+    // means nothing.
+    if (p?.action === 'spot-reports') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      try {
+        const r = await fetch(
+          `${URL_}/rest/v1/spot_reports?resolved_at=is.null`
+          + `&select=id,spot_key,reason,note,created_at&order=created_at.asc&limit=100`,
+          { headers: svcH });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, reports: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'report queue failed' });
+      }
+    }
+
+    if (p?.action === 'resolve-spot-reports') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const key = String(p.spotKey || '').trim();
+      if (!key) return res.status(200).json({ ok: false, error: 'Which spot?' });
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/resolve_spot_reports`, {
+          method: 'POST', headers: svcH,
+          body: JSON.stringify({ p_spot_key: key, p_resolution: String(p.resolution || '').slice(0, 300) || null }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, closed: Number(JSON.parse(text)) || 0 });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'resolve failed' });
+      }
+    }
+
     // The demand map. Where people want parking and cannot get it — the page
     // you put in front of a church committee.
     if (p?.action === 'demand') {
