@@ -1,0 +1,13 @@
+-- Supabase's default privileges, which the test cluster does not have.
+--
+-- A hosted project ships with
+--
+--   alter default privileges in schema public grant all on tables to anon, authenticated;
+--
+-- so every new table in public is granted to both roles the moment it is
+-- created. event_alerts and event_alert_sends both end with a `revoke all`, and the checks that
+-- assert them pass on nothing without this:
+-- on a bare cluster the grant was never there, so deleting the revoke changes
+-- neither the grants nor the test result — and the list of who follows which
+-- ground would go to production readable by anonymous callers.
+alter default privileges in schema public grant all on tables to anon, authenticated;

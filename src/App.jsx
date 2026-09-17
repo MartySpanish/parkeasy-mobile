@@ -7,7 +7,7 @@ import {
   Bookmark, Camera, Check, X, ChevronRight, ChevronLeft, Share2,
   Map, Star, Clock, Car, Info, LogOut, User, Filter, Smartphone, Download,
   Zap, Timer, Globe, Receipt, Key, Shield, Mail, Megaphone, FileText, Sun, Moon, Sparkles,
-  Store, Briefcase,
+  Store, Briefcase, AlertTriangle, HelpCircle,
 } from 'lucide-react';
 import { supabase, isSupabaseEnabled, sessionToUser } from './supabase';
 import { EXTRA_SPOTS } from './extraSpots';
@@ -19,6 +19,7 @@ import { notify, apiFetch, fetchBookable, redeemPromo, fetchPromoStatus, startPa
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { tileLayerProps, tileThemeClass } from './mapTiles';
 import { pushSupport, isPushEnabled, enablePush, disablePush } from './push';
+import { getParked, startParked, endParked, setTimer, cancelTimer, timeLeft, shareParked, directionsToCar, metresBetween, walkLabel, walkMinutes } from './parked';
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
 // app_events. track() mirrors the overlapping names into funnel.js itself,
 // so a call site never wires up both instruments by hand. See src/analytics.js.
@@ -36,6 +37,12 @@ import { holdCopy } from './data/spaceHold';
 import { eventsOn, whenWord, venueOf } from './data/events';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
+import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
+import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
+import { fetchReferrals, ensureCode, referralLine, referralLink, rememberCode, claimPendingCode, claimMessage } from './data/referrals';
+import { PREMIUM_BENEFITS, paidBenefits, freeBenefits } from './premium';
+import { toast, onToast } from './toast';
+import { setOfflineMaps, clearOfflineMaps } from './offlineMaps';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
 import { fetchPhotosForSpot, submitSpotPhoto, spotKeyOf } from './data/spotPhotos';
 import ComparisonCard from './components/funnel/ComparisonCard';
@@ -1291,16 +1298,25 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
         </div>
         <div className="p-6 space-y-4">
           <div className="space-y-2">
-            {[
-              ['✨','Hidden gems — founder-curated free spots in ideal locations'],
-              ['⚡','Premium EV charger spots + charging filter'],
-              ['📍','Sort by distance — nearest spots first'],
-              ['🗺️','Offline maps — works without signal'],
-              ['🔔','Notifications when spots free up'],
-              ['💎','Premium badge on your profile'],
-            ].map(([icon,text])=>(
-              <div key={text} className="flex items-center gap-3 text-sm text-[#cdd9e8]">
-                <span className="w-6 text-center text-base">{icon}</span><span>{text}</span>
+            {/* RENDERED FROM src/premium.js, which carries a `proof` for every
+                claim — the identifier in this repository that implements it —
+                and a test that fails if one is missing. This list was six
+                hardcoded strings and two of them were not true: there were no
+                offline maps at all (the service worker passed tiles straight
+                through), and "notifications when spots free up" is real but
+                free to everybody. The first is now built; the second is below,
+                under its own heading, described as what it is. */}
+            {paidBenefits().map(b=>(
+              <div key={b.text} className="flex items-center gap-3 text-sm text-[#cdd9e8]">
+                <span className="w-6 text-center text-base">{b.icon}</span><span>{b.text}</span>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6b7d96]">Free for everyone</p>
+            {freeBenefits().map(b=>(
+              <div key={b.text} className="flex items-center gap-3 text-sm text-[rgba(234,241,248,0.55)]">
+                <span className="w-6 text-center text-base">{b.icon}</span><span>{b.text}</span>
               </div>
             ))}
           </div>
@@ -1428,16 +1444,16 @@ const PushToggle = () => {
       if (on) {
         await disablePush();
         setOn(await isPushEnabled());
-        notify('Alerts off');
+        toast('Alerts off');
       } else {
         const r = await enablePush({ userGesture: true });
         setOn(await isPushEnabled());
         // Each branch says what actually happened. "Something went wrong" on a
         // permission prompt the driver themselves dismissed is a lie.
-        if (r.ok) notify('Alerts on — we\u2019ll tell you when it matters');
-        else if (r.reason === 'denied') notify('Alerts blocked. You can undo that in your browser\u2019s site settings.');
-        else if (r.reason === 'default') notify('No bother — ask again any time');
-        else notify('Couldn\u2019t turn alerts on. Try again in a moment.');
+        if (r.ok) toast('Alerts on — we\u2019ll tell you when it matters');
+        else if (r.reason === 'denied') toast('Alerts blocked. You can undo that in your browser\u2019s site settings.', 'warn');
+        else if (r.reason === 'default') toast('No bother — ask again any time');
+        else toast('Couldn\u2019t turn alerts on. Try again in a moment.', 'warn');
       }
     } finally { setBusy(false); }
   };
@@ -1456,8 +1472,141 @@ const PushToggle = () => {
   );
 };
 
+// ── Points ────────────────────────────────────────────────────────────────────
+//
+// 744 spots, 89 gems and every restriction note came from drivers, and nothing
+// in this app has ever thanked them for it. Points convert to Premium days —
+// see docs/points.md for why that is the only reward it can honestly pay.
+//
+// SELF-CONTAINED, and renders NOTHING until it has a real balance. A rewards
+// card that flashes "0 points" while it loads has told the driver they have
+// nothing, and for most of them that will be the only thing they read.
+const PointsCard = ({ onRedeemed }) => {
+  const [p, setP] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [how, setHow] = useState(false);
+  const load = useCallback(() => { fetchPoints().then(setP); }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!p) return null;
+
+  const s = pointsSummary(p);
+
+  const redeem = async () => {
+    setBusy(true);
+    try {
+      const r = await redeemPoints();
+      if (r.ok) {
+        toast(`${r.days} days of Premium added \u2014 thanks for the help`);
+        onRedeemed?.(r.until);
+        load();
+      } else if (r.reason === 'not_enough') {
+        // Said as the number it is. "Something went wrong" would be a lie about
+        // a thing that went exactly right.
+        toast(`Not quite yet \u2014 ${Math.max(0, (r.cost || s.cost) - (r.balance || 0))} more points`, 'warn');
+        load();
+      } else {
+        toast('Couldn\u2019t redeem that just now. Try again in a moment.', 'warn');
+      }
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-xl p-3 bg-white/5 border border-white/10">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-xl font-extrabold text-[#EAF1F8] tabular-nums">{s.balance}</p>
+        <button onClick={()=>setHow(v=>!v)} className="text-[10px] font-bold text-[#5BE7DA]">
+          {how ? 'Hide' : 'How to earn'}
+        </button>
+      </div>
+      <p className="text-[10px] text-[#6b7d96] font-medium">Thanks points</p>
+      {/* A bar, capped at full. 300 points is not 300% of the way to a 30-day
+          reward — it is three of them waiting. */}
+      <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div className="h-full rounded-full bg-[#5BE7DA]" style={{width:`${Math.round(s.progress*100)}%`}}/>
+      </div>
+      <p className="text-[10.5px] text-[rgba(234,241,248,0.6)] mt-1.5 leading-relaxed">{s.text}</p>
+      {s.ready && (
+        <button onClick={redeem} disabled={busy}
+          className="w-full mt-2 py-2 rounded-xl font-bold text-[11.5px] text-[#06231f] btn-teal active:scale-95 transition disabled:opacity-60">
+          {busy ? '\u2026' : `Redeem for ${s.days} days`}
+        </button>
+      )}
+      {how && (
+        <ul className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
+          {EARN_WAYS.map(w => (
+            <li key={w.kind} className="flex items-start justify-between gap-2">
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold text-[#EAF1F8]">{w.label}</span>
+                <span className="block text-[9.5px] text-[#6b7d96]">{w.note}</span>
+              </span>
+              <span className="text-[11px] font-extrabold text-[#5BE7DA] flex-shrink-0">+{w.points}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+// ── Referrals ─────────────────────────────────────────────────────────────────
+//
+// The code is minted on first look rather than for all 1,400 accounts at once,
+// so opening this menu is what creates it.
+//
+// WHAT IT WILL NOT SAY. Not "2 pending points" — a referral pays when the
+// person you brought contributes something the map keeps, which may never
+// happen, and calling that pending is a promise. Both numbers are shown and the
+// gap is explained instead. See docs/referrals.md.
+const ReferralCard = () => {
+  const [r, setR] = useState(null);
+  const [code, setCode] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const got = await fetchReferrals();
+      if (!live) return;
+      setR(got);
+      // my_referrals() reports the code only if one exists; minting is a
+      // separate call so that merely reading the card is not a write for
+      // somebody who never opens it.
+      setCode(got?.code || (await ensureCode()));
+    })();
+    return () => { live = false; };
+  }, []);
+
+  if (!r || !code) return null;
+  const line = referralLine(r);
+  const url = referralLink(code);
+
+  const share = async () => {
+    const text = `I use ParkEasy for parking in Belfast — free spots, real prices. `
+      + `Use my code ${code} when you join.`;
+    try {
+      if (navigator.share) { await navigator.share({ title: 'ParkEasy', text, url }); return; }
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      setCopied(true); setTimeout(()=>setCopied(false), 1600);
+    } catch { /* a cancelled share sheet is not a failure worth reporting */ }
+  };
+
+  return (
+    <div className="rounded-xl p-3 bg-white/5 border border-white/10">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-display font-extrabold text-[15px] text-[#EAF1F8] tracking-[0.12em] tabular-nums">{code}</p>
+        <button onClick={share}
+          className="text-[10.5px] font-bold text-[#06231f] btn-teal px-2.5 py-1.5 rounded-full active:scale-95 transition">
+          {copied ? 'Copied' : 'Share'}
+        </button>
+      </div>
+      <p className="text-[10px] text-[#6b7d96] font-medium mt-0.5">Your invite code</p>
+      <p className="text-[10.5px] text-[rgba(234,241,248,0.6)] mt-1.5 leading-relaxed">{line.text}</p>
+    </div>
+  );
+};
+
 // ── User Menu ─────────────────────────────────────────────────────────────────
-const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin, onCorporate }) => (
+const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin, onCorporate, onRedeemed }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
     <div className="absolute top-16 right-3 bg-[#0e1a2c] rounded-2xl shadow-2xl border border-white/10 w-64 overflow-hidden" onClick={e=>e.stopPropagation()}>
       <div style={{background:'var(--surface-solid)'}} className="p-4 flex items-center gap-3">
@@ -1483,6 +1632,11 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             }
           </div>
         </div>
+        {/* Before the upgrade button on purpose: somebody who has given this map
+            four spots should be offered their thanks before they are offered a
+            price. */}
+        <PointsCard onRedeemed={onRedeemed}/>
+        <ReferralCard/>
         {!isPremium && (
           <button onClick={onUpgrade} className="w-full bg-yellow-400 text-[#FFD27A] py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
             ★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr
@@ -1506,6 +1660,18 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             be "contact ParkEasy", which is a liability and a slow one. Renders
             nothing at all for somebody with no subscription. */}
         {isPremium && <CancelSubscription/>}
+        {/* Visible, because a feature somebody paid for that they cannot see
+            is a feature they will not believe they got. And clearable, because
+            a map cache is space on their phone. */}
+        {isPremium && (
+          <button onClick={()=>{ clearOfflineMaps(); setOfflineMaps(true); toast('Stored maps cleared'); }}
+            className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl font-bold text-xs text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+            <span className="flex items-center gap-2">
+              <Map size={14} className="text-[#5BE7DA]"/>Offline maps on
+            </span>
+            <span className="text-[10px] font-extrabold text-[#6b7d96]">CLEAR</span>
+          </button>
+        )}
         <PushToggle/>
         <div className="border-t border-white/10 pt-2">
           <button onClick={onSignOut} className="w-full flex items-center gap-2 text-sm text-red-300 hover:text-red-300 font-medium py-1 transition-colors">
@@ -1863,7 +2029,7 @@ const AddPhotoSheet = ({ spot, user, onClose, onAdded }) => {
   );
 };
 
-const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot, reportFlagged, onReported, user }) => {
+const SpotDetail = ({ spot, saved, onSave, mySignal, onSignal, signalCounts, onClose, onStartTimer, onHeading, headingMine, bookableSpots = [], onOpenSpot, reportFlagged, onReported, user }) => {
   // Featured Partner: a local business within its radius of this spot. Same
   // contextual placement as on bookable listings — community spots are where
   // the traffic is, so the partner is visible while supply is still growing.
@@ -1926,9 +2092,14 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
   const hasPhoto = allPhotos.length > 0 && !photoBroken;
   const [confirmedAt,setConfirmedAt]=useState(()=> spot ? (ls.get('pe_confirmed_at',{})[spot.id]||null) : null);
   if (!spot) return null;
-  const confirmCount=(spot.votes||0)+(voted?1:0);
+  // WHAT OTHER DRIVERS SAID, from the server. This line used to read
+  // "Confirmed by 0 drivers" on every spot in the app: spot.votes is a seed
+  // field and all 744 of them are 0, and the only thing that could raise it
+  // was this browser's own localStorage. See data/spotSignalsCore.js.
+  const community = signalSummary(signalCounts, mySignal);
   const confirmedAgo=confirmedAt?timeAgo(confirmedAt):null;
-  const confirmStillHere=()=>{ onVote?.(spot.id); const m=ls.get('pe_confirmed_at',{}); m[spot.id]=Date.now(); ls.set('pe_confirmed_at',m); setConfirmedAt(m[spot.id]); };
+  const say=(signal)=>{ onSignal?.(spot.id, nextSignal(mySignal, signal));
+    if (signal === 'confirmed') { const m=ls.get('pe_confirmed_at',{}); m[spot.id]=Date.now(); ls.set('pe_confirmed_at',m); setConfirmedAt(m[spot.id]); } };
   const reportHref=`mailto:parkeasyuk@gmail.com?subject=${encodeURIComponent('Report wrong/gone: '+spot.name)}&body=${encodeURIComponent('This spot may be inaccurate or gone:\n\n'+spot.name+' — '+spot.near+'\nhttps://parkeasy.uk/\n\nWhat is wrong: ')}`;
   const occ = occupancyOf(spot); const pr = priceParts(spot);
   const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
@@ -2198,17 +2369,33 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
             </button>
           )}
           <div className="mt-4 pt-4 border-t border-white/10">
+            {/* The tick is earned now rather than printed. With nothing said
+                about a spot there is no tick and no number — the absence of
+                answers is not evidence about the spot, and dressing it as
+                "Confirmed by 0 drivers" was a verdict on all 744 of them. */}
             <p className="text-xs text-[rgba(234,241,248,0.55)] mb-2.5">
-              <Check size={11} className="inline -mt-0.5 text-[#6BEFB9]"/> Confirmed by <strong className="text-[#EAF1F8]">{confirmCount}</strong> driver{confirmCount!==1?'s':''}
-              {confirmedAgo && <span className="text-[rgba(234,241,248,0.4)]"> · you confirmed {confirmedAgo}</span>}
+              {community.tone === 'confirmed'
+                ? <Check size={11} className="inline -mt-0.5 text-[#6BEFB9]"/>
+                : community.tone === 'disputed'
+                  ? <AlertTriangle size={11} className="inline -mt-0.5 text-[#FFD27A]"/>
+                  : <HelpCircle size={11} className="inline -mt-0.5 text-[rgba(234,241,248,0.4)]"/>}{' '}
+              {community.text}
+              {/* Not beside "You said this one is still here" — the count has
+                  not caught up yet and the sentence already says it. */}
+              {confirmedAgo && community.mine === 'confirmed' && community.confirmed > 0
+                && <span className="text-[rgba(234,241,248,0.4)]"> · you confirmed {confirmedAgo}</span>}
             </p>
             <div className="flex items-center gap-2">
-              <button onClick={confirmStillHere} disabled={voted}
-                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${voted?'bg-[#34E0A0]/15 border-[#34E0A0]/50 text-[#6BEFB9]':'border-white/15 text-[#cdd9e8] hover:border-[#34E0A0]/40'}`}>
-                👍 {voted?'Confirmed':'Still here'}
+              {/* Both buttons toggle. Tapping the answer you already gave takes
+                  it back, because the alternative is a driver who mis-tapped
+                  being counted for good — and Still here used to disable
+                  itself on the first tap, which is exactly that. */}
+              <button onClick={()=>say('confirmed')} aria-pressed={community.mine === 'confirmed'}
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${community.mine === 'confirmed'?'bg-[#34E0A0]/15 border-[#34E0A0]/50 text-[#6BEFB9]':'border-white/15 text-[#cdd9e8] hover:border-[#34E0A0]/40'}`}>
+                👍 {community.mine === 'confirmed'?'Confirmed':'Still here'}
               </button>
-              <button onClick={()=>onRate?.(spot.id,'changed')}
-                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${rating==='changed'?'bg-[#FFC24B]/15 border-[#FFC24B]/50 text-[#FFD27A]':'border-white/15 text-[#cdd9e8] hover:border-[#FFC24B]/40'}`}>
+              <button onClick={()=>say('changed')} aria-pressed={community.mine === 'changed'}
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl border transition ${community.mine === 'changed'?'bg-[#FFC24B]/15 border-[#FFC24B]/50 text-[#FFD27A]':'border-white/15 text-[#cdd9e8] hover:border-[#FFC24B]/40'}`}>
                 👎 Changed
               </button>
               {/* One tap, in the app. This was a mailto: link, which is a
@@ -2258,8 +2445,150 @@ const fmtHMS = (ms) => {
   const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 };
+// A wall-clock time, which is how a reminder has to be phrased: "before 15:40"
+// is something a driver can check against a sign; "in 108 minutes" is not.
+const fmtClock = (ts) => new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-const SessionModal = ({ session, now, onClose, onEnd }) => {
+// ── The reminder ──────────────────────────────────────────────────────────────
+//
+// The countdown that already existed was accurate and useless: it only ran
+// while the tab was alive, and the tab is gone by the time a two-hour limit
+// matters. These chips write the timer to the database, and a cron sweep
+// pushes it (api/cron/parking-timers.js, docs/parking.md).
+//
+// No chip under 10 minutes, because the sweep runs every 5 and a shorter
+// promise is one that can arrive after the ticket.
+const TIMER_CHOICES = [30, 60, 120, 180];
+
+const ParkedTimer = ({ session, now, onChange }) => {
+  const [busy, setBusy] = useState(false);
+  const [how, setHow] = useState(null);   // 'scheduled' | 'local-only'
+  const left = timeLeft(session, now);
+
+  const choose = async (mins) => {
+    setBusy(true);
+    try {
+      const r = await setTimer(mins, Math.min(15, Math.max(5, Math.round(mins / 8))));
+      setHow(r.ok ? r.reason : null);
+      if (r.ok) onChange?.(r.parked);
+      // 'local-only' is not a failure, and must not be dressed as success:
+      // the countdown works, the notification will not come.
+      if (!r.ok) toast('Couldn\u2019t set that reminder.', 'warn');
+      else if (r.reason === 'local-only') toast('Reminder set on this device only', 'warn');
+      else toast(`We\u2019ll remind you before ${fmtClock(Date.now() + mins * 60000)}`);
+    } finally { setBusy(false); }
+  };
+
+  const clear = async () => {
+    setBusy(true);
+    try { await cancelTimer(); onChange?.({ ...session, dueAt: null, warnMins: null }); toast('Reminder off'); }
+    finally { setBusy(false); }
+  };
+
+  if (left != null) {
+    const over = left <= 0;
+    return (
+      <div className={`mt-3 p-3.5 rounded-2xl border ${over ? 'bg-[#FFC24B]/10 border-[#FFC24B]/30' : 'bg-white/5 border-white/10'}`}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold text-[rgba(234,241,248,0.5)]">
+              {over ? 'Your parking is up' : 'Time left'}
+            </div>
+            <div className={`font-display font-bold text-lg tabular-nums ${over ? 'text-[#FFD27A]' : 'text-[#EAF1F8]'}`}>
+              {over ? `Ran out at ${fmtClock(session.dueAt)}` : fmtHMS(left)}
+            </div>
+            {/* Said plainly, because the difference is whether a notification
+                arrives when the phone is in a pocket. */}
+            {how === 'local-only' && (
+              <div className="text-[10.5px] text-[rgba(234,241,248,0.45)] mt-0.5">On this device only — no alert if you close the app</div>
+            )}
+          </div>
+          <button onClick={clear} disabled={busy}
+            className="text-[11px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 px-3 py-1.5 rounded-full flex-shrink-0 disabled:opacity-50">
+            {busy ? '…' : 'Off'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+      <div className="flex items-center gap-2">
+        <Timer size={14} className="text-[#5BE7DA]"/>
+        <span className="text-[12.5px] font-semibold text-[#EAF1F8]">Remind me before it runs out</span>
+      </div>
+      <div className="flex gap-2 mt-2.5">
+        {TIMER_CHOICES.map(m => (
+          <button key={m} onClick={()=>choose(m)} disabled={busy}
+            className="flex-1 py-2 rounded-xl text-[12px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition disabled:opacity-50">
+            {m < 60 ? `${m}m` : `${m / 60}h`}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Find my car ───────────────────────────────────────────────────────────────
+//
+// Renders nothing without coordinates. A session recorded before this shipped
+// has a name and no position, and a "Find my car" button that cannot find the
+// car is worse than no button — so the old sessions simply do not get one.
+const FindMyCar = ({ session }) => {
+  const [me, setMe] = useState(null);
+  const [asked, setAsked] = useState(false);
+  const url = directionsToCar(session);
+  if (!url) return null;
+
+  // The driver's own position is only asked for when they tap: a geolocation
+  // prompt that appears because a sheet opened is a prompt people deny.
+  const locate = () => {
+    setAsked(true);
+    try {
+      navigator.geolocation?.getCurrentPosition(
+        p => setMe({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        () => setMe(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+    } catch { setMe(null); }
+  };
+
+  const away = me ? metresBetween(me.lat, me.lng, session.lat, session.lng) : null;
+
+  return (
+    <div className="mt-3 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+      <div className="flex items-center gap-2">
+        <Navigation size={14} className="text-[#5BE7DA]"/>
+        <span className="text-[12.5px] font-semibold text-[#EAF1F8]">Find my car</span>
+        {away != null && (
+          <span className="ml-auto text-[11.5px] font-bold text-[#6BEFB9] tabular-nums">
+            {walkLabel(away)} · {walkMinutes(away)} min walk
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2 mt-2.5">
+        <a href={url} target="_blank" rel="noopener noreferrer"
+          className="flex-1 py-2 rounded-xl text-[12px] font-bold text-center text-[#06231f] btn-teal active:scale-95 transition">
+          Walk me back
+        </a>
+        {!me && (
+          <button onClick={locate}
+            className="px-3 py-2 rounded-xl text-[12px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+            {asked ? 'How far?' : 'How far?'}
+          </button>
+        )}
+        <button onClick={()=>shareParked(session).then(r => {
+            if (r.ok) toast(r.how === 'copied' ? 'Link copied' : 'Shared');
+          })}
+          className="px-3 py-2 rounded-xl text-[12px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+          <Share2 size={13}/>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const SessionModal = ({ session, now, onClose, onEnd, onChange }) => {
   if (!session) return null;
   const elapsed = Math.max(0, now - session.startedAt);
   const rate = session.rate || 0;
@@ -2300,7 +2629,9 @@ const SessionModal = ({ session, now, onClose, onEnd }) => {
             <div className="w-9 h-9 rounded-xl teal-grad flex items-center justify-center text-[#06231f] font-display font-extrabold">P</div>
             <div className="font-bold text-sm text-[#EAF1F8] truncate">{session.name}</div>
           </div>
-          <button onClick={onEnd} className="w-full mt-5 py-3.5 rounded-2xl font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
+          <ParkedTimer session={session} now={now} onChange={onChange}/>
+          <FindMyCar session={session}/>
+          <button onClick={onEnd} className="w-full mt-4 py-3.5 rounded-2xl font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
             End session
           </button>
           <p className="text-[11px] text-center text-[rgba(234,241,248,0.4)] mt-3">A personal reminder only — ParkEasy doesn't charge or pay for parking.</p>
@@ -2320,12 +2651,21 @@ const ParkBar = ({ session, now, onOpen, onEnd }) => {
   if (!session) return null;
   const elapsed = Math.max(0, now - session.startedAt);
   const cost = session.rate ? (elapsed / 3600000) * session.rate : null;
+  // With a timer running, the number that matters is how long is LEFT. Elapsed
+  // time is a fact about the past; the deadline is the thing with a fine on it.
+  const left = timeLeft(session, now);
+  const over = left != null && left <= 0;
   return (
     <div className="px-3 py-2 flex items-center gap-2" style={{ background:'linear-gradient(90deg,#0e6a5f,#0c5248)', borderTop:'1px solid var(--hairline)' }}>
       <button onClick={onOpen} className="flex-1 flex items-center gap-2 text-left min-w-0">
         <span className="w-2 h-2 rounded-full bg-[#6BEFB9] flex-shrink-0" style={{boxShadow:'0 0 8px #34E0A0'}}/>
-        <span className="text-xs font-bold text-white truncate">Parked at {session.name}</span>
-        <span className="text-xs font-extrabold text-white tabular-nums ml-auto flex-shrink-0">{fmtHMS(elapsed)}{cost!=null?` · ~£${cost.toFixed(2)}`:''}</span>
+        <span className="text-xs font-bold text-white truncate">
+          {over ? 'Parking ran out' : 'Parked at'} {over ? '' : session.name}
+        </span>
+        <span className={`text-xs font-extrabold tabular-nums ml-auto flex-shrink-0 ${over ? 'text-[#FFD27A]' : 'text-white'}`}>
+          {left != null ? (over ? fmtClock(session.dueAt) : `${fmtHMS(left)} left`)
+                        : `${fmtHMS(elapsed)}${cost!=null?` · ~£${cost.toFixed(2)}`:''}`}
+        </span>
       </button>
       <button onClick={onEnd} className="text-[11px] font-bold text-[#06231f] bg-[#6BEFB9] px-2.5 py-1 rounded-full flex-shrink-0 active:scale-95">End</button>
     </div>
@@ -2776,14 +3116,14 @@ const applyChip = (arr, chip) => {
 };
 
 const SORT_OPTIONS_FREE    = [
-  { id:'popular', label:'Most Popular' },
+  { id:'popular', label:'Recommended' },
   { id:'cheap',   label:'Cheapest' },
   { id:'spaces',  label:'Most spaces' },
   { id:'free',    label:'Free First' },
   { id:'alpha',   label:'A–Z' },
 ];
 const SORT_OPTIONS_PREMIUM = [
-  { id:'popular',  label:'Most Popular' },
+  { id:'popular',  label:'Recommended' },
   { id:'cheap',    label:'Cheapest' },
   { id:'spaces',   label:'Most spaces' },
   { id:'free',     label:'Free First' },
@@ -3193,7 +3533,7 @@ const RequestParking = ({ geo, cityName }) => {
 const PARTNER_SLOTS = [2, 9, 15, 20, 25, 29, 33, 36, 39, 44, 49];
 
 
-const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched, initialGeo }) => {
+const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpots, networkSpots, cityCenter, cityName, onAdvertise, onHowItWorks, onOpenSpot, onOpenPartner, onCityDetected, onEvent, onEvents, onAddSpot, onSearched, initialGeo }) => {
   const [query,       setQuery]       = useState('');
   const [badgeFilter, setBadgeFilter] = useState('all');
   const [sortBy,      setSortBy]      = useState('popular');
@@ -3307,6 +3647,15 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
       if (t) return t;
       if (sortBy === 'cheap') return priceVal(a) - priceVal(b);
       if (sortBy === 'spaces') return ((b.available??b.spaces)||0) - ((a.available??a.spaces)||0);
+      // ORDERED BY OUR RANKING, AND LABELLED AS OURS. `votes` is a weight in
+      // the seed data — a couple of thousand of them across 297 spots, none
+      // given by a driver — so calling this "Most Popular" claimed a
+      // popularity nobody measured. Real confirmations now exist
+      // (spot_signal_counts) and are shown on the spot's own sheet, where
+      // they can be read as the small number they honestly are; sorting the
+      // whole list by them on the day this ships would put every spot in id
+      // order. The weight stays as the ranking, and the label no longer
+      // attributes it to drivers.
       if (sortBy === 'popular') return b.votes - a.votes;
       if (sortBy === 'free') {
         const fa = ['free','hidden_gem'].includes(a.badge) ? 0 : 1;
@@ -4228,7 +4577,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
 
 
 // ── NearbyTab ─────────────────────────────────────────────────────────────────
-const NearbyTab = ({ saved, onSave, ratings, onRate, votes, onVote, cityName, onCityDetected, userSpots = [], isPremium, onUpgrade, onOpenSpot }) => {
+const NearbyTab = ({ saved, onSave, cityName, onCityDetected, userSpots = [], isPremium, onUpgrade, onOpenSpot }) => {
   const [loc,     setLoc]     = useState(null);
   const [nearby,  setNearby]  = useState([]);
   const [loading, setLoading] = useState(false);
@@ -4458,7 +4807,7 @@ const BusinessesTab = ({ onGetListed, allSpots = SPOTS }) => {
 };
 
 // ── SavedTab ──────────────────────────────────────────────────────────────────
-const SavedTab = ({ saved, onSave, ratings, onRate, votes, onVote, allSpots = SPOTS, isPremium, onUpgrade, onOpenSpot }) => {
+const SavedTab = ({ saved, onSave, allSpots = SPOTS, isPremium, onUpgrade, onOpenSpot }) => {
   const spots = allSpots.filter(s => saved.has(s.id));
   const [focusSpot, setFocusSpot] = useState(null);
   const [shared, setShared] = useState(false);
@@ -9303,7 +9652,16 @@ export default function App() {
   const [tab,           setTab]           = useState('search');
   const [user,          setUser]          = useState(()=>ls.get('pe_user', null));
   const [saved,         setSaved]         = useState(()=>new Set(ls.get('pe_saved', [])));
-  const [ratings,       setRatings]       = useState(()=>ls.get('pe_ratings', {}));
+  // What THIS device said about each spot: { [spotId]: 'confirmed' | 'changed' }.
+  // Replaces pe_votes ({id: true}) and pe_ratings ({id: 'changed'}), which
+  // between them were the whole of the old feature: the first was read only by
+  // the reader's own screen and the second was never read at all. Both are
+  // migrated in so months of taps still show on the buttons — see
+  // mergeLegacySignals for why they are NOT replayed to the server.
+  const [signals,       setSignals]       = useState(() =>
+    mergeLegacySignals(ls.get('pe_signals', null), ls.get('pe_votes', {}), ls.get('pe_ratings', {})));
+  // And what every driver said, from the server.
+  const [signalCounts,  setSignalCounts]  = useState({});
   // NEVER on arrival. A search-first product whose first interaction is a
   // registration form throws away the top of its own funnel — and this one
   // asked for name, email, password and a promo code before a single parking
@@ -9367,6 +9725,40 @@ export default function App() {
     return () => { live = false; };
   }, [user?.id]);
 
+  // OFFLINE MAPS FOLLOW ENTITLEMENT, both ways.
+  //
+  // Posted on every render of this effect rather than once, because `tilesOn`
+  // in the worker is a variable in memory: the browser stops and restarts a
+  // worker whenever it likes and it comes back false. Turning it OFF also
+  // deletes what is stored — "stop storing maps on my phone" has to mean that,
+  // or a lapsed subscriber is left with fifty megabytes and no way to shift it.
+  useEffect(() => {
+    if (isPremium) setOfflineMaps(true);
+    else { setOfflineMaps(false); clearOfflineMaps(); }
+  }, [isPremium]);
+
+  // The waiting referral code, claimed as soon as somebody is signed in.
+  //
+  // Keyed on user?.id so it fires on sign-in rather than only on load, which is
+  // the case that matters: the driver followed the link, browsed, and signed up
+  // twenty minutes later. claimPendingCode() forgets the code on every outcome
+  // except an unreachable server, so this is not a request per page load
+  // forever.
+  useEffect(() => {
+    if (!user?.id) return;
+    let live = true;
+    claimPendingCode().then(reason => {
+      // Only the outcomes a person can act on. 'recorded' is worth saying —
+      // their mate gets the credit — and so is a code that will never work.
+      // Silence on the rest: nobody needs to be told about a code they do not
+      // remember typing.
+      if (live && (reason === 'recorded' || reason === 'own_code' || reason === 'not_new')) {
+        toast(claimMessage(reason));
+      }
+    });
+    return () => { live = false; };
+  }, [user?.id]);
+
   // Deep links: #s=<id> opens that spot; the hash tracks the open detail sheet.
   // Gated spots can't be opened via a shared link on the free tier — show the
   // pricing sheet instead so exact locations never leak.
@@ -9386,7 +9778,6 @@ export default function App() {
       else if (location.hash.startsWith('#s=')) history.replaceState(null, '', location.pathname + location.search);
     } catch { /* ignore */ }
   }, [detailSpot]);
-  const [votes,          setVotes]          = useState(()=>ls.get('pe_votes', {}));
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstall,    setShowInstall]    = useState(false);
   const [showIOSGuide,   setShowIOSGuide]   = useState(false);
@@ -9402,6 +9793,25 @@ export default function App() {
   const [flash,          setFlash]          = useState(null);   // transient top banner {tone,msg}
   const [showAdmin,      setShowAdmin]      = useState(false);
   const [promoToast,     setPromoToast]     = useState(null);   // { ok, msg }
+
+  // THE TOAST BUS, wired to the banner that was already here.
+  //
+  // `flash` has always been the right renderer and has always been local state,
+  // so nothing outside this function could reach it — which is why four
+  // features ended up calling notify() from src/notify.js instead, a function
+  // that emails the founder and shows the driver nothing. See src/toast.js.
+  //
+  // Auto-dismissed, unlike the deep-link flashes below, which are about a
+  // payment and should stay until they are read.
+  useEffect(() => {
+    let timer = null;
+    const off = onToast(({ msg, tone }) => {
+      setFlash({ tone, msg });
+      clearTimeout(timer);
+      timer = setTimeout(() => setFlash(null), 4200);
+    });
+    return () => { off(); clearTimeout(timer); };
+  }, []);
 
   // Apply the theme to the document root and keep the browser chrome colour
   // in sync so the status bar matches in both modes.
@@ -9447,6 +9857,11 @@ export default function App() {
   const [reportCounts, setReportCounts] = useState({});
   const loadReportCounts = useCallback(() => { fetchReportCounts().then(setReportCounts); }, []);
   useEffect(() => { loadReportCounts(); }, [loadReportCounts]);
+
+  // One read for the whole map. The view is a few hundred rows of integers, and
+  // a fetch per sheet opened is a fetch per sheet opened.
+  const loadSignalCounts = useCallback(() => { fetchSignalCounts().then(setSignalCounts); }, []);
+  useEffect(() => { loadSignalCounts(); }, [loadSignalCounts]);
 
   // ── HIDDEN GEMS, FROM THE DATABASE ───────────────────────────────────────
   // The 89 curated free spots now live in public.hidden_gems, so they can be
@@ -9769,6 +10184,19 @@ export default function App() {
       track('premium_paid');
       window.history.replaceState({}, '', window.location.pathname);
     }
+    // A REFERRAL LINK, which almost never ends in an immediate signup.
+    //
+    // parkeasy.uk/?ref=PQ4R7T arrives at a driver with no account, and the
+    // referral cannot be recorded until there is one — they may not sign in
+    // for a week. So the code is held on the device and claimed the moment an
+    // account exists (see the effect below). Stripped from the URL either way,
+    // because a referral code in the address bar gets pasted into a tweet and
+    // then it is everybody's.
+    const ref = p.get('ref');
+    if (ref) {
+      rememberCode(ref);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     // Hidden-gem reward: when a community spot is approved, the founder emails
     // the submitter this link — it activates 1 week of Premium. A second
     // approval extends from whatever is left, so the free time stacks.
@@ -9935,24 +10363,30 @@ export default function App() {
     });
   };
 
-  const rateSpot = (id, val) => {
-    setRatings(prev => {
-      const next = {...prev};
-      next[id]===val ? delete next[id] : (next[id]=val);
-      ls.set('pe_ratings', next);
+  // "Still here" / "Changed", and this time the answer leaves the phone.
+  //
+  // The device's own record is written FIRST and kept whatever the network
+  // does: the button has to reflect what the driver just said, and a build with
+  // no database behind it still has to work. The count beside it comes back
+  // from the server — incrementing a local guess is exactly what made
+  // "Confirmed by 1 driver" true on one phone and false everywhere else.
+  const saySignal = useCallback(async (id, signal) => {
+    setSignals(prev => {
+      const next = { ...prev };
+      signal ? (next[id] = signal) : delete next[id];
+      ls.set('pe_signals', next);
       return next;
     });
-  };
-
-  const voteSpot = (id) => {
-    promptSignup();
-    setVotes(prev => {
-      if (prev[id]) return prev;
-      const next = { ...prev, [id]: true };
-      ls.set('pe_votes', next);
-      return next;
-    });
-  };
+    const fresh = signal ? await setSignal(id, signal) : (await clearSignal(id), null);
+    if (fresh) {
+      setSignalCounts(prev => ({ ...prev, [String(id)]: fresh }));
+    } else {
+      // Either it was taken back, or it did not reach the server. Re-read
+      // rather than guess: a stale count is a wrong count and this one is
+      // shown to everybody.
+      loadSignalCounts();
+    }
+  }, [loadSignalCounts]);
 
 
   // Parking session timer — tick every second while a session is active.
@@ -10008,8 +10442,12 @@ export default function App() {
 
   const startSession = (spot) => {
     const rate = spot.price ? (parseFloat(String(spot.price).match(/([\d.]+)/)?.[1]) || 0) : 0;
-    const sess = { spotId: spot.id, name: spot.name, rate, startedAt: Date.now() };
-    setParkSession(sess); ls.set('pe_session', sess);
+    // startParked records the spot's COORDINATES as well as its name, and owns
+    // the localStorage key. Before this the app knew the driver was parked at
+    // "Rear yard" and had no idea where that was, so it could not walk them
+    // back to it — and neither could they.
+    const sess = startParked({ spotId: spot.id, name: spot.name, rate, lat: spot.lat, lng: spot.lng });
+    setParkSession(sess);
     setDetailSpot(null); setShowSession(true); setNowTs(Date.now());
     // Tell the next driver this one is taken. Optimistically bump the local
     // count too, so the badge appears immediately rather than after the poll.
@@ -10030,7 +10468,11 @@ export default function App() {
         return next;
       });
     }
-    setParkSession(null); ls.set('pe_session', null); setShowSession(false);
+    // endParked cancels the server-side reminder as well as clearing the
+    // record. Without that, a driver who moves the car at 2:50 still gets
+    // "parking runs out in 15 minutes" at 3:45 — about parking they left.
+    endParked();
+    setParkSession(null); setShowSession(false);
   };
 
   const handleSpotAdded = (newSpot) => {
@@ -10094,11 +10536,11 @@ export default function App() {
         onWay: heading[String(detailSpot.id)]   || undefined,
         ...(typeof detailSpot.spaces !== 'number' && capacity[String(detailSpot.id)]
           ? { spaces: capacity[String(detailSpot.id)], spacesEstimated: true } : {}),
-      }} saved={saved.has(detailSpot.id)} onSave={toggleSave} rating={ratings[detailSpot.id]} onRate={rateSpot} voted={!!votes?.[detailSpot.id]} onVote={voteSpot} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
+      }} saved={saved.has(detailSpot.id)} onSave={toggleSave} mySignal={signals[detailSpot.id] || null} onSignal={saySignal} signalCounts={signalCounts[String(detailSpot.id)]} onClose={()=>setDetailSpot(null)} onStartTimer={startSession}
         onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}
         bookableSpots={rentalSpots} onOpenSpot={openSpot}
         reportFlagged={reportFlag(reportCounts, detailSpot.id)} onReported={loadReportCounts} user={user}/>}
-      {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
+      {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession} onChange={setParkSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
       {showCorporate && (
         <React.Suspense fallback={null}>
@@ -10158,6 +10600,15 @@ export default function App() {
           onUpgrade={()=>{setShowUserMenu(false);setShowPricing(true);}}
           onAdmin={isAdminUser(user) ? ()=>{setShowUserMenu(false);setShowAdmin(true);} : undefined}
           onCorporate={hasCorporate ? ()=>{setShowUserMenu(false);setShowCorporate(true);} : undefined}
+          onRedeemed={(until)=>{
+            // Premium starts the moment it is granted, not on the next reload.
+            // The server is the authority — has_premium() reads the same row —
+            // and this is the local mirror catching up so the gems unlock
+            // without the driver wondering what they paid points for.
+            setIsPremium(true); ls.set('pe_premium', true);
+            const ms = Date.parse(until);
+            if (Number.isFinite(ms)) ls.set('pe_premium_until', ms);
+          }}
           onClose={()=>setShowUserMenu(false)}/>
       )}
 
@@ -10241,10 +10692,10 @@ export default function App() {
         {showInstall && !isStandalone && (
           <InstallBanner isIOS={isIOS} onInstall={handleInstall} onDismiss={()=>setShowInstall(false)}/>
         )}
-        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)} initialGeo={deepGeo}/>}
-        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
+        {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)} initialGeo={deepGeo}/>}
+        {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
-        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} ratings={ratings} onRate={rateSpot} votes={votes} onVote={voteSpot} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
+        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
         {tab==='partner'    && <PartnerTab onOpenPartner={setDetailPartner}/>}
         {/* Not on Search, which carries its own copy near the top of the

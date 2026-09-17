@@ -279,6 +279,14 @@
     {
       "path": "/api/cron/notify-waitlist",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/parking-timers",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/event-alerts",
+      "schedule": "0 * * * *"
     }
   ]
 }

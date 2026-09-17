@@ -199,8 +199,49 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  push subscriptions     $(grep -c 'PASS  ' /tmp/pe-t19.log) checks" \
     || { fail=1; echo "  push subscriptions     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t19.log; }
 
+  tests/db/run.sh tests/db/event_alerts_seed.sql \
+                  supabase/migrations/20260919_event_alerts.sql \
+                  tests/db/event_alerts.test.sql                   > /tmp/pe-t24.log 2>&1 \
+    && echo "  event alerts           $(grep -c 'PASS  ' /tmp/pe-t24.log) checks" \
+    || { fail=1; echo "  event alerts           FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t24.log; }
+
+  tests/db/run.sh tests/db/referrals_seed.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  supabase/migrations/20260918_contribution_points.sql \
+                  supabase/migrations/20260918_referrals.sql \
+                  tests/db/referrals.test.sql                      > /tmp/pe-t23.log 2>&1 \
+    && echo "  referrals              $(grep -c 'PASS  ' /tmp/pe-t23.log) checks" \
+    || { fail=1; echo "  referrals              FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t23.log; }
+
+  tests/db/run.sh tests/db/contribution_points_seed.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  supabase/migrations/20260918_contribution_points.sql \
+                  tests/db/contribution_points.test.sql            > /tmp/pe-t22.log 2>&1 \
+    && echo "  contribution points    $(grep -c 'PASS  ' /tmp/pe-t22.log) checks" \
+    || { fail=1; echo "  contribution points    FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t22.log; }
+
+  tests/db/run.sh tests/db/spot_signals_seed.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260728_public_approved_spots.sql \
+                  supabase/migrations/20260820_hotspot_moderation.sql \
+                  supabase/migrations/20260917_spot_signals.sql \
+                  tests/db/spot_signals.test.sql                   > /tmp/pe-t21.log 2>&1 \
+    && echo "  spot signals           $(grep -c 'PASS  ' /tmp/pe-t21.log) checks" \
+    || { fail=1; echo "  spot signals           FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t21.log; }
+
+  tests/db/run.sh tests/db/parking_timers_seed.sql \
+                  supabase/migrations/20260917_parking_timers.sql \
+                  tests/db/parking_timers.test.sql                 > /tmp/pe-t20.log 2>&1 \
+    && echo "  parking timers         $(grep -c 'PASS  ' /tmp/pe-t20.log) checks" \
+    || { fail=1; echo "  parking timers         FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t20.log; }
+
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
+  tests/db/points_concurrency.sh 2>&1 | grep -E 'redeems|PASSED|FAIL' || fail=1
 else
   echo "  SKIPPED — no Postgres at ${PGBIN:-/usr/lib/postgresql/16/bin}."
   echo "  The permit quota and the moderation rules are NOT covered by this run."
