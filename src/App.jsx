@@ -40,6 +40,8 @@ import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } 
 import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
 import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
 import { fetchReferrals, ensureCode, referralLine, referralLink, rememberCode, claimPendingCode, claimMessage } from './data/referrals';
+import { PREMIUM_BENEFITS, paidBenefits, freeBenefits } from './premium';
+import { setOfflineMaps, clearOfflineMaps } from './offlineMaps';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
 import { fetchPhotosForSpot, submitSpotPhoto, spotKeyOf } from './data/spotPhotos';
 import ComparisonCard from './components/funnel/ComparisonCard';
@@ -1295,16 +1297,25 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
         </div>
         <div className="p-6 space-y-4">
           <div className="space-y-2">
-            {[
-              ['✨','Hidden gems — founder-curated free spots in ideal locations'],
-              ['⚡','Premium EV charger spots + charging filter'],
-              ['📍','Sort by distance — nearest spots first'],
-              ['🗺️','Offline maps — works without signal'],
-              ['🔔','Notifications when spots free up'],
-              ['💎','Premium badge on your profile'],
-            ].map(([icon,text])=>(
-              <div key={text} className="flex items-center gap-3 text-sm text-[#cdd9e8]">
-                <span className="w-6 text-center text-base">{icon}</span><span>{text}</span>
+            {/* RENDERED FROM src/premium.js, which carries a `proof` for every
+                claim — the identifier in this repository that implements it —
+                and a test that fails if one is missing. This list was six
+                hardcoded strings and two of them were not true: there were no
+                offline maps at all (the service worker passed tiles straight
+                through), and "notifications when spots free up" is real but
+                free to everybody. The first is now built; the second is below,
+                under its own heading, described as what it is. */}
+            {paidBenefits().map(b=>(
+              <div key={b.text} className="flex items-center gap-3 text-sm text-[#cdd9e8]">
+                <span className="w-6 text-center text-base">{b.icon}</span><span>{b.text}</span>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6b7d96]">Free for everyone</p>
+            {freeBenefits().map(b=>(
+              <div key={b.text} className="flex items-center gap-3 text-sm text-[rgba(234,241,248,0.55)]">
+                <span className="w-6 text-center text-base">{b.icon}</span><span>{b.text}</span>
               </div>
             ))}
           </div>
@@ -1648,6 +1659,18 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             be "contact ParkEasy", which is a liability and a slow one. Renders
             nothing at all for somebody with no subscription. */}
         {isPremium && <CancelSubscription/>}
+        {/* Visible, because a feature somebody paid for that they cannot see
+            is a feature they will not believe they got. And clearable, because
+            a map cache is space on their phone. */}
+        {isPremium && (
+          <button onClick={()=>{ clearOfflineMaps(); setOfflineMaps(true); notify('Stored maps cleared'); }}
+            className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl font-bold text-xs text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+            <span className="flex items-center gap-2">
+              <Map size={14} className="text-[#5BE7DA]"/>Offline maps on
+            </span>
+            <span className="text-[10px] font-extrabold text-[#6b7d96]">CLEAR</span>
+          </button>
+        )}
         <PushToggle/>
         <div className="border-t border-white/10 pt-2">
           <button onClick={onSignOut} className="w-full flex items-center gap-2 text-sm text-red-300 hover:text-red-300 font-medium py-1 transition-colors">
@@ -9700,6 +9723,18 @@ export default function App() {
     })();
     return () => { live = false; };
   }, [user?.id]);
+
+  // OFFLINE MAPS FOLLOW ENTITLEMENT, both ways.
+  //
+  // Posted on every render of this effect rather than once, because `tilesOn`
+  // in the worker is a variable in memory: the browser stops and restarts a
+  // worker whenever it likes and it comes back false. Turning it OFF also
+  // deletes what is stored — "stop storing maps on my phone" has to mean that,
+  // or a lapsed subscriber is left with fifty megabytes and no way to shift it.
+  useEffect(() => {
+    if (isPremium) setOfflineMaps(true);
+    else { setOfflineMaps(false); clearOfflineMaps(); }
+  }, [isPremium]);
 
   // The waiting referral code, claimed as soon as somebody is signed in.
   //
