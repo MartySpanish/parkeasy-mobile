@@ -41,6 +41,7 @@ import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySi
 import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
 import { fetchReferrals, ensureCode, referralLine, referralLink, rememberCode, claimPendingCode, claimMessage } from './data/referrals';
 import { PREMIUM_BENEFITS, paidBenefits, freeBenefits } from './premium';
+import { toast, onToast } from './toast';
 import { setOfflineMaps, clearOfflineMaps } from './offlineMaps';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
 import { fetchPhotosForSpot, submitSpotPhoto, spotKeyOf } from './data/spotPhotos';
@@ -1443,16 +1444,16 @@ const PushToggle = () => {
       if (on) {
         await disablePush();
         setOn(await isPushEnabled());
-        notify('Alerts off');
+        toast('Alerts off');
       } else {
         const r = await enablePush({ userGesture: true });
         setOn(await isPushEnabled());
         // Each branch says what actually happened. "Something went wrong" on a
         // permission prompt the driver themselves dismissed is a lie.
-        if (r.ok) notify('Alerts on — we\u2019ll tell you when it matters');
-        else if (r.reason === 'denied') notify('Alerts blocked. You can undo that in your browser\u2019s site settings.');
-        else if (r.reason === 'default') notify('No bother — ask again any time');
-        else notify('Couldn\u2019t turn alerts on. Try again in a moment.');
+        if (r.ok) toast('Alerts on — we\u2019ll tell you when it matters');
+        else if (r.reason === 'denied') toast('Alerts blocked. You can undo that in your browser\u2019s site settings.', 'warn');
+        else if (r.reason === 'default') toast('No bother — ask again any time');
+        else toast('Couldn\u2019t turn alerts on. Try again in a moment.', 'warn');
       }
     } finally { setBusy(false); }
   };
@@ -1495,16 +1496,16 @@ const PointsCard = ({ onRedeemed }) => {
     try {
       const r = await redeemPoints();
       if (r.ok) {
-        notify(`${r.days} days of Premium added \u2014 thanks for the help`);
+        toast(`${r.days} days of Premium added \u2014 thanks for the help`);
         onRedeemed?.(r.until);
         load();
       } else if (r.reason === 'not_enough') {
         // Said as the number it is. "Something went wrong" would be a lie about
         // a thing that went exactly right.
-        notify(`Not quite yet \u2014 ${Math.max(0, (r.cost || s.cost) - (r.balance || 0))} more points`);
+        toast(`Not quite yet \u2014 ${Math.max(0, (r.cost || s.cost) - (r.balance || 0))} more points`, 'warn');
         load();
       } else {
-        notify('Couldn\u2019t redeem that just now. Try again in a moment.');
+        toast('Couldn\u2019t redeem that just now. Try again in a moment.', 'warn');
       }
     } finally { setBusy(false); }
   };
@@ -1663,7 +1664,7 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             is a feature they will not believe they got. And clearable, because
             a map cache is space on their phone. */}
         {isPremium && (
-          <button onClick={()=>{ clearOfflineMaps(); setOfflineMaps(true); notify('Stored maps cleared'); }}
+          <button onClick={()=>{ clearOfflineMaps(); setOfflineMaps(true); toast('Stored maps cleared'); }}
             className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl font-bold text-xs text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
             <span className="flex items-center gap-2">
               <Map size={14} className="text-[#5BE7DA]"/>Offline maps on
@@ -2472,15 +2473,15 @@ const ParkedTimer = ({ session, now, onChange }) => {
       if (r.ok) onChange?.(r.parked);
       // 'local-only' is not a failure, and must not be dressed as success:
       // the countdown works, the notification will not come.
-      if (!r.ok) notify('Couldn\u2019t set that reminder.');
-      else if (r.reason === 'local-only') notify('Reminder set on this device only');
-      else notify(`We\u2019ll remind you before ${fmtClock(Date.now() + mins * 60000)}`);
+      if (!r.ok) toast('Couldn\u2019t set that reminder.', 'warn');
+      else if (r.reason === 'local-only') toast('Reminder set on this device only', 'warn');
+      else toast(`We\u2019ll remind you before ${fmtClock(Date.now() + mins * 60000)}`);
     } finally { setBusy(false); }
   };
 
   const clear = async () => {
     setBusy(true);
-    try { await cancelTimer(); onChange?.({ ...session, dueAt: null, warnMins: null }); notify('Reminder off'); }
+    try { await cancelTimer(); onChange?.({ ...session, dueAt: null, warnMins: null }); toast('Reminder off'); }
     finally { setBusy(false); }
   };
 
@@ -2577,7 +2578,7 @@ const FindMyCar = ({ session }) => {
           </button>
         )}
         <button onClick={()=>shareParked(session).then(r => {
-            if (r.ok) notify(r.how === 'copied' ? 'Link copied' : 'Shared');
+            if (r.ok) toast(r.how === 'copied' ? 'Link copied' : 'Shared');
           })}
           className="px-3 py-2 rounded-xl text-[12px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
           <Share2 size={13}/>
@@ -9752,7 +9753,7 @@ export default function App() {
       // Silence on the rest: nobody needs to be told about a code they do not
       // remember typing.
       if (live && (reason === 'recorded' || reason === 'own_code' || reason === 'not_new')) {
-        notify(claimMessage(reason));
+        toast(claimMessage(reason));
       }
     });
     return () => { live = false; };
@@ -9792,6 +9793,25 @@ export default function App() {
   const [flash,          setFlash]          = useState(null);   // transient top banner {tone,msg}
   const [showAdmin,      setShowAdmin]      = useState(false);
   const [promoToast,     setPromoToast]     = useState(null);   // { ok, msg }
+
+  // THE TOAST BUS, wired to the banner that was already here.
+  //
+  // `flash` has always been the right renderer and has always been local state,
+  // so nothing outside this function could reach it — which is why four
+  // features ended up calling notify() from src/notify.js instead, a function
+  // that emails the founder and shows the driver nothing. See src/toast.js.
+  //
+  // Auto-dismissed, unlike the deep-link flashes below, which are about a
+  // payment and should stay until they are read.
+  useEffect(() => {
+    let timer = null;
+    const off = onToast(({ msg, tone }) => {
+      setFlash({ tone, msg });
+      clearTimeout(timer);
+      timer = setTimeout(() => setFlash(null), 4200);
+    });
+    return () => { off(); clearTimeout(timer); };
+  }, []);
 
   // Apply the theme to the document root and keep the browser chrome colour
   // in sync so the status bar matches in both modes.

@@ -17,11 +17,14 @@
 // environment. A wrong venue pin doesn't just look untidy — it silently shows
 // the wrong car parks. Where a venue is approximate the detail view says so,
 // rather than presenting a radius search as if it were surveyed.
-import React, { useMemo, useState } from 'react';
-import { X, ChevronLeft, ChevronDown, Clock, MapPin, AlertTriangle, Users, Calendar } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { X, ChevronLeft, ChevronDown, Clock, MapPin, AlertTriangle, Users, Calendar, Bell } from 'lucide-react';
 import { upcomingEvents, venueOf, startOf, endOf, formatWhen } from '../../data/events';
 import { parkingForEvent, TIER } from '../../data/eventParking';
 import { holdCopy } from '../../data/spaceHold';
+import { setEventAlert, fetchEventAlerts } from '../../data/eventAlerts';
+import { toast } from '../../toast';
+import { enablePush, isPushEnabled } from '../../push';
 
 // Tag → accent. Colour carries the category faster than the word does when
 // you're scanning thirty rows for "the football one".
@@ -204,7 +207,7 @@ const TierSection = ({ group, renderSpot, isPremium, sole = false }) => {
   );
 };
 
-const EventDetail = ({ ev, groups, onBack, renderSpot, isPremium, onOpenFleadh, onAddSpot }) => {
+const EventDetail = ({ ev, groups, onBack, renderSpot, isPremium, onOpenFleadh, onAddSpot, following, onFollow }) => {
   const venue = venueOf(ev);
   const hasBookable = groups.some(g => g.tier === TIER.BOOKABLE && g.items.length);
   return (
@@ -220,6 +223,8 @@ const EventDetail = ({ ev, groups, onBack, renderSpot, isPremium, onOpenFleadh, 
         <MapPin size={14} />{venue?.name}{venue?.area ? ` · ${venue.area}` : ''}
       </p>
       {venue?.aka && <p className="text-[11.5px] text-[#8da2bd] mt-0.5 ml-[22px]">{venue.aka}</p>}
+
+      <FollowVenue venueKey={ev.venue} venueName={venue?.name} following={following} onChange={onFollow}/>
 
       <div className="flex flex-wrap gap-1.5 mt-3">
         {ev.soldOut && <Chip tone="#FF8A8A">Sold out — expect a full venue</Chip>}
@@ -299,7 +304,60 @@ const EventDetail = ({ ev, groups, onBack, renderSpot, isPremium, onOpenFleadh, 
   );
 };
 
-// ── Screen ───────────────────────────────────────────────────────────────────
+/**
+ * Follow this venue, so the next fixture reaches a phone that is in a pocket.
+ *
+ * A BANNER IS NOT AN ALERT. This screen is excellent and reaches only somebody
+ * who opens it. Forty thousand people went to Boucher Road on 20 August and the
+ * app said nothing to any of them.
+ *
+ * FOLLOWING A VENUE, NOT SHARING A LOCATION. The alternative design pushes to
+ * everybody near the ground and means storing where drivers are. This asks
+ * instead, which is explicit, exactly targetable, and holds nothing about
+ * anybody's movements.
+ */
+const FollowVenue = ({ venueKey, venueName, following, onChange }) => {
+  const [busy, setBusy] = useState(false);
+  if (!venueKey) return null;   // a one-off location has nobody to follow
+
+  const flip = async () => {
+    setBusy(true);
+    try {
+      const want = !following;
+      // PERMISSION FIRST, AND ONLY ON THE WAY IN. Recording a follow and then
+      // being refused the notification permission leaves somebody certain they
+      // will be told about a fixture they will hear nothing about.
+      if (want && !(await isPushEnabled())) {
+        const r = await enablePush({ userGesture: true });
+        if (!r.ok) {
+          onChange?.(venueKey, false, r.reason === 'denied'
+            ? 'Alerts are blocked for ParkEasy in your browser settings'
+            : 'No bother — tap again any time');
+          return;
+        }
+      }
+      const now = await setEventAlert(venueKey, want);
+      onChange?.(venueKey, now, now
+        ? `We\u2019ll tell you before the next one at ${venueName || 'this venue'}`
+        : 'Alerts off for this venue');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <button onClick={flip} disabled={busy} aria-pressed={following}
+      className={`w-full mt-3.5 py-3 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-[13.5px] active:scale-95 transition disabled:opacity-60 ${
+        following
+          ? 'bg-[#2ED3C6]/12 border border-[#5BE7DA]/45 text-[#5BE7DA]'
+          : 'bg-white/8 border border-white/15 text-[#EAF1F8]'}`}>
+      <Bell size={15} className={following ? 'text-[#5BE7DA]' : 'text-[#5BE7DA]'} />
+      {busy ? '\u2026' : following
+        ? `Following ${venueName || 'this venue'}`
+        : `Tell me before the next one here`}
+    </button>
+  );
+};
+
+// \u2500\u2500 Screen \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 /**
  * @param spots       every spot in the network
@@ -313,6 +371,15 @@ export default function EventsScreen({
 }) {
   const [openId, setOpenId] = useState(null);
   const [month, setMonth] = useState('all');
+  // The venues this browser follows, read once. Held here rather than in the
+  // button so opening four events does not mean four round trips.
+  const [followed, setFollowed] = useState(() => new Set());
+  useEffect(() => { let live = true; fetchEventAlerts().then(s => { if (live) setFollowed(s); });
+                    return () => { live = false; }; }, []);
+  const onFollow = (venueKey, on, message) => {
+    setFollowed(prev => { const next = new Set(prev); on ? next.add(venueKey) : next.delete(venueKey); return next; });
+    if (message) toast(message, on ? 'ok' : 'warn');
+  };
 
   const events = useMemo(() => upcomingEvents(todayISO), [todayISO]);
 
@@ -359,7 +426,8 @@ export default function EventsScreen({
         {open ? (
           <div className="mt-4">
             <EventDetail ev={open} groups={parking[open.id] || []} onBack={() => setOpenId(null)}
-              renderSpot={renderSpot} isPremium={isPremium} onOpenFleadh={onOpenFleadh} onAddSpot={onAddSpot} />
+              renderSpot={renderSpot} isPremium={isPremium} onOpenFleadh={onOpenFleadh} onAddSpot={onAddSpot}
+              following={followed.has(open.venue)} onFollow={onFollow} />
           </div>
         ) : (
           <>

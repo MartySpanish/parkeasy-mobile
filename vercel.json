@@ -283,6 +283,10 @@
     {
       "path": "/api/cron/parking-timers",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/event-alerts",
+      "schedule": "0 * * * *"
     }
   ]
 }

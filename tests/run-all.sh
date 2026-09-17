@@ -199,6 +199,12 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  push subscriptions     $(grep -c 'PASS  ' /tmp/pe-t19.log) checks" \
     || { fail=1; echo "  push subscriptions     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t19.log; }
 
+  tests/db/run.sh tests/db/event_alerts_seed.sql \
+                  supabase/migrations/20260919_event_alerts.sql \
+                  tests/db/event_alerts.test.sql                   > /tmp/pe-t24.log 2>&1 \
+    && echo "  event alerts           $(grep -c 'PASS  ' /tmp/pe-t24.log) checks" \
+    || { fail=1; echo "  event alerts           FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t24.log; }
+
   tests/db/run.sh tests/db/referrals_seed.sql \
                   supabase/migrations/20260707_promo_codes.sql \
                   supabase/migrations/20260720_spot_submissions.sql \

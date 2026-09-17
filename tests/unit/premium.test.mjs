@@ -189,7 +189,10 @@ it('turning it off deletes what is stored', () => {
   assert.match(sw, /caches\.delete\(TILE_CACHE\)\);\s*\n\s*tilesOn = false;/,
     'clearing leaves caching switched on, so it refills immediately');
   // And the driver can do it themselves.
-  assert.match(app, /clearOfflineMaps\(\); setOfflineMaps\(true\); notify\('Stored maps cleared'\)/,
+  // toast(), not notify(). This check originally asserted notify(), which is
+  // src/notify.js's email-the-founder function — the sentence went to an inbox
+  // and the driver saw nothing. See src/toast.js and docs/matchday.md.
+  assert.match(app, /clearOfflineMaps\(\); setOfflineMaps\(true\); toast\('Stored maps cleared'\)/,
     'there is no way for a subscriber to clear the stored map');
 });
 
