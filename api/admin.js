@@ -130,6 +130,18 @@ export default async function handler(req, res) {
       method: 'POST', headers: svcH,
       body: JSON.stringify({ p_user_id: userId, p_kind: kind, p_ref: String(ref) }),
     }).catch(() => {});
+    // AND THE REFERRAL, if this is the contribution that proves the person who
+    // brought them was worth paying for. Fired from here rather than from its
+    // own call site so there is exactly one place in the codebase that knows
+    // "somebody's work was accepted" — a second place is a place that forgets.
+    //
+    // qualify_referral() pays at most once and reports "nothing pending" for
+    // everybody else, which is most approvals. Never awaited, for the same
+    // reason as above: the approval is what matters.
+    fetch(`${URL_}/rest/v1/rpc/qualify_referral`, {
+      method: 'POST', headers: svcH,
+      body: JSON.stringify({ p_invitee_id: userId, p_because: `${kind} ${ref}` }),
+    }).catch(() => {});
   };
 
 

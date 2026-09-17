@@ -162,9 +162,22 @@ it('the award is fired from the approval, not from the submission', () => {
 it('a thank-you can never fail an approval', () => {
   // The spot going live matters to every driver; the points are a courtesy to
   // one. So the award is fired and not awaited, and it cannot throw.
-  const fn = admin.slice(admin.indexOf('const thankYou ='), admin.indexOf('const thankYou =') + 600);
+  // Sliced at the arrow function's own closing brace. Anchoring on the comment
+  // that follows it does not work: cut() has already stripped every comment, so
+  // the slice ran to the end of the file — which is how the count below would
+  // have been satisfied by unrelated code.
+  const from = admin.indexOf('const thankYou =');
+  const fn = admin.slice(from, admin.indexOf('\n  };', from) + 5);
+  assert.ok(fn.length > 200 && fn.length < 2000, `thankYou slice looks wrong (${fn.length} chars)`);
   assert.ok(!/await/.test(fn), 'the award is awaited — a slow RPC now delays every approval');
-  assert.match(fn, /\.catch\(\(\) => \{\}\)/, 'a failed award now breaks the approval');
+  // EVERY fetch, counted. thankYou fires two RPCs now (the points and the
+  // referral), and a bare search for one .catch was satisfied by the second
+  // while the first went unguarded.
+  const fetches = (fn.match(/fetch\(/g) || []).length;
+  const catches = (fn.match(/\.catch\(\(\) => \{\}\)/g) || []).length;
+  assert.ok(fetches > 0, 'thankYou no longer calls anything');
+  assert.equal(catches, fetches,
+    `${fetches} requests and ${catches} catches — a failed one now breaks the approval`);
   assert.match(fn, /if \(!userId \|\| !SERVICE\) return;/,
     'an anonymous submission or a missing service key reaches the RPC');
   // And it is declared before the first handler that calls it: a const is not
@@ -194,7 +207,7 @@ it('there is no path from the app to awarding anything', () => {
 it('"not enough yet" is not reported as "something went wrong"', () => {
   // The two are not the same and only one of them is the driver's business.
   assert.match(app, /r\.reason === 'not_enough'/, 'a shortfall is now an error message');
-  const card = app.slice(app.indexOf('const PointsCard'), app.indexOf('// ── User Menu'));
+  const card = app.slice(app.indexOf('const PointsCard'), app.indexOf('const ReferralCard'));
   assert.match(card, /more points/, 'the shortfall no longer says how many');
   assert.match(card, /days of Premium added/, 'a successful redemption says nothing');
   // Premium starts the moment it is granted rather than on the next reload.

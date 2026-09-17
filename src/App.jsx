@@ -39,6 +39,7 @@ import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
 import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
 import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
+import { fetchReferrals, ensureCode, referralLine, referralLink, rememberCode, claimPendingCode, claimMessage } from './data/referrals';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
 import { fetchPhotosForSpot, submitSpotPhoto, spotKeyOf } from './data/spotPhotos';
 import ComparisonCard from './components/funnel/ComparisonCard';
@@ -1535,6 +1536,63 @@ const PointsCard = ({ onRedeemed }) => {
   );
 };
 
+// ── Referrals ─────────────────────────────────────────────────────────────────
+//
+// The code is minted on first look rather than for all 1,400 accounts at once,
+// so opening this menu is what creates it.
+//
+// WHAT IT WILL NOT SAY. Not "2 pending points" — a referral pays when the
+// person you brought contributes something the map keeps, which may never
+// happen, and calling that pending is a promise. Both numbers are shown and the
+// gap is explained instead. See docs/referrals.md.
+const ReferralCard = () => {
+  const [r, setR] = useState(null);
+  const [code, setCode] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const got = await fetchReferrals();
+      if (!live) return;
+      setR(got);
+      // my_referrals() reports the code only if one exists; minting is a
+      // separate call so that merely reading the card is not a write for
+      // somebody who never opens it.
+      setCode(got?.code || (await ensureCode()));
+    })();
+    return () => { live = false; };
+  }, []);
+
+  if (!r || !code) return null;
+  const line = referralLine(r);
+  const url = referralLink(code);
+
+  const share = async () => {
+    const text = `I use ParkEasy for parking in Belfast — free spots, real prices. `
+      + `Use my code ${code} when you join.`;
+    try {
+      if (navigator.share) { await navigator.share({ title: 'ParkEasy', text, url }); return; }
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      setCopied(true); setTimeout(()=>setCopied(false), 1600);
+    } catch { /* a cancelled share sheet is not a failure worth reporting */ }
+  };
+
+  return (
+    <div className="rounded-xl p-3 bg-white/5 border border-white/10">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-display font-extrabold text-[15px] text-[#EAF1F8] tracking-[0.12em] tabular-nums">{code}</p>
+        <button onClick={share}
+          className="text-[10.5px] font-bold text-[#06231f] btn-teal px-2.5 py-1.5 rounded-full active:scale-95 transition">
+          {copied ? 'Copied' : 'Share'}
+        </button>
+      </div>
+      <p className="text-[10px] text-[#6b7d96] font-medium mt-0.5">Your invite code</p>
+      <p className="text-[10.5px] text-[rgba(234,241,248,0.6)] mt-1.5 leading-relaxed">{line.text}</p>
+    </div>
+  );
+};
+
 // ── User Menu ─────────────────────────────────────────────────────────────────
 const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin, onCorporate, onRedeemed }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
@@ -1566,6 +1624,7 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             four spots should be offered their thanks before they are offered a
             price. */}
         <PointsCard onRedeemed={onRedeemed}/>
+        <ReferralCard/>
         {!isPremium && (
           <button onClick={onUpgrade} className="w-full bg-yellow-400 text-[#FFD27A] py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
             ★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr
@@ -9642,6 +9701,28 @@ export default function App() {
     return () => { live = false; };
   }, [user?.id]);
 
+  // The waiting referral code, claimed as soon as somebody is signed in.
+  //
+  // Keyed on user?.id so it fires on sign-in rather than only on load, which is
+  // the case that matters: the driver followed the link, browsed, and signed up
+  // twenty minutes later. claimPendingCode() forgets the code on every outcome
+  // except an unreachable server, so this is not a request per page load
+  // forever.
+  useEffect(() => {
+    if (!user?.id) return;
+    let live = true;
+    claimPendingCode().then(reason => {
+      // Only the outcomes a person can act on. 'recorded' is worth saying —
+      // their mate gets the credit — and so is a code that will never work.
+      // Silence on the rest: nobody needs to be told about a code they do not
+      // remember typing.
+      if (live && (reason === 'recorded' || reason === 'own_code' || reason === 'not_new')) {
+        notify(claimMessage(reason));
+      }
+    });
+    return () => { live = false; };
+  }, [user?.id]);
+
   // Deep links: #s=<id> opens that spot; the hash tracks the open detail sheet.
   // Gated spots can't be opened via a shared link on the free tier — show the
   // pricing sheet instead so exact locations never leak.
@@ -10046,6 +10127,19 @@ export default function App() {
       // free grants in the conversion rate that decides whether the paywall
       // works.
       track('premium_paid');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // A REFERRAL LINK, which almost never ends in an immediate signup.
+    //
+    // parkeasy.uk/?ref=PQ4R7T arrives at a driver with no account, and the
+    // referral cannot be recorded until there is one — they may not sign in
+    // for a week. So the code is held on the device and claimed the moment an
+    // account exists (see the effect below). Stripped from the URL either way,
+    // because a referral code in the address bar gets pasted into a tweet and
+    // then it is everybody's.
+    const ref = p.get('ref');
+    if (ref) {
+      rememberCode(ref);
       window.history.replaceState({}, '', window.location.pathname);
     }
     // Hidden-gem reward: when a community spot is approved, the founder emails

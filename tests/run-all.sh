@@ -199,6 +199,16 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  push subscriptions     $(grep -c 'PASS  ' /tmp/pe-t19.log) checks" \
     || { fail=1; echo "  push subscriptions     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t19.log; }
 
+  tests/db/run.sh tests/db/referrals_seed.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  supabase/migrations/20260918_contribution_points.sql \
+                  supabase/migrations/20260918_referrals.sql \
+                  tests/db/referrals.test.sql                      > /tmp/pe-t23.log 2>&1 \
+    && echo "  referrals              $(grep -c 'PASS  ' /tmp/pe-t23.log) checks" \
+    || { fail=1; echo "  referrals              FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t23.log; }
+
   tests/db/run.sh tests/db/contribution_points_seed.sql \
                   supabase/migrations/20260707_promo_codes.sql \
                   supabase/migrations/20260720_spot_submissions.sql \
