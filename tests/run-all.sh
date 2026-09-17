@@ -199,6 +199,12 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  push subscriptions     $(grep -c 'PASS  ' /tmp/pe-t19.log) checks" \
     || { fail=1; echo "  push subscriptions     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t19.log; }
 
+  tests/db/run.sh tests/db/parking_timers_seed.sql \
+                  supabase/migrations/20260917_parking_timers.sql \
+                  tests/db/parking_timers.test.sql                 > /tmp/pe-t20.log 2>&1 \
+    && echo "  parking timers         $(grep -c 'PASS  ' /tmp/pe-t20.log) checks" \
+    || { fail=1; echo "  parking timers         FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t20.log; }
+
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
 else

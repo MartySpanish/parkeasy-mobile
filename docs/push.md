@@ -110,13 +110,15 @@ and no grants: the two SECURITY DEFINER functions are the whole write surface
 and the service key is the only reader. It is a send list, and a driver has no
 reason to see anybody's — including their own.
 
-## What is not built yet
+## What uses it
 
-The channel, not the messages. Nothing sends a push on a schedule yet — parking
-timers (F13), "a space opened near where you looked" (the waitlist sweep in
+Parking timers do, as of `api/cron/parking-timers.js` — see `docs/parking.md`.
+That sweep is the worked example of a scheduled sender: it claims its rows
+before it sends, so a retry cannot double-notify.
+
+Still to come: "a space opened near where you looked" (the waitlist sweep in
 `api/cron/notify-waitlist.js`, which still only emails) and matchday alerts
-(F14) are the features that will use it. `pushToUsers` is the only thing they
-need.
+(F14). `pushToUsers` and `pushToSessions` are the only things they need.
 
 ## Tests
 

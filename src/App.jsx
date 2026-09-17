@@ -19,6 +19,7 @@ import { notify, apiFetch, fetchBookable, redeemPromo, fetchPromoStatus, startPa
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
 import { tileLayerProps, tileThemeClass } from './mapTiles';
 import { pushSupport, isPushEnabled, enablePush, disablePush } from './push';
+import { getParked, startParked, endParked, setTimer, cancelTimer, timeLeft, shareParked, directionsToCar, metresBetween, walkLabel, walkMinutes } from './parked';
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
 // app_events. track() mirrors the overlapping names into funnel.js itself,
 // so a call site never wires up both instruments by hand. See src/analytics.js.
@@ -2258,8 +2259,150 @@ const fmtHMS = (ms) => {
   const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 };
+// A wall-clock time, which is how a reminder has to be phrased: "before 15:40"
+// is something a driver can check against a sign; "in 108 minutes" is not.
+const fmtClock = (ts) => new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-const SessionModal = ({ session, now, onClose, onEnd }) => {
+// ── The reminder ──────────────────────────────────────────────────────────────
+//
+// The countdown that already existed was accurate and useless: it only ran
+// while the tab was alive, and the tab is gone by the time a two-hour limit
+// matters. These chips write the timer to the database, and a cron sweep
+// pushes it (api/cron/parking-timers.js, docs/parking.md).
+//
+// No chip under 10 minutes, because the sweep runs every 5 and a shorter
+// promise is one that can arrive after the ticket.
+const TIMER_CHOICES = [30, 60, 120, 180];
+
+const ParkedTimer = ({ session, now, onChange }) => {
+  const [busy, setBusy] = useState(false);
+  const [how, setHow] = useState(null);   // 'scheduled' | 'local-only'
+  const left = timeLeft(session, now);
+
+  const choose = async (mins) => {
+    setBusy(true);
+    try {
+      const r = await setTimer(mins, Math.min(15, Math.max(5, Math.round(mins / 8))));
+      setHow(r.ok ? r.reason : null);
+      if (r.ok) onChange?.(r.parked);
+      // 'local-only' is not a failure, and must not be dressed as success:
+      // the countdown works, the notification will not come.
+      if (!r.ok) notify('Couldn\u2019t set that reminder.');
+      else if (r.reason === 'local-only') notify('Reminder set on this device only');
+      else notify(`We\u2019ll remind you before ${fmtClock(Date.now() + mins * 60000)}`);
+    } finally { setBusy(false); }
+  };
+
+  const clear = async () => {
+    setBusy(true);
+    try { await cancelTimer(); onChange?.({ ...session, dueAt: null, warnMins: null }); notify('Reminder off'); }
+    finally { setBusy(false); }
+  };
+
+  if (left != null) {
+    const over = left <= 0;
+    return (
+      <div className={`mt-3 p-3.5 rounded-2xl border ${over ? 'bg-[#FFC24B]/10 border-[#FFC24B]/30' : 'bg-white/5 border-white/10'}`}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold text-[rgba(234,241,248,0.5)]">
+              {over ? 'Your parking is up' : 'Time left'}
+            </div>
+            <div className={`font-display font-bold text-lg tabular-nums ${over ? 'text-[#FFD27A]' : 'text-[#EAF1F8]'}`}>
+              {over ? `Ran out at ${fmtClock(session.dueAt)}` : fmtHMS(left)}
+            </div>
+            {/* Said plainly, because the difference is whether a notification
+                arrives when the phone is in a pocket. */}
+            {how === 'local-only' && (
+              <div className="text-[10.5px] text-[rgba(234,241,248,0.45)] mt-0.5">On this device only — no alert if you close the app</div>
+            )}
+          </div>
+          <button onClick={clear} disabled={busy}
+            className="text-[11px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 px-3 py-1.5 rounded-full flex-shrink-0 disabled:opacity-50">
+            {busy ? '…' : 'Off'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+      <div className="flex items-center gap-2">
+        <Timer size={14} className="text-[#5BE7DA]"/>
+        <span className="text-[12.5px] font-semibold text-[#EAF1F8]">Remind me before it runs out</span>
+      </div>
+      <div className="flex gap-2 mt-2.5">
+        {TIMER_CHOICES.map(m => (
+          <button key={m} onClick={()=>choose(m)} disabled={busy}
+            className="flex-1 py-2 rounded-xl text-[12px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition disabled:opacity-50">
+            {m < 60 ? `${m}m` : `${m / 60}h`}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Find my car ───────────────────────────────────────────────────────────────
+//
+// Renders nothing without coordinates. A session recorded before this shipped
+// has a name and no position, and a "Find my car" button that cannot find the
+// car is worse than no button — so the old sessions simply do not get one.
+const FindMyCar = ({ session }) => {
+  const [me, setMe] = useState(null);
+  const [asked, setAsked] = useState(false);
+  const url = directionsToCar(session);
+  if (!url) return null;
+
+  // The driver's own position is only asked for when they tap: a geolocation
+  // prompt that appears because a sheet opened is a prompt people deny.
+  const locate = () => {
+    setAsked(true);
+    try {
+      navigator.geolocation?.getCurrentPosition(
+        p => setMe({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        () => setMe(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+    } catch { setMe(null); }
+  };
+
+  const away = me ? metresBetween(me.lat, me.lng, session.lat, session.lng) : null;
+
+  return (
+    <div className="mt-3 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+      <div className="flex items-center gap-2">
+        <Navigation size={14} className="text-[#5BE7DA]"/>
+        <span className="text-[12.5px] font-semibold text-[#EAF1F8]">Find my car</span>
+        {away != null && (
+          <span className="ml-auto text-[11.5px] font-bold text-[#6BEFB9] tabular-nums">
+            {walkLabel(away)} · {walkMinutes(away)} min walk
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2 mt-2.5">
+        <a href={url} target="_blank" rel="noopener noreferrer"
+          className="flex-1 py-2 rounded-xl text-[12px] font-bold text-center text-[#06231f] btn-teal active:scale-95 transition">
+          Walk me back
+        </a>
+        {!me && (
+          <button onClick={locate}
+            className="px-3 py-2 rounded-xl text-[12px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+            {asked ? 'How far?' : 'How far?'}
+          </button>
+        )}
+        <button onClick={()=>shareParked(session).then(r => {
+            if (r.ok) notify(r.how === 'copied' ? 'Link copied' : 'Shared');
+          })}
+          className="px-3 py-2 rounded-xl text-[12px] font-bold text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
+          <Share2 size={13}/>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const SessionModal = ({ session, now, onClose, onEnd, onChange }) => {
   if (!session) return null;
   const elapsed = Math.max(0, now - session.startedAt);
   const rate = session.rate || 0;
@@ -2300,7 +2443,9 @@ const SessionModal = ({ session, now, onClose, onEnd }) => {
             <div className="w-9 h-9 rounded-xl teal-grad flex items-center justify-center text-[#06231f] font-display font-extrabold">P</div>
             <div className="font-bold text-sm text-[#EAF1F8] truncate">{session.name}</div>
           </div>
-          <button onClick={onEnd} className="w-full mt-5 py-3.5 rounded-2xl font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
+          <ParkedTimer session={session} now={now} onChange={onChange}/>
+          <FindMyCar session={session}/>
+          <button onClick={onEnd} className="w-full mt-4 py-3.5 rounded-2xl font-display font-bold text-sm bg-white/8 border border-white/15 text-[#EAF1F8] hover:bg-white/12 active:scale-95 transition">
             End session
           </button>
           <p className="text-[11px] text-center text-[rgba(234,241,248,0.4)] mt-3">A personal reminder only — ParkEasy doesn't charge or pay for parking.</p>
@@ -2320,12 +2465,21 @@ const ParkBar = ({ session, now, onOpen, onEnd }) => {
   if (!session) return null;
   const elapsed = Math.max(0, now - session.startedAt);
   const cost = session.rate ? (elapsed / 3600000) * session.rate : null;
+  // With a timer running, the number that matters is how long is LEFT. Elapsed
+  // time is a fact about the past; the deadline is the thing with a fine on it.
+  const left = timeLeft(session, now);
+  const over = left != null && left <= 0;
   return (
     <div className="px-3 py-2 flex items-center gap-2" style={{ background:'linear-gradient(90deg,#0e6a5f,#0c5248)', borderTop:'1px solid var(--hairline)' }}>
       <button onClick={onOpen} className="flex-1 flex items-center gap-2 text-left min-w-0">
         <span className="w-2 h-2 rounded-full bg-[#6BEFB9] flex-shrink-0" style={{boxShadow:'0 0 8px #34E0A0'}}/>
-        <span className="text-xs font-bold text-white truncate">Parked at {session.name}</span>
-        <span className="text-xs font-extrabold text-white tabular-nums ml-auto flex-shrink-0">{fmtHMS(elapsed)}{cost!=null?` · ~£${cost.toFixed(2)}`:''}</span>
+        <span className="text-xs font-bold text-white truncate">
+          {over ? 'Parking ran out' : 'Parked at'} {over ? '' : session.name}
+        </span>
+        <span className={`text-xs font-extrabold tabular-nums ml-auto flex-shrink-0 ${over ? 'text-[#FFD27A]' : 'text-white'}`}>
+          {left != null ? (over ? fmtClock(session.dueAt) : `${fmtHMS(left)} left`)
+                        : `${fmtHMS(elapsed)}${cost!=null?` · ~£${cost.toFixed(2)}`:''}`}
+        </span>
       </button>
       <button onClick={onEnd} className="text-[11px] font-bold text-[#06231f] bg-[#6BEFB9] px-2.5 py-1 rounded-full flex-shrink-0 active:scale-95">End</button>
     </div>
@@ -10008,8 +10162,12 @@ export default function App() {
 
   const startSession = (spot) => {
     const rate = spot.price ? (parseFloat(String(spot.price).match(/([\d.]+)/)?.[1]) || 0) : 0;
-    const sess = { spotId: spot.id, name: spot.name, rate, startedAt: Date.now() };
-    setParkSession(sess); ls.set('pe_session', sess);
+    // startParked records the spot's COORDINATES as well as its name, and owns
+    // the localStorage key. Before this the app knew the driver was parked at
+    // "Rear yard" and had no idea where that was, so it could not walk them
+    // back to it — and neither could they.
+    const sess = startParked({ spotId: spot.id, name: spot.name, rate, lat: spot.lat, lng: spot.lng });
+    setParkSession(sess);
     setDetailSpot(null); setShowSession(true); setNowTs(Date.now());
     // Tell the next driver this one is taken. Optimistically bump the local
     // count too, so the badge appears immediately rather than after the poll.
@@ -10030,7 +10188,11 @@ export default function App() {
         return next;
       });
     }
-    setParkSession(null); ls.set('pe_session', null); setShowSession(false);
+    // endParked cancels the server-side reminder as well as clearing the
+    // record. Without that, a driver who moves the car at 2:50 still gets
+    // "parking runs out in 15 minutes" at 3:45 — about parking they left.
+    endParked();
+    setParkSession(null); setShowSession(false);
   };
 
   const handleSpotAdded = (newSpot) => {
@@ -10098,7 +10260,7 @@ export default function App() {
         onHeading={toggleHeading} headingMine={!!myHeading[String(detailSpot.id)]}
         bookableSpots={rentalSpots} onOpenSpot={openSpot}
         reportFlagged={reportFlag(reportCounts, detailSpot.id)} onReported={loadReportCounts} user={user}/>}
-      {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession}/>}
+      {showSession && <SessionModal session={parkSession} now={nowTs} onClose={()=>setShowSession(false)} onEnd={endSession} onChange={setParkSession}/>}
       {infoPage && <InfoOverlay page={infoPage} onClose={()=>setInfoPage(null)}/>}
       {showCorporate && (
         <React.Suspense fallback={null}>
