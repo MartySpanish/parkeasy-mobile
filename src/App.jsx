@@ -38,6 +38,7 @@ import { eventsOn, whenWord, venueOf } from './data/events';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
 import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
+import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
 import { fetchPhotosForSpot, submitSpotPhoto, spotKeyOf } from './data/spotPhotos';
 import ComparisonCard from './components/funnel/ComparisonCard';
@@ -1458,8 +1459,84 @@ const PushToggle = () => {
   );
 };
 
+// ── Points ────────────────────────────────────────────────────────────────────
+//
+// 744 spots, 89 gems and every restriction note came from drivers, and nothing
+// in this app has ever thanked them for it. Points convert to Premium days —
+// see docs/points.md for why that is the only reward it can honestly pay.
+//
+// SELF-CONTAINED, and renders NOTHING until it has a real balance. A rewards
+// card that flashes "0 points" while it loads has told the driver they have
+// nothing, and for most of them that will be the only thing they read.
+const PointsCard = ({ onRedeemed }) => {
+  const [p, setP] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [how, setHow] = useState(false);
+  const load = useCallback(() => { fetchPoints().then(setP); }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!p) return null;
+
+  const s = pointsSummary(p);
+
+  const redeem = async () => {
+    setBusy(true);
+    try {
+      const r = await redeemPoints();
+      if (r.ok) {
+        notify(`${r.days} days of Premium added \u2014 thanks for the help`);
+        onRedeemed?.(r.until);
+        load();
+      } else if (r.reason === 'not_enough') {
+        // Said as the number it is. "Something went wrong" would be a lie about
+        // a thing that went exactly right.
+        notify(`Not quite yet \u2014 ${Math.max(0, (r.cost || s.cost) - (r.balance || 0))} more points`);
+        load();
+      } else {
+        notify('Couldn\u2019t redeem that just now. Try again in a moment.');
+      }
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-xl p-3 bg-white/5 border border-white/10">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-xl font-extrabold text-[#EAF1F8] tabular-nums">{s.balance}</p>
+        <button onClick={()=>setHow(v=>!v)} className="text-[10px] font-bold text-[#5BE7DA]">
+          {how ? 'Hide' : 'How to earn'}
+        </button>
+      </div>
+      <p className="text-[10px] text-[#6b7d96] font-medium">Thanks points</p>
+      {/* A bar, capped at full. 300 points is not 300% of the way to a 30-day
+          reward — it is three of them waiting. */}
+      <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div className="h-full rounded-full bg-[#5BE7DA]" style={{width:`${Math.round(s.progress*100)}%`}}/>
+      </div>
+      <p className="text-[10.5px] text-[rgba(234,241,248,0.6)] mt-1.5 leading-relaxed">{s.text}</p>
+      {s.ready && (
+        <button onClick={redeem} disabled={busy}
+          className="w-full mt-2 py-2 rounded-xl font-bold text-[11.5px] text-[#06231f] btn-teal active:scale-95 transition disabled:opacity-60">
+          {busy ? '\u2026' : `Redeem for ${s.days} days`}
+        </button>
+      )}
+      {how && (
+        <ul className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
+          {EARN_WAYS.map(w => (
+            <li key={w.kind} className="flex items-start justify-between gap-2">
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold text-[#EAF1F8]">{w.label}</span>
+                <span className="block text-[9.5px] text-[#6b7d96]">{w.note}</span>
+              </span>
+              <span className="text-[11px] font-extrabold text-[#5BE7DA] flex-shrink-0">+{w.points}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 // ── User Menu ─────────────────────────────────────────────────────────────────
-const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin, onCorporate }) => (
+const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin, onCorporate, onRedeemed }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
     <div className="absolute top-16 right-3 bg-[#0e1a2c] rounded-2xl shadow-2xl border border-white/10 w-64 overflow-hidden" onClick={e=>e.stopPropagation()}>
       <div style={{background:'var(--surface-solid)'}} className="p-4 flex items-center gap-3">
@@ -1485,6 +1562,10 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             }
           </div>
         </div>
+        {/* Before the upgrade button on purpose: somebody who has given this map
+            four spots should be offered their thanks before they are offered a
+            price. */}
+        <PointsCard onRedeemed={onRedeemed}/>
         {!isPremium && (
           <button onClick={onUpgrade} className="w-full bg-yellow-400 text-[#FFD27A] py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
             ★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr
@@ -10370,6 +10451,15 @@ export default function App() {
           onUpgrade={()=>{setShowUserMenu(false);setShowPricing(true);}}
           onAdmin={isAdminUser(user) ? ()=>{setShowUserMenu(false);setShowAdmin(true);} : undefined}
           onCorporate={hasCorporate ? ()=>{setShowUserMenu(false);setShowCorporate(true);} : undefined}
+          onRedeemed={(until)=>{
+            // Premium starts the moment it is granted, not on the next reload.
+            // The server is the authority — has_premium() reads the same row —
+            // and this is the local mirror catching up so the gems unlock
+            // without the driver wondering what they paid points for.
+            setIsPremium(true); ls.set('pe_premium', true);
+            const ms = Date.parse(until);
+            if (Number.isFinite(ms)) ls.set('pe_premium_until', ms);
+          }}
           onClose={()=>setShowUserMenu(false)}/>
       )}
 

@@ -1,0 +1,13 @@
+-- Supabase's default privileges, which the test cluster does not have.
+--
+-- A hosted project ships with
+--
+--   alter default privileges in schema public grant all on tables to anon, authenticated;
+--
+-- so every new table in public is granted to both roles the moment it is
+-- created. contribution_points ends with a `revoke all`, and the check that
+-- asserts anon cannot INSERT into the ledger passes on nothing without this:
+-- on a bare cluster the grant was never there, so deleting the revoke changes
+-- neither the grants nor the test result — and a table that mints Premium days
+-- goes to production writable by anonymous callers.
+alter default privileges in schema public grant all on tables to anon, authenticated;

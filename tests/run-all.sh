@@ -199,6 +199,15 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  push subscriptions     $(grep -c 'PASS  ' /tmp/pe-t19.log) checks" \
     || { fail=1; echo "  push subscriptions     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t19.log; }
 
+  tests/db/run.sh tests/db/contribution_points_seed.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  supabase/migrations/20260918_contribution_points.sql \
+                  tests/db/contribution_points.test.sql            > /tmp/pe-t22.log 2>&1 \
+    && echo "  contribution points    $(grep -c 'PASS  ' /tmp/pe-t22.log) checks" \
+    || { fail=1; echo "  contribution points    FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t22.log; }
+
   tests/db/run.sh tests/db/spot_signals_seed.sql \
                   supabase/migrations/20260720_spot_submissions.sql \
                   supabase/migrations/20260728_public_approved_spots.sql \
@@ -216,6 +225,7 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
 
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
+  tests/db/points_concurrency.sh 2>&1 | grep -E 'redeems|PASSED|FAIL' || fail=1
 else
   echo "  SKIPPED — no Postgres at ${PGBIN:-/usr/lib/postgresql/16/bin}."
   echo "  The permit quota and the moderation rules are NOT covered by this run."

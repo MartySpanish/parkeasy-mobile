@@ -114,6 +114,25 @@ export default async function handler(req, res) {
 
   const svcH = { Authorization: `Bearer ${SERVICE}`, apikey: SERVICE, 'Content-Type': 'application/json' };
 
+  // THE THANK-YOU, and why it lives on the approval and not on the submission.
+  //
+  // award_points() pays for accepted work only: points for the act of
+  // submitting would fund a queue of junk, and the queue is what keeps the map
+  // accurate. So the award is fired from exactly the places a human decides
+  // something was good — here, and when a report is resolved as accurate.
+  //
+  // It never throws and its result is never awaited into the response. An
+  // approval must not fail because a thank-you did: the spot going live is the
+  // thing that matters to every driver, and the points are a courtesy to one.
+  const thankYou = (userId, kind, ref) => {
+    if (!userId || !SERVICE) return;
+    fetch(`${URL_}/rest/v1/rpc/award_points`, {
+      method: 'POST', headers: svcH,
+      body: JSON.stringify({ p_user_id: userId, p_kind: kind, p_ref: String(ref) }),
+    }).catch(() => {});
+  };
+
+
   // ── Founder action: grant Premium to any account by email (support tool —
   // e.g. Stripe buyers from before purchases were account-linked). Writes a
   // promo_redemptions entitlement; the user's next signed-in app open syncs it.
@@ -365,6 +384,21 @@ export default async function handler(req, res) {
       if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
       const key = String(p.spotKey || '').trim();
       if (!key) return res.status(200).json({ ok: false, error: 'Which spot?' });
+      // WHO WAS RIGHT, read before the rows are closed — resolve_spot_reports()
+      // stamps resolved_at, and after that there is nothing left to read. Only
+      // when `accurate` is set: a report resolved as "checked, nothing wrong
+      // here" is not work worth paying for, and paying for every report would
+      // make reporting every spot on the map the way to earn.
+      let reporters = [];
+      if (p.accurate) {
+        try {
+          const rr = await fetch(
+            `${URL_}/rest/v1/spot_reports?spot_key=eq.${encodeURIComponent(key)}`
+            + `&resolved_at=is.null&reporter_id=not.is.null&select=reporter_id`,
+            { headers: svcH });
+          if (rr.ok) reporters = (await rr.json()).map(r => r.reporter_id);
+        } catch { /* the thank-you is never the reason a resolve fails */ }
+      }
       try {
         const r = await fetch(`${URL_}/rest/v1/rpc/resolve_spot_reports`, {
           method: 'POST', headers: svcH,
@@ -372,7 +406,11 @@ export default async function handler(req, res) {
         });
         const text = await r.text().catch(() => '');
         if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
-        return res.status(200).json({ ok: true, closed: Number(JSON.parse(text)) || 0 });
+        // One award per reporter per spot: the ref is the spot key, so a
+        // reporter who was right about the same spot twice is paid once.
+        const thanked = new Set(reporters);
+        for (const who of thanked) thankYou(who, 'report_accurate', key);
+        return res.status(200).json({ ok: true, closed: Number(JSON.parse(text)) || 0, thanked: thanked.size });
       } catch (e) {
         return res.status(200).json({ ok: false, error: e.message || 'resolve failed' });
       }
@@ -582,10 +620,16 @@ export default async function handler(req, res) {
       const patch = action === 'approve'
         ? { status: 'approved', reviewed_at: new Date().toISOString(), review_note: null }
         : { status: 'rejected', reviewed_at: new Date().toISOString(), review_note: reason.trim() };
-      const up = await fetch(`${URL_}/rest/v1/spot_photos?id=eq.${encodeURIComponent(id)}`, {
-        method: 'PATCH', headers: svcH, body: JSON.stringify(patch),
+      const up = await fetch(`${URL_}/rest/v1/spot_photos?id=eq.${encodeURIComponent(id)}&select=submitted_by`, {
+        method: 'PATCH', headers: { ...svcH, Prefer: 'return=representation' }, body: JSON.stringify(patch),
       });
       if (!up.ok) return res.status(502).json({ error: 'Update failed', detail: await up.text().catch(() => '') });
+      if (action === 'approve') {
+        // submitted_by is read back from the PATCH rather than fetched first:
+        // one round trip, and it is the row that was actually updated.
+        const who = (await up.json().catch(() => []))?.[0]?.submitted_by;
+        thankYou(who, 'photo_approved', id);
+      }
       return res.status(200).json({ ok: true, status: patch.status });
     }
 
@@ -609,6 +653,7 @@ export default async function handler(req, res) {
         method: 'PATCH', headers: svcH, body: JSON.stringify(patch),
       });
       if (!up.ok) return res.status(502).json({ error: 'Update failed', detail: await up.text().catch(() => '') });
+      if (action === 'approve') thankYou(sub.user_id, 'spot_approved', id);
 
       if (sub.submitter_email && process.env.RESEND_API_KEY) {
         const place = sub.street || sub.near || 'your spot';
