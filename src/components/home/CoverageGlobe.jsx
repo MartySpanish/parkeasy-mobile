@@ -40,11 +40,25 @@ const C = {
 /** Belfast, and the tilt that keeps it facing the viewer at rest. */
 const BELFAST = [-5.93, 54.6];
 
+// The props are a FALLBACK, not the source.
+//
+// They used to be the source, counted off the bundled arrays in App.jsx: 744
+// spaces, 89 gems, 31 towns. Ninety of those 744 are in Dublin, Cork, Galway,
+// Manchester, Glasgow, Edinburgh and Perth, and the card sits on a page whose
+// headline says "across Northern Ireland" — so the card was contradicting the
+// paragraph beside it, which is the exact fault this component was added to
+// expose in the first place.
+//
+// places.json is already fetched below for the dots, and its stats block is
+// NI-scoped and gem-counted from the live database by
+// scripts/generate-globe-data.mjs. Reading the numbers from the same file the
+// dots come from means the card cannot disagree with the prerendered text.
 export default function CoverageGlobe({ spaces, gems, towns }) {
   const wrapRef   = useRef(null);
   const canvasRef = useRef(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [stats, setStats] = useState(null);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -86,6 +100,13 @@ export default function CoverageGlobe({ spaces, gems, towns }) {
           ni:      ni.ni,
           dots: (places?.spaces || []).map(s => ({ c: s.c, gem: s.t === 'gem' })),
         };
+        // Only trust a stats block that actually carries the three numbers.
+        // A half-written one falls back to the props rather than rendering a
+        // confident-looking zero.
+        const st = places?.stats;
+        if (st && Number.isInteger(st.spaces) && Number.isInteger(st.gems) && Number.isInteger(st.towns)) {
+          setStats(st);
+        }
         setReady(true);
         draw(0);
         if (!reduced) raf = requestAnimationFrame(spin);
@@ -230,9 +251,9 @@ export default function CoverageGlobe({ spaces, gems, towns }) {
         {!ready && <div style={{paddingTop:'62%'}}/>}
       </div>
       <div className="flex items-start gap-6 mt-3">
-        {stat(spaces, 'Spaces mapped')}
-        {stat(gems,   'Hidden gems')}
-        {stat(towns,  'Towns covered')}
+        {stat(stats?.spaces ?? spaces, 'Spaces mapped')}
+        {stat(stats?.gems   ?? gems,   'Hidden gems')}
+        {stat(stats?.towns  ?? towns,  'Towns covered')}
       </div>
       <a href="/globe"
         className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#5BE7DA] mt-3 px-3 py-2 -ml-3 rounded-full active:scale-95 transition">

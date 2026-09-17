@@ -15,9 +15,18 @@ import { EV_SPOTS } from './evSpots';
 import { PILOT_SPOTS } from './pilotSpots';
 import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
-import { notify, apiFetch, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
+import { notify, apiFetch, fetchBookable, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
+import { tileLayerProps, tileThemeClass } from './mapTiles';
+import { pushSupport, isPushEnabled, enablePush, disablePush } from './push';
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
+// app_events. track() mirrors the overlapping names into funnel.js itself,
+// so a call site never wires up both instruments by hand. See src/analytics.js.
+import { track } from './analytics';
+// The headline counts, from public/globe/places.json — see the file for why
+// six surfaces were all quoting the bundled fallback instead.
+import { useNetworkStats } from './useNetworkStats';
+import { TIERS, priceLabel } from './partnerTiers';
 import { paymentError } from './errors';
 import CategoryGrid, { CATEGORIES } from './components/home/CategoryGrid';
 import { splitPartnersByCategory } from './data/partnerCategories';
@@ -684,11 +693,19 @@ const getCitySpots = (cityId) => [ ...(CITY_SPOTS[cityId] || []), ...(EXTRA_SPOT
 
 // Welcome-screen stats — derived from every town's spots so they never go stale.
 const ALL_SPOTS_STATS = CITIES.flatMap(c => getCitySpots(c.id));
-const WELCOME_STATS = [
-  [ALL_SPOTS_STATS.length, 'Spots', '#34E0A0'],
-  [ALL_SPOTS_STATS.filter(s => s.badge === 'hidden_gem').length, 'Hidden gems', '#C9A7FF'],
-  [ALL_SPOTS_STATS.filter(s => s.badge === 'official').length, 'Car parks', '#7CC4FF'],
-  [CITIES.length, 'Towns', '#5BE7DA'],
+// The bundled counts. Used as the fallback the moment before places.json
+// lands, and for good if it never does — a stat tile must never be blank.
+const BUNDLED_STATS = {
+  spaces: ALL_SPOTS_STATS.length,
+  gems:   ALL_SPOTS_STATS.filter(s => s.badge === 'hidden_gem').length,
+  towns:  CITIES.length,
+};
+const WELCOME_CAR_PARKS = ALL_SPOTS_STATS.filter(s => s.badge === 'official').length;
+const welcomeStats = (st) => [
+  [st.spaces, 'Spots', '#34E0A0'],
+  [st.gems, 'Hidden gems', '#C9A7FF'],
+  [WELCOME_CAR_PARKS, 'Car parks', '#7CC4FF'],
+  [st.towns, 'Towns', '#5BE7DA'],
 ];
 
 // ── Free hidden-gem taster ────────────────────────────────────────────────────
@@ -955,6 +972,11 @@ const Badge = ({ type, sm }) => {
 
 // ── Welcome / Auth Modal ──────────────────────────────────────────────────────
 const WelcomeModal = ({ onJoin, onSkip }) => {
+  // The four tiles on this screen are the first numbers anybody sees, so they
+  // come from the generated stats rather than the bundled arrays. Falls back to
+  // the bundled counts, which is what renders for the instant before the file
+  // lands and for good if it never does.
+  const welcomeNumbers = useNetworkStats(BUNDLED_STATS);
   // 'signup' or 'login'. With real accounts (Supabase) we let people do both.
   const [mode, setMode]   = useState('signup');
   const [name, setName]   = useState('');
@@ -1055,7 +1077,7 @@ const WelcomeModal = ({ onJoin, onSkip }) => {
 
         <div className="p-6 space-y-5">
           <div className="grid grid-cols-4 gap-2 text-center">
-            {WELCOME_STATS.map(([n,l,c])=>(
+            {welcomeStats(welcomeNumbers).map(([n,l,c])=>(
               <div key={l} className="bg-white/5 border border-white/10 rounded-2xl py-3">
                 <span className="block w-1.5 h-1.5 rounded-full mx-auto mb-1.5" style={{background:c, boxShadow:`0 0 8px ${c}66`}}/>
                 <p className="font-display font-extrabold text-[#EAF1F8] text-lg leading-none">{n}</p>
@@ -1252,7 +1274,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
               it can never disagree with what they are about to see, and it
               includes community spots the moment they are approved. */}
           <p className="text-white/90 text-[13px] mt-1.5">
-            <strong className="text-white">{ALL_SPOTS_STATS.length} parking spots across Northern Ireland</strong>,
+            <strong className="text-white">{ALL_SPOTS_STATS.length} parking spots across Northern Ireland, the Republic and Britain</strong>,
             every one checked before it goes on the map.
           </p>
           {/* The gem count, queried rather than hardcoded, so it moves the day
@@ -1348,6 +1370,92 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
   );
 };
 
+// ── Notifications toggle ──────────────────────────────────────────────────────
+//
+// The whole point of the permission prompt is that it is asked ONCE, and only
+// after somebody has tapped something that obviously wants a notification.
+// "Block" is permanent and cannot be undone from inside the page, so a prompt
+// fired on page load is the channel thrown away. This control is that tap.
+//
+// It renders nothing at all where push cannot work, rather than a dead switch:
+//
+//   not configured  — no VAPID key on this deployment. Nothing to offer.
+//   no push api     — iOS Safari in a tab. Says how to get it (install the PWA),
+//                     because that is a real instruction and not an excuse.
+//   denied          — blocked already. Says so, and says where to undo it,
+//                     because we are not allowed to ask again.
+const PushToggle = () => {
+  const [support, setSupport] = useState(null);
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const s = pushSupport();
+      const enabled = await isPushEnabled();
+      if (alive) { setSupport(s); setOn(enabled); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  if (!support) return null;
+  if (support.reason === 'not-configured' || support.reason === 'no-window') return null;
+
+  // iOS gives a tab no Push API at all; an installed PWA gets one. Worth
+  // saying, since it is the single commonest reason this is missing.
+  if (support.reason === 'no-push' || support.reason === 'no-service-worker'
+      || support.reason === 'no-notification') {
+    return (
+      <p className="text-[11px] text-[#6b7d96] leading-snug">
+        Alerts need ParkEasy on your home screen — tap Share then &ldquo;Add to Home Screen&rdquo;.
+      </p>
+    );
+  }
+
+  if (support.reason === 'denied') {
+    return (
+      <p className="text-[11px] text-[#6b7d96] leading-snug">
+        Alerts are blocked for parkeasy.uk. Turn them back on in your browser&rsquo;s site settings —
+        we can&rsquo;t ask again from here.
+      </p>
+    );
+  }
+
+  const flip = async () => {
+    setBusy(true);
+    try {
+      if (on) {
+        await disablePush();
+        setOn(await isPushEnabled());
+        notify('Alerts off');
+      } else {
+        const r = await enablePush({ userGesture: true });
+        setOn(await isPushEnabled());
+        // Each branch says what actually happened. "Something went wrong" on a
+        // permission prompt the driver themselves dismissed is a lie.
+        if (r.ok) notify('Alerts on — we\u2019ll tell you when it matters');
+        else if (r.reason === 'denied') notify('Alerts blocked. You can undo that in your browser\u2019s site settings.');
+        else if (r.reason === 'default') notify('No bother — ask again any time');
+        else notify('Couldn\u2019t turn alerts on. Try again in a moment.');
+      }
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <button onClick={flip} disabled={busy}
+      className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl font-bold text-xs text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition disabled:opacity-60">
+      <span className="flex items-center gap-2">
+        <Megaphone size={14} className="text-[#5BE7DA]"/>
+        {on ? 'Alerts on' : 'Turn on alerts'}
+      </span>
+      <span className={`text-[10px] font-extrabold ${on ? 'text-[#6BEFB9]' : 'text-[#6b7d96]'}`}>
+        {busy ? '…' : on ? 'ON' : 'OFF'}
+      </span>
+    </button>
+  );
+};
+
 // ── User Menu ─────────────────────────────────────────────────────────────────
 const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, onAdmin, onCorporate }) => (
   <div className="fixed inset-0 z-[150]" onClick={onClose}>
@@ -1398,6 +1506,7 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
             be "contact ParkEasy", which is a liability and a slow one. Renders
             nothing at all for somebody with no subscription. */}
         {isPremium && <CancelSubscription/>}
+        <PushToggle/>
         <div className="border-t border-white/10 pt-2">
           <button onClick={onSignOut} className="w-full flex items-center gap-2 text-sm text-red-300 hover:text-red-300 font-medium py-1 transition-colors">
             <LogOut size={15}/> Sign out
@@ -1459,7 +1568,7 @@ const amenitiesOf = (spot) => {
 const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) {
     return (
-      <button onClick={onUpgrade} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
+      <button onClick={() => { track('gem_locked_view', { surface: 'card' }); onUpgrade(); }} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
         <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
         <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p></div>
         <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal flex-shrink-0">Unlock &#9733;</span>
@@ -1899,8 +2008,8 @@ const SpotDetail = ({ spot, saved, onSave, rating, onRate, voted, onVote, onClos
               )}
             </>
           ) : (
-            <MapContainer key={spot.id} center={[spot.lat,spot.lng]} zoom={17} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
-              <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+            <MapContainer className={tileThemeClass()} key={spot.id} center={[spot.lat,spot.lng]} zoom={17} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
+              <TileLayer {...tileLayerProps()}/>
               <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
             </MapContainer>
           )}
@@ -2408,8 +2517,8 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
       <div className="relative h-80 flex-shrink-0">
         {/* zoomControl off: it renders top-left, exactly under the close button.
             Drag and pinch still work, which is what a phone uses anyway. */}
-        <MapContainer center={[54.6008,-5.9272]} zoom={14} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-          <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+        <MapContainer className={tileThemeClass()} center={[54.6008,-5.9272]} zoom={14} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
+          <TileLayer {...tileLayerProps()}/>
           <Polygon positions={zonePositions} pathOptions={{color:'#FF5C5C',weight:3,fillColor:'#FF5C5C',fillOpacity:0.30}}/>
           {FLEADH.zoneStreets.filter(s=>s.label).map((s,i)=>(
             <Marker key={'st'+i} position={[s.lat,s.lng]} icon={streetPin(s.name)}/>
@@ -2580,19 +2689,16 @@ const searchPin = (label) => L.divIcon({
 
 // isPremium defaults to true so existing call sites keep exact pins; screens
 // that can show gated spots pass the real flag + an upgrade handler.
-// Map base tiles — CARTO's free, polished styles that match the app theme
-// (dark map for dark mode, light "Voyager" for light mode). No per-view cost.
-const CARTO_DARK  = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png';
-const CARTO_LIGHT = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-const TILE_ATTR = '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
-const tileUrl = () => (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light') ? CARTO_LIGHT : CARTO_DARK;
+// Base tiles, attribution and the dark-tile class all come from src/mapTiles.js
+// — which provider is in use depends on VITE_CARTO_API_KEY, so none of it can
+// be a constant here.
 
 // `pin` (optional) marks a searched address location.
 const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPremium=true, onUpgrade, pin }) => (
   <div style={{height}} className={flat ? 'overflow-hidden border-y border-white/10' : 'rounded-2xl overflow-hidden border border-white/10 shadow-sm'}>
-    <MapContainer center={center || BELFAST_CENTER} zoom={zoom}
+    <MapContainer className={tileThemeClass()} center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
-      <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+      <TileLayer {...tileLayerProps()}/>
       {center && <RecenterMap center={center} zoom={zoom}/>}
       {pin && (
         <Marker position={[pin.lat, pin.lng]} icon={searchPin(pin.label)} zIndexOffset={1000}>
@@ -2605,7 +2711,7 @@ const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPr
             <div style={{minWidth:160}}>
               <p className="font-bold text-sm mb-1">{gatedLabel(s)}</p>
               <p className="text-xs text-[#8da2bd] leading-relaxed">Around {s.near}. Approximate area — the exact free spot is revealed with Premium.</p>
-              <button onClick={onUpgrade}
+              <button onClick={() => { track('gem_locked_view', { surface: 'map' }); onUpgrade(); }}
                 className="mt-2 block w-full text-center text-xs bg-[#5BE7DA] text-[#06231f] px-3 py-1.5 rounded-lg font-semibold">
                 Unlock Premium ★
               </button>
@@ -2798,7 +2904,7 @@ const approxCoord = (v) => Math.round(v * 200) / 200;
 // ── Sheet row (map screen): price chip | name + caption | availability dot ──
 const RowItem = ({ spot, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) return (
-    <button onClick={onUpgrade} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
+    <button onClick={() => { track('gem_locked_view', { surface: 'row' }); onUpgrade(); }} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
       <div className="min-w-[56px] h-[46px] rounded-[13px] flex items-center justify-center bg-[#2ED3C6]/12 border border-[#2ED3C6]/25 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
       <div className="flex-1 min-w-0"><p className="text-[14.5px] font-bold text-[#EAF1F8]">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — unlock the exact spot</p></div>
       <span className="text-[#5BE7DA] text-xs font-bold flex-shrink-0">Unlock ★</span>
@@ -2981,6 +3087,27 @@ const RequestParking = ({ geo, cityName }) => {
 
   const where = geo?.label?.split(',')[0] || cityName;
 
+  // The supply-acquisition signal: somebody looked here and there was nothing
+  // to book. Fired once per mount of the card, which is once per search that
+  // came up short.
+  //
+  // WHAT THE COORDINATES ARE. props.query is what they typed, and lat/lng are
+  // the coordinates OF THAT PLACE — the searched destination, not the driver's
+  // position. That is the same line parking_requests already draws, and the
+  // reason it is safe to keep: it says "people want parking near Botanic", not
+  // "this person was at Botanic".
+  //
+  // Rounded to three decimals, about 110 metres. Enough to cluster a demand
+  // map and to tell a club their car park is in the right place; not enough to
+  // be a doorstep.
+  useEffect(() => {
+    const round = (n) => (typeof n === 'number' ? Math.round(n * 1000) / 1000 : null);
+    track('search_no_results', {
+      query: where || 'unknown',
+      ...(geo?.lat != null ? { lat: String(round(geo.lat)), lng: String(round(geo.lng)) } : {}),
+    }, { town: cityName || null });
+  }, [where, cityName, geo?.lat, geo?.lng]);
+
   const submit = async (e) => {
     e.preventDefault();
     const addr = email.trim();
@@ -3100,7 +3227,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
     if (geo) { const c = nearestCity(geo.lat, geo.lng); if (c) onCityDetected?.(c.id); }
     // The app has just answered the question it was opened for. That — and
     // only that — is when it has earned the right to ask for an account.
-    if (geo) { onSearched?.(); trackSearch(geo.via || 'search'); }
+    if (geo) { onSearched?.(); track('search', { via: geo.via || 'search' }, { town: geo.label || null }); }
   }, [geo]);
 
   const viewOnMap = (spot) => {
@@ -3698,7 +3825,16 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
 
     // Counted from the live network, never typed in: a hard-coded number is
     // wrong the first time anybody adds a spot.
-    const gemCount = (networkSpots || []).filter(s => s.badge === 'hidden_gem').length;
+    //
+    // THE WORDING NAMES THE WHOLE GEOGRAPHY, so the count covers it. Ninety of
+    // these spots are in Dublin, Cork, Galway, Manchester, Glasgow, Edinburgh
+    // and Perth; the sentence used to say "across Northern Ireland" over all of
+    // them, which was false. The fix is the copy, not a smaller number.
+    //
+    // inNorthernIreland() (src/regions.js) is what any Northern-Ireland-only
+    // claim must use — the globe data still records the NI subset — but this
+    // line is not one of those claims any more.
+    const gemCount  = (networkSpots || []).filter(s => s.badge === 'hidden_gem').length;
     // Counted, never typed. An inflated number is the one thing a stranger can
     // catch you out on, and this one is in the headline's supporting line.
     const spotTotal = (networkSpots || []).length;
@@ -3718,7 +3854,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, ratings, onRate, votes, onVote
             Know where you&rsquo;re parking before you leave the house
           </h1>
           <p className="text-[13.5px] text-[rgba(234,241,248,0.66)] leading-relaxed mt-2">
-            {spotTotal} spots across Northern Ireland &mdash; the free ones, the cheap ones, and{' '}
+            {spotTotal} spots across Northern Ireland, the Republic and Britain &mdash; the free ones, the cheap ones, and{' '}
             <strong className="text-[#EAF1F8]">{gemCount} hidden gems</strong> locals told us about.
           </p>
           {/* The generic subtitle — "Compare nearby car parks, street parking,
@@ -4971,6 +5107,23 @@ const BookingSheet = ({ listing, onClose }) => {
     return () => { live = false; };
   }, [listing.id]);
   const rate = override ?? baseRate;
+  // CAN this space take money at all — asked when the panel opens rather than
+  // when Pay is tapped. A driveway published in July had a host who never
+  // finished Stripe onboarding, so the refusal arrived at the card step and the
+  // app read it as a declined card. Nobody's card was the problem.
+  //
+  // null means "we could not find out", and that is NOT the same as no: the
+  // Pay button stays exactly as it was and the honest refusal comes from the
+  // server, as it does now. A network blip must not make every space on the
+  // map look unbookable.
+  const [payable, setPayable] = useState({ bookable: null, reason: null, message: null });
+  useEffect(() => {
+    let live = true;
+    setPayable({ bookable: null, reason: null, message: null });
+    fetchBookable(listing.id).then(r => { if (live) setPayable(r); });
+    return () => { live = false; };
+  }, [listing.id]);
+  const notPayable = payable.bookable === false;
   const [time, setTime] = useState('09:00');
   const [hours, setHours] = useState(2);
   const [busy, setBusy] = useState(false);
@@ -5049,10 +5202,17 @@ const BookingSheet = ({ listing, onClose }) => {
       const startTime = dayPriced ? String(listing.gate_opens_at || '08:00').slice(0,5) : time;
       const startsAt = date && startTime ? new Date(`${date}T${startTime}`).toISOString() : null;
       ls.set('pe_vehicle_reg', regClean);
+      track('booking_start',
+        { unit: dayPriced ? 'day' : 'hour', hours: String(hours) },
+        { listingId: listing.id });
       const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks, vehicleReg: regClean,
         unit: dayPriced ? 'day' : 'hour' });
       window.location.href = url;   // full-page redirect to Stripe Checkout
-    } catch (e) { setErr(paymentError(e.message)); setBusy(false); }
+    } catch (e) {
+      // The error OBJECT: it carries the server's refusal code, and passing
+      // only the message is what made a payouts problem read as a card decline.
+      setErr(paymentError(e)); setBusy(false);
+    }
   };
 
   const field = "w-full bg-white/[0.06] border border-white/12 rounded-xl px-3.5 py-3 min-h-[44px] text-sm text-[#EAF1F8] focus:outline-none focus:ring-2 focus:ring-[#2ED3C6]/60";
@@ -5080,6 +5240,16 @@ const BookingSheet = ({ listing, onClose }) => {
         {closedDay && (
           <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
             {closedReason || spanReason}
+          </p>
+        )}
+        {/* Said once, at the top, before any of the fields below are filled
+            in. The old behaviour let somebody pick a date, type their
+            registration and tap Pay before finding out. */}
+        {notPayable && (
+          <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
+            {payable.reason === 'host_payouts_incomplete'
+              ? <>This host hasn&rsquo;t finished setting up payments yet, so we can&rsquo;t take a booking for this space. Nothing you do here will charge you — try one of the spaces nearby.</>
+              : (payable.message || <>This space isn&rsquo;t taking bookings just now.</>)}
           </p>
         )}
         {/* Only where the host published both rates. One rate and there is no
@@ -5203,14 +5373,18 @@ const BookingSheet = ({ listing, onClose }) => {
                 alert(`Booked with your ${credit.passName} — ${r.creditsRemaining} credit${r.creditsRemaining!==1?'s':''} left.`);
                 onClose();
               } catch (e) { setErr(e.message || 'Could not redeem'); setBusy(false); }
-            }} disabled={busy || closedDay}
+            }} disabled={busy || closedDay || notPayable}
             className="mt-4 w-full font-display font-bold py-3 rounded-2xl text-sm text-[#06231f] disabled:opacity-50" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
-            {busy ? 'Booking…' : closedDay ? 'Closed on that date' : `Use pass credit (${credit.remaining} left) — free`}
+            {busy ? 'Booking…'
+              : notPayable ? 'Not taking bookings yet'
+              : closedDay ? 'Closed on that date'
+              : `Use pass credit (${credit.remaining} left) — free`}
           </button>
         )}
-        <button onClick={pay} disabled={busy || rate<=0 || belowMin || !regValid || closedDay}
+        <button onClick={pay} disabled={busy || rate<=0 || belowMin || !regValid || closedDay || notPayable}
           className={`${credit ? 'mt-2' : 'mt-4'} w-full btn-teal text-[#06231f] font-display font-bold py-3 rounded-2xl text-sm disabled:opacity-50`}>
           {busy ? 'Opening secure payment…'
+            : notPayable ? 'Not taking bookings yet'
             : spanReason ? 'Covers a date this space is closed'
             : closedDay ? 'Closed on that date — pick another'
             : belowMin ? `Add ${hoursForMin - hours} more hour${hoursForMin - hours !== 1 ? 's' : ''} to book`
@@ -5456,12 +5630,12 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
                   Two sites 500m apart still overlap at a scale that also has to
                   show Newry; the list underneath is the unambiguous version,
                   and pinch-zoom separates them. */}
-              <MapContainer
+              <MapContainer className={tileThemeClass()}
                 bounds={sites.map(s => [s.lat, s.lng])}
                 boundsOptions={{ padding: [34, 34], maxZoom: 13 }}
                 style={{width:'100%',height:'100%'}}
                 scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-                <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+                <TileLayer {...tileLayerProps()}/>
                 {sites.map(s => (
                   <Marker key={s.id} position={[s.lat, s.lng]} icon={pricePin(s, false)}
                     eventHandlers={{ click: () => onOpenSpot?.(s) }}/>
@@ -5516,9 +5690,9 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
         <>
         <h3 className="font-display font-bold text-[15px] text-[#EAF1F8] mt-5 mb-2">Parking around {partner.name}</h3>
         <div className="rounded-2xl overflow-hidden border border-white/10" style={{height:230}}>
-          <MapContainer center={[partner.lat, partner.lng]} zoom={16} style={{width:'100%',height:'100%'}}
+          <MapContainer className={tileThemeClass()} center={[partner.lat, partner.lng]} zoom={16} style={{width:'100%',height:'100%'}}
             scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-            <TileLayer url={tileUrl()} attribution={TILE_ATTR} subdomains="abcd" detectRetina/>
+            <TileLayer {...tileLayerProps()}/>
             {/* Above the parking pins: the business is the anchor of this map,
                 and a spot pin sitting on top of its name is confusing. */}
             <Marker position={[partner.lat, partner.lng]} icon={bizPin(partner.name)} zIndexOffset={1000}/>
@@ -6729,12 +6903,22 @@ const BookingsPanel = ({ user }) => {
           const hostEarns = b.booking_price_pence - (b.application_fee_pence - b.service_fee_pence);
           const when = b.starts_at ? new Date(b.starts_at).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
           const cancellable = b.status === 'paid' && (!b.starts_at || Date.parse(b.starts_at) > Date.now());
-          const statusColor = b.status==='paid' ? 'text-[#6BEFB9]' : b.status==='cancelled' ? 'text-[#FFD27A]' : b.status==='pending' ? 'text-[#8da2bd]' : 'text-red-300';
+          // A request on somebody's driveway. The card is authorised, not
+          // charged, and the host has not agreed to anything yet — so this row
+          // must not read like a confirmed booking.
+          const awaiting = b.status === 'awaiting_host';
+          const statusColor = b.status==='paid' ? 'text-[#6BEFB9]'
+            : awaiting ? 'text-[#FFD27A]'
+            : b.status==='cancelled' || b.status==='expired' ? 'text-[#FFD27A]'
+            : b.status==='declined' ? 'text-[#ff9d9d]'
+            : b.status==='pending' ? 'text-[#8da2bd]' : 'text-red-300';
+          const statusLabel = awaiting ? 'awaiting host'
+            : b.status === 'expired' ? 'no answer' : b.status;
           return (
             <div key={b.id} className="py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold text-[13px] text-[#EAF1F8] truncate">{titles[b.listing_id] || 'Space'}</span>
-                <span className={`text-[11px] font-bold uppercase ${statusColor}`}>{b.status}</span>
+                <span className={`text-[11px] font-bold uppercase ${statusColor}`}>{statusLabel}</span>
               </div>
               <div className="flex items-center justify-between gap-2 text-[11.5px] text-[rgba(234,241,248,0.55)] mt-0.5">
                 <span>{asHost ? '🅿️ your space' : '🚗 you booked'} · {when} · {b.duration_hours}h</span>
@@ -6756,6 +6940,27 @@ const BookingsPanel = ({ user }) => {
                 </span>
               </div>
               {b.status === 'cancelled' && b.refund_pence > 0 && <p className="text-[11px] text-[#FFD27A] mt-0.5">Refunded {gbp(b.refund_pence)}</p>}
+              {/* The three states a request can be in, said plainly. "You have
+                  not been charged" is the sentence that stops a support email
+                  in every one of them. */}
+              {awaiting && (
+                <p className="text-[11.5px] text-[#FFD27A] mt-1 bg-[#FFD27A]/8 border border-[#FFD27A]/20 rounded-lg px-2.5 py-1.5">
+                  {asHost
+                    ? '⏳ Someone is asking to park here — check your email to accept or decline.'
+                    : '⏳ Waiting for the host to accept. Your card is authorised, not charged.'}
+                </p>
+              )}
+              {b.status === 'declined' && !asHost && (
+                <p className="text-[11.5px] text-[#ff9d9d] mt-1">
+                  The host couldn’t take this one. You were not charged
+                  {b.host_decline_reason ? ` — “${b.host_decline_reason}”` : '.'}
+                </p>
+              )}
+              {b.status === 'expired' && !asHost && (
+                <p className="text-[11.5px] text-[rgba(234,241,248,0.55)] mt-1">
+                  The host didn’t answer in time, so the request lapsed. You were not charged.
+                </p>
+              )}
               {b.status === 'paid' && !asHost && offers[b.listing_id] && (
                 <p className="text-[11.5px] text-[#6BEFB9] mt-1 bg-[#34E0A0]/8 border border-[#34E0A0]/20 rounded-lg px-2.5 py-1.5">
                   📍 While you're there: {offers[b.listing_id].description} — <strong>{offers[b.listing_id].business_name}</strong>
@@ -6926,6 +7131,13 @@ const PayoutSetup = ({ user }) => {
   const [acct, setAcct] = useState(undefined);   // undefined = loading, null = none
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState('');
+  // How many of this host's spaces are live. It changes what this card has to
+  // say: with no live space, payout setup is housekeeping for later. With one,
+  // it is the reason nobody can book it — a driveway sat live since July with
+  // an unfinished Stripe account, every booking attempt refused, and this card
+  // said only "get set up to receive payments". It never mentioned that the
+  // space was unbookable until it was done.
+  const [liveSpaces, setLiveSpaces] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -6933,6 +7145,10 @@ const PayoutSetup = ({ user }) => {
       if (!isSupabaseEnabled || !user?.id) { setAcct(null); return; }
       const { data } = await supabase.from('host_accounts').select('onboarding_status,transfers_active').eq('host_id', user.id).maybeSingle();
       if (active) setAcct(data || null);
+      const { count } = await supabase.from('rental_listings')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', user.id).eq('status', 'active');
+      if (active) setLiveSpaces(count || 0);
     })();
     return () => { active = false; };
   }, [user?.id]);
@@ -6969,7 +7185,7 @@ const PayoutSetup = ({ user }) => {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0e1a2c] p-4 mb-5">
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{background: active ? 'linear-gradient(135deg,#34E0A0,#059669)' : 'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
+        <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{background: active ? 'linear-gradient(135deg,#34E0A0,#059669)' : liveSpaces > 0 ? 'linear-gradient(135deg,#FFD27A,#FFC24B)' : 'linear-gradient(135deg,#54E6D8,#2ED3C6)'}}>
           {active ? <Check size={18} className="text-[#06231f]"/> : <Receipt size={18} className="text-[#06231f]"/>}
         </div>
         <div className="flex-1 min-w-0">
@@ -6980,8 +7196,16 @@ const PayoutSetup = ({ user }) => {
             </>
           ) : (
             <>
-              <p className="font-display font-bold text-[14px] text-[#EAF1F8]">{started ? 'Finish setting up payouts' : 'Get set up to receive payments'}</p>
-              <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-0.5">Add your details with Stripe so booking money can be paid to you (minus ParkEasy’s 15% fee). Takes a couple of minutes.</p>
+              <p className="font-display font-bold text-[14px] text-[#EAF1F8]">
+                {liveSpaces > 0
+                  ? (liveSpaces === 1 ? 'Your space can’t be booked yet' : 'Your spaces can’t be booked yet')
+                  : started ? 'Finish setting up payouts' : 'Get set up to receive payments'}
+              </p>
+              <p className="text-[12px] text-[rgba(234,241,248,0.55)] mt-0.5">
+                {liveSpaces > 0
+                  ? <>{liveSpaces === 1 ? 'Your space is live and drivers can see it, but we can’t take money for it' : `Your ${liveSpaces} spaces are live and drivers can see them, but we can’t take money for them`} until your payout details are set up — so every booking gets turned away. Takes a couple of minutes with Stripe, and you keep 85% of the space price.</>
+                  : <>Add your details with Stripe so booking money can be paid to you (minus ParkEasy’s 15% fee). Takes a couple of minutes.</>}
+              </p>
               {err && <p className="text-[12px] text-red-300 mt-1.5">{err}</p>}
               <button onClick={go} disabled={busy}
                 className="mt-2.5 inline-flex items-center gap-2 btn-teal text-[#06231f] font-bold text-[13px] px-4 py-2 rounded-xl disabled:opacity-50">
@@ -7306,6 +7530,9 @@ const SyncPartners = () => {
 };
 
 const AdminOverlay = ({ onClose }) => {
+  // App data tiles. Same source as the homepage, so the dashboard cannot tell
+  // Marty one number while the page tells a visitor another.
+  const adminStats = useNetworkStats(BUNDLED_STATS);
   const [state, setState] = useState({ loading: true });
   const [refresh, setRefresh] = useState(0);
   const [acting, setActing] = useState(null);
@@ -7362,6 +7589,139 @@ const AdminOverlay = ({ onClose }) => {
       } catch (e) { setState({ loading:false, error: e.message || 'Failed to load' }); }
     })();
   }, [refresh]);
+  // ── /admin/metrics ────────────────────────────────────────────────────────
+  //
+  // Loaded on demand rather than with the rest of the dashboard. It is a
+  // 30-day aggregate over every event in the system, and the dashboard's other
+  // panels are what somebody opens this screen for.
+  const [metrics, setMetrics] = useState({ state: 'idle' });
+  const loadMetrics = async (days = 30) => {
+    setMetrics({ state: 'loading' });
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess?.session?.access_token;
+      const r = await apiFetch('/api/admin', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'metrics', days }) });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) { setMetrics({ state: 'error', error: j.error || 'Request failed' }); return; }
+      setMetrics({ state: 'done', summary: j.summary, days });
+    } catch (e) { setMetrics({ state: 'error', error: e.message || 'Request failed' }); }
+  };
+
+  // ── Partners ──────────────────────────────────────────────────────────────
+  //
+  // Loaded on demand like the metrics panel. This is the screen that sells the
+  // next card: impressions, taps and click rate per partner, with the tier
+  // beside them so the number and the price are in the same glance.
+  const [partners, setPartners] = useState({ state: 'idle' });
+  const [partnerBusy, setPartnerBusy] = useState(null);
+
+  const adminPost = async (body) => {
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess?.session?.access_token;
+    const r = await apiFetch('/api/admin', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body) });
+    return r.json().catch(() => ({ ok: false, error: 'No response' }));
+  };
+
+  const loadPartners = async (days = 30) => {
+    setPartners({ state: 'loading' });
+    const j = await adminPost({ action: 'partner-stats', days }).catch(e => ({ ok: false, error: e.message }));
+    setPartners(j.ok ? { state: 'done', rows: j.partners || [], days: j.days } : { state: 'error', error: j.error });
+  };
+
+  const setPartnerTier = async (partnerId, tier) => {
+    setPartnerBusy(partnerId);
+    const j = await adminPost({ action: 'set-partner-tier', partnerId, tier }).catch(e => ({ ok: false, error: e.message }));
+    if (j.ok) {
+      // Patch in place rather than refetching: the aggregate is a 30-day scan
+      // and the only thing that changed is one row's tier.
+      setPartners(s => s.state === 'done'
+        ? { ...s, rows: s.rows.map(r => (r.id === partnerId ? { ...r, tier } : r)) } : s);
+    } else { alert(j.error || 'Could not change the tier'); }
+    setPartnerBusy(null);
+  };
+
+  const sendCheckoutLink = async (partnerId, tier) => {
+    setPartnerBusy(partnerId);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess?.session?.access_token;
+      const r = await apiFetch('/api/partners/checkout-link', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ partnerId, tier }) });
+      const j = await r.json().catch(() => ({}));
+      if (j.url) {
+        // Copied rather than opened: this link is for the PARTNER, and opening
+        // it here would start Marty paying for their card himself.
+        try { await navigator.clipboard.writeText(j.url); } catch { /* fall through to the prompt */ }
+        window.prompt(`${priceLabel(tier)} checkout link for ${j.partner} — copied. Send it to them:`, j.url);
+      } else {
+        alert(j.error || 'Could not create the link');
+      }
+    } catch (e) { alert(e.message || 'Could not create the link'); }
+    setPartnerBusy(null);
+  };
+
+  // ── QR codes ──────────────────────────────────────────────────────────────
+  // 26 codes, 90 printed items, and zero recorded scans until /q/ existed.
+  const [qr, setQr] = useState({ state: 'idle' });
+  const loadQr = async (days = 90) => {
+    setQr({ state: 'loading' });
+    const j = await adminPost({ action: 'qr-stats', days }).catch(e => ({ ok: false, error: e.message }));
+    setQr(j.ok ? { state: 'done', rows: j.codes || [], days: j.days } : { state: 'error', error: j.error });
+  };
+
+  // ── Event-day pricing ─────────────────────────────────────────────────────
+  // Upcoming high/major events near an active listing. SUGGESTIONS only: the
+  // host agreed a price, so raising it is a decision somebody makes once with
+  // their nod, not something a cron job does to them.
+  const [evp, setEvp] = useState({ state: 'idle' });
+  const loadEvp = async () => {
+    setEvp({ state: 'loading' });
+    const j = await adminPost({ action: 'event-pricing', radiusM: 2000, days: 90 })
+      .catch(e => ({ ok: false, error: e.message }));
+    setEvp(j.ok ? { state: 'done', rows: j.suggestions || [], radius: j.radius } : { state: 'error', error: j.error });
+  };
+  const applyEventPrice = async (row, multiplier) => {
+    const base = row.price_per_day_pence || row.price_per_hour_pence || 0;
+    if (!base) { alert('That listing has no base price to multiply.'); return; }
+    const pricePence = Math.round(base * multiplier);
+    const date = String(row.starts_at).slice(0, 10);
+    const j = await adminPost({
+      action: 'set-event-price', listingId: row.listing_id, date, pricePence,
+      eventId: row.event_id, label: `Event pricing — ${row.event}`,
+    }).catch(e => ({ ok: false, error: e.message }));
+    if (j.ok) {
+      setEvp(s => s.state === 'done' ? { ...s, rows: s.rows.map(x =>
+        (x.listing_id === row.listing_id && String(x.starts_at).slice(0,10) === date)
+          ? { ...x, existing_pence: pricePence, existing_label: `Event pricing — ${row.event}` } : x) } : s);
+    } else { alert(j.error || 'Could not set the price'); }
+  };
+
+  // ── Which hotspots produce bookings ───────────────────────────────────────
+  // The free → paid funnel, per free spot. A spot with taps and no bookings is
+  // the row worth opening this for: the card is read and the paid space is not
+  // bought, which is the wrong alternative or the wrong price.
+  const [hot, setHot] = useState({ state: 'idle' });
+  const loadHot = async (days = 90) => {
+    setHot({ state: 'loading' });
+    const j = await adminPost({ action: 'hotspot-stats', days }).catch(e => ({ ok: false, error: e.message }));
+    setHot(j.ok ? { state: 'done', rows: j.spots || [], days: j.days } : { state: 'error', error: j.error });
+  };
+
+  // ── Demand map ────────────────────────────────────────────────────────────
+  // Where people want parking and cannot get it. The rows with demand and NO
+  // listing are the supply-acquisition list — that is the whole point.
+  const [demand, setDemand] = useState({ state: 'idle' });
+  const loadDemand = async (days = 90) => {
+    setDemand({ state: 'loading' });
+    const j = await adminPost({ action: 'demand', days }).catch(e => ({ ok: false, error: e.message }));
+    setDemand(j.ok ? { state: 'done', rows: j.points || [], days: j.days } : { state: 'error', error: j.error });
+  };
+
   const d = state.data;
   const Tile = ({ label, value, accent }) => (
     <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-center">
@@ -7380,6 +7740,452 @@ const AdminOverlay = ({ onClose }) => {
           </div>
         </div>
         <div className="px-4 py-5 pb-16 space-y-5">
+          {/* ── Demand map ─────────────────────────────────────────────────
+              "Eleven people looked for parking near your club last month."
+              The unserved rows come first because they are the ones to act on. */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-display font-bold text-[#EAF1F8]">Demand</p>
+                <p className="text-[11px] text-[rgba(234,241,248,0.5)]">Where people want parking · last {demand.days || 90} days</p>
+              </div>
+              <button onClick={() => loadDemand(90)} disabled={demand.state === 'loading'}
+                className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal disabled:opacity-50">
+                {demand.state === 'loading' ? 'Loading…' : demand.state === 'done' ? 'Refresh' : 'Load'}
+              </button>
+            </div>
+
+            {demand.state === 'error' && <p className="text-xs text-[#ff9d9d] mt-3">{demand.error}</p>}
+
+            {demand.state === 'done' && (demand.rows.length === 0 ? (
+              <p className="text-xs text-[rgba(234,241,248,0.55)] mt-3">
+                Nothing yet. Rows appear as people leave emails, search for somewhere with
+                nothing to book, or park at a free spot.
+              </p>
+            ) : (() => {
+              // Unserved first: a cluster with demand and no bookable space is
+              // the reason to open this screen.
+              const rows = [...demand.rows].sort((a, b) =>
+                (a.has_listing === b.has_listing ? 0 : a.has_listing ? 1 : -1)
+                || (b.requests - a.requests) || (b.total - a.total));
+              const emails = rows.reduce((t, r) => t + (r.requests || 0), 0);
+              const gaps = rows.filter(r => !r.has_listing).length;
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    <Tile label="Left an email" value={emails} accent="#C9A7FF"/>
+                    <Tile label="Areas" value={rows.length} accent="#5BE7DA"/>
+                    <Tile label="No space yet" value={gaps} accent={gaps ? '#FFD27A' : '#6BEFB9'}/>
+                  </div>
+
+                  <div className="mt-3 space-y-1.5">
+                    {rows.slice(0, 30).map(r => (
+                      <div key={`${r.lat},${r.lng}`} className="flex items-start justify-between gap-2 py-1.5 border-t border-white/5">
+                        <div className="min-w-0">
+                          <p className="text-[12.5px] text-[#EAF1F8] font-semibold truncate">
+                            {r.label || `${r.lat}, ${r.lng}`}
+                            {r.venue && <span className="text-[rgba(234,241,248,0.45)] font-normal"> · near {r.venue}</span>}
+                          </p>
+                          {/* Counted separately, never summed. An email address and
+                              a map pan are not the same evidence. */}
+                          <p className="text-[11px] text-[rgba(234,241,248,0.45)]">
+                            {r.requests > 0 && `${r.requests} left an email`}
+                            {r.requests > 0 && (r.no_results > 0 || r.parked > 0) && ' · '}
+                            {r.no_results > 0 && `${r.no_results} found nothing`}
+                            {r.no_results > 0 && r.parked > 0 && ' · '}
+                            {r.parked > 0 && `${r.parked} parked free`}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold uppercase flex-shrink-0 ${r.has_listing ? 'text-[#6BEFB9]' : 'text-[#FFD27A]'}`}>
+                          {r.has_listing ? 'served' : 'no space'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })())}
+          </div>
+
+          {/* ── Hotspot conversion ─────────────────────────────────────────
+              Which free spots send people to a paid space. Taps come from
+              app_events; bookings come from bookings.from_hotspot_spot_id,
+              written server-side, which is why a booking can appear with no
+              tap beside it — a client event after a Stripe redirect is lost
+              every time somebody closes the receipt tab. */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-display font-bold text-[#EAF1F8]">Hotspots → bookings</p>
+                <p className="text-[11px] text-[rgba(234,241,248,0.5)]">Which free spots sell a paid space · last {hot.days || 90} days</p>
+              </div>
+              <button onClick={() => loadHot(90)} disabled={hot.state === 'loading'}
+                className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal disabled:opacity-50">
+                {hot.state === 'loading' ? 'Loading…' : hot.state === 'done' ? 'Refresh' : 'Load'}
+              </button>
+            </div>
+
+            {hot.state === 'error' && <p className="text-xs text-[#ff9d9d] mt-3">{hot.error}</p>}
+
+            {hot.state === 'done' && (hot.rows.length === 0 ? (
+              <p className="text-xs text-[rgba(234,241,248,0.55)] mt-3">
+                Nothing yet. Rows appear once a driver taps from a free spot through to a
+                bookable one — the comparison card only shows where there is a real choice.
+              </p>
+            ) : (() => {
+              const rows = hot.rows;
+              const taps = rows.reduce((t, r) => t + (r.tap_sessions || 0), 0);
+              const books = rows.reduce((t, r) => t + (r.bookings || 0), 0);
+              const gross = rows.reduce((t, r) => t + (r.gross_pence || 0), 0);
+              const dead = rows.filter(r => (r.taps || 0) > 0 && (r.bookings || 0) === 0).length;
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    <Tile label="People tapped" value={taps.toLocaleString('en-GB')} accent="#5BE7DA"/>
+                    <Tile label="Booked" value={books.toLocaleString('en-GB')} accent="#C9A7FF"/>
+                    <Tile label="Gross" value={`£${(gross / 100).toFixed(0)}`} accent="#6BEFB9"/>
+                  </div>
+                  {taps > 0 && (
+                    <p className="text-[11px] text-[rgba(234,241,248,0.45)] mt-2">
+                      {Math.round((books / taps) * 100)}% of people who tapped through went on to book
+                      {dead > 0 && ` · ${dead} spot${dead === 1 ? '' : 's'} tapped but never booked`}
+                    </p>
+                  )}
+
+                  <div className="mt-3 space-y-1.5">
+                    {rows.slice(0, 30).map(r => {
+                      const never = (r.taps || 0) > 0 && (r.bookings || 0) === 0;
+                      return (
+                        <div key={r.spot_id} className="flex items-start justify-between gap-2 py-1.5 border-t border-white/5">
+                          <div className="min-w-0">
+                            <p className="text-[12.5px] text-[#EAF1F8] font-semibold truncate">
+                              {r.name}{!r.is_gem && <span className="text-[rgba(234,241,248,0.4)] font-normal"> · not a gem</span>}
+                            </p>
+                            <p className="text-[11px] text-[rgba(234,241,248,0.45)]">
+                              {r.tap_sessions || 0} tapped
+                              {r.town ? ` · ${r.town}` : ''}
+                            </p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className={`text-[14px] font-bold ${never ? 'text-[#FFD27A]' : 'text-[#6BEFB9]'}`}>
+                              {r.bookings || 0}
+                            </p>
+                            <p className="text-[10px] text-[rgba(234,241,248,0.4)]">
+                              {r.gross_pence ? `£${(r.gross_pence / 100).toFixed(0)}` : 'no booking'}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })())}
+          </div>
+
+          {/* ── Event-day pricing ──────────────────────────────────────────
+              JustPark's own figure: hosts near big venues using event pricing
+              earn about 57% more a year. Nothing here applies automatically. */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-display font-bold text-[#EAF1F8]">Event-day pricing</p>
+                <p className="text-[11px] text-[rgba(234,241,248,0.5)]">High &amp; major events within {((evp.radius || 2000) / 1000).toFixed(1)}km · next 90 days</p>
+              </div>
+              <button onClick={loadEvp} disabled={evp.state === 'loading'}
+                className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal disabled:opacity-50">
+                {evp.state === 'loading' ? 'Loading…' : evp.state === 'done' ? 'Refresh' : 'Load'}
+              </button>
+            </div>
+
+            {evp.state === 'error' && <p className="text-xs text-[#ff9d9d] mt-3">{evp.error}</p>}
+
+            {evp.state === 'done' && (evp.rows.length === 0 ? (
+              <p className="text-xs text-[rgba(234,241,248,0.55)] mt-3">
+                No big events near a listing in the next 90 days. That is a supply gap, not a bug —
+                the nearest venues need a space listed within walking distance.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {evp.rows.slice(0, 40).map((r, i) => {
+                  const when = new Date(r.starts_at).toLocaleString('en-GB',
+                    { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                  const base = r.price_per_day_pence || r.price_per_hour_pence || 0;
+                  const set = r.existing_pence;
+                  return (
+                    <div key={`${r.event_id}-${r.listing_id}-${i}`} className="bg-white/[0.04] border border-white/10 rounded-xl p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-[13px] text-[#EAF1F8] truncate">{r.event}</span>
+                        <span className={`text-[10px] font-bold uppercase flex-shrink-0 ${r.demand_tier === 'major' ? 'text-[#ff9d9d]' : 'text-[#FFD27A]'}`}>{r.demand_tier}</span>
+                      </div>
+                      <p className="text-[11px] text-[rgba(234,241,248,0.5)] mt-0.5">
+                        {when} · {r.venue} · {r.listing} {r.metres}m away
+                      </p>
+                      {set ? (
+                        <p className="text-[11.5px] text-[#6BEFB9] mt-1.5">
+                          Priced at £{(set / 100).toFixed(2)} — {r.existing_label}
+                        </p>
+                      ) : (
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="text-[11px] text-[rgba(234,241,248,0.45)]">now £{(base / 100).toFixed(2)}</span>
+                          <button onClick={() => applyEventPrice(r, 1.5)}
+                            className="text-[10.5px] font-bold px-2 py-1 rounded-lg bg-[#5BE7DA]/15 border border-[#5BE7DA]/30 text-[#5BE7DA] active:scale-95">
+                            +50% → £{((base * 1.5) / 100).toFixed(2)}
+                          </button>
+                          <button onClick={() => applyEventPrice(r, 2)}
+                            className="text-[10.5px] font-bold px-2 py-1 rounded-lg bg-[#C9A7FF]/15 border border-[#C9A7FF]/30 text-[#C9A7FF] active:scale-95">
+                            +100% → £{((base * 2) / 100).toFixed(2)}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          {/* ── QR codes ───────────────────────────────────────────────────
+              Scans per code, with the landing target beside them. Half the run
+              used to point at pages that did not exist, so the target and the
+              number it produced belong on the same line. */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-display font-bold text-[#EAF1F8]">QR codes</p>
+                <p className="text-[11px] text-[rgba(234,241,248,0.5)]">Stickers and flyers · last {qr.days || 90} days</p>
+              </div>
+              <button onClick={() => loadQr(90)} disabled={qr.state === 'loading'}
+                className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal disabled:opacity-50">
+                {qr.state === 'loading' ? 'Loading…' : qr.state === 'done' ? 'Refresh' : 'Load'}
+              </button>
+            </div>
+
+            {qr.state === 'error' && <p className="text-xs text-[#ff9d9d] mt-3">{qr.error}</p>}
+
+            {qr.state === 'done' && (() => {
+              const rows = qr.rows || [];
+              const total = rows.reduce((t, r) => t + (r.scans || 0), 0);
+              const week  = rows.reduce((t, r) => t + (r.this_week || 0), 0);
+              const items = rows.reduce((t, r) => t + (r.quantity || 0), 0);
+              const dead  = rows.filter(r => (r.scans || 0) === 0).length;
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    <Tile label="Scans" value={total.toLocaleString('en-GB')} accent="#5BE7DA"/>
+                    <Tile label="This week" value={week.toLocaleString('en-GB')} accent="#C9A7FF"/>
+                    <Tile label="Never scanned" value={`${dead}/${rows.length}`} accent={dead ? '#FFD27A' : '#6BEFB9'}/>
+                  </div>
+                  <p className="text-[11px] text-[rgba(234,241,248,0.45)] mt-2">{items} printed items across {rows.length} codes</p>
+
+                  <div className="mt-3 space-y-1.5">
+                    {rows.map(r => (
+                      <div key={r.code} className="flex items-start justify-between gap-2 py-1.5 border-t border-white/5">
+                        <div className="min-w-0">
+                          <p className="text-[12.5px] text-[#EAF1F8] font-semibold">
+                            <span className="font-mono text-[#5BE7DA]">{r.code}</span>
+                            <span className="text-[rgba(234,241,248,0.5)] font-normal"> · {r.area}</span>
+                          </p>
+                          <p className="text-[11px] text-[rgba(234,241,248,0.45)] truncate">{r.location}</p>
+                          <p className="text-[10.5px] text-[rgba(234,241,248,0.35)] font-mono">{r.lands_on}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className={`text-[14px] font-bold ${(r.scans || 0) === 0 ? 'text-[#FFD27A]' : 'text-[#EAF1F8]'}`}>{r.scans || 0}</p>
+                          <p className="text-[10px] text-[rgba(234,241,248,0.4)]">{r.quantity || 0} up</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* ── Partners ───────────────────────────────────────────────────
+              The screen that sells the next card. Impressions, taps and click
+              rate per partner over 30 days, with the tier beside them so the
+              number and the price are in one glance. */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-display font-bold text-[#EAF1F8]">Partners</p>
+                <p className="text-[11px] text-[rgba(234,241,248,0.5)]">Cards, clicks and tiers · last {partners.days || 30} days</p>
+              </div>
+              <button onClick={() => loadPartners(30)} disabled={partners.state === 'loading'}
+                className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal disabled:opacity-50">
+                {partners.state === 'loading' ? 'Loading…' : partners.state === 'done' ? 'Refresh' : 'Load'}
+              </button>
+            </div>
+
+            {partners.state === 'error' && <p className="text-xs text-[#ff9d9d] mt-3">{partners.error}</p>}
+
+            {partners.state === 'done' && (() => {
+              const rows = partners.rows || [];
+              const totI = rows.reduce((t, r) => t + (r.impressions || 0), 0);
+              const totC = rows.reduce((t, r) => t + (r.clicks || 0), 0);
+              const paying = rows.filter(r => r.tier !== 'listed');
+              const mrr = paying.reduce((t, r) => t + (TIERS[r.tier]?.pricePence || 0), 0);
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    <Tile label="Shown · 30d" value={totI.toLocaleString('en-GB')} accent="#5BE7DA"/>
+                    <Tile label="Tapped" value={totC.toLocaleString('en-GB')} accent="#C9A7FF"/>
+                    <Tile label="Card MRR" value={`£${(mrr / 100).toFixed(0)}`} accent="#6BEFB9"/>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {rows.map(r => {
+                      const ctr = r.impressions > 0 ? `${((r.clicks / r.impressions) * 100).toFixed(1)}%` : '—';
+                      const statsUrl = `${window.location.origin}/api/partners/stats?token=${r.stats_token}`;
+                      const busy = partnerBusy === r.id;
+                      return (
+                        <div key={r.id} className="bg-white/[0.04] border border-white/10 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-[13px] text-[#EAF1F8] truncate">{r.name}</span>
+                            <span className="text-[11px] font-bold text-[#6BEFB9] flex-shrink-0">{priceLabel(r.tier)}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[11.5px] text-[rgba(234,241,248,0.6)] mt-1">
+                            <span>{(r.impressions || 0).toLocaleString('en-GB')} shown</span>
+                            <span>{r.clicks || 0} taps</span>
+                            <span className={r.impressions > 0 && r.clicks === 0 ? 'text-[#FFD27A]' : 'text-[#5BE7DA]'}>{ctr}</span>
+                            {r.payment_failed_at && <span className="text-[#ff9d9d]">payment failed</span>}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                            {Object.keys(TIERS).map(t => (
+                              <button key={t} disabled={busy || r.tier === t}
+                                onClick={() => setPartnerTier(r.id, t)}
+                                className={`text-[10.5px] font-bold px-2 py-1 rounded-lg border transition ${
+                                  r.tier === t
+                                    ? 'bg-[#5BE7DA] text-[#06231f] border-[#5BE7DA]'
+                                    : 'bg-white/5 text-[rgba(234,241,248,0.65)] border-white/12 active:scale-95'}`}>
+                                {TIERS[t].label}
+                              </button>
+                            ))}
+                            {r.tier !== 'sponsored' && (
+                              <button disabled={busy} onClick={() => sendCheckoutLink(r.id, r.tier === 'featured' ? 'sponsored' : 'featured')}
+                                className="text-[10.5px] font-bold px-2 py-1 rounded-lg bg-[#C9A7FF]/15 border border-[#C9A7FF]/30 text-[#C9A7FF] active:scale-95 ml-auto">
+                                {busy ? '…' : `Sell ${r.tier === 'featured' ? 'Sponsored' : 'Featured'}`}
+                              </button>
+                            )}
+                          </div>
+                          {/* The link you text them. Their own numbers, no login. */}
+                          <button onClick={() => { navigator.clipboard?.writeText(statsUrl).catch(() => {}); window.prompt('Their stats page — send them this:', statsUrl); }}
+                            className="text-[10.5px] text-[rgba(234,241,248,0.4)] mt-1.5 underline">
+                            copy their stats link
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* ── Metrics ────────────────────────────────────────────────────
+              The two funnels and the supply list. A funnel step is counted in
+              SESSIONS, not taps: one person opening three locked gems is one
+              person who wanted them, and counting taps would make the paywall
+              look like it converts a third as well as it really does. */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-display font-bold text-[#EAF1F8]">Product metrics</p>
+                <p className="text-[11px] text-[rgba(234,241,248,0.5)]">app_events · last {metrics.days || 30} days</p>
+              </div>
+              <button onClick={() => loadMetrics(30)} disabled={metrics.state === 'loading'}
+                className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal disabled:opacity-50">
+                {metrics.state === 'loading' ? 'Loading…' : metrics.state === 'done' ? 'Refresh' : 'Load'}
+              </button>
+            </div>
+
+            {metrics.state === 'error' && (
+              <p className="text-xs text-[#ff9d9d] mt-3">{metrics.error}</p>
+            )}
+
+            {metrics.state === 'done' && (() => {
+              const m = metrics.summary || {};
+              const pf = m.premium_funnel || {}, bf = m.booking_funnel || {};
+              const pct = (a, b) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '—');
+              const Funnel = ({ title, steps }) => (
+                <div className="mt-3">
+                  <p className="text-[11px] font-semibold text-[#6b7d96] mb-1.5">{title}</p>
+                  {steps.map(([label, n], i) => (
+                    <div key={label} className="flex items-center justify-between text-[12.5px] py-1">
+                      <span className="text-[rgba(234,241,248,0.72)]">{label}</span>
+                      <span className="text-[#EAF1F8] font-semibold tabular-nums">
+                        {n}
+                        {i > 0 && <span className="text-[#6b7d96] font-normal ml-2">{pct(n, steps[i - 1][1])}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+              const noResults = m.no_results || [];
+              const total = (m.daily || []).reduce((t, r) => t + (r.n || 0), 0);
+              return (
+                <>
+                  {total === 0 && (
+                    <p className="text-xs text-[rgba(234,241,248,0.55)] mt-3">
+                      No events yet. They start arriving as soon as this build is live and somebody searches.
+                    </p>
+                  )}
+                  <Funnel title="Locked gem → Premium" steps={[
+                    ['Saw a locked gem', pf.gem_locked_view || 0],
+                    ['Opened the paywall', pf.premium_paywall_view || 0],
+                    ['Paid', pf.premium_paid || 0]]}/>
+                  <Funnel title="Listing → booking" steps={[
+                    ['Viewed a listing', bf.listing_view || 0],
+                    ['Started a booking', bf.booking_start || 0],
+                    ['Paid', bf.booking_paid || 0]]}/>
+
+                  {/* The free → paid funnel. The tap comes from app_events; the
+                      booking comes from bookings.from_hotspot, written
+                      server-side, because a client event after a Stripe
+                      redirect is lost every time somebody closes the receipt
+                      tab — which is exactly when a booking is most complete. */}
+                  {metrics.hotspot && (
+                    <div className="mt-4">
+                      <p className="text-[11px] font-semibold text-[#6b7d96] mb-1.5">Free spot → paid booking</p>
+                      <div className="flex items-center justify-between text-[12.5px] py-1">
+                        <span className="text-[rgba(234,241,248,0.72)]">Tapped through to a paid space</span>
+                        <span className="text-[#EAF1F8] font-semibold tabular-nums">
+                          {(m.daily || []).filter(r => r.event_name === 'hotspot_to_booking_tap')
+                            .reduce((t, r) => t + (r.n || 0), 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[12.5px] py-1">
+                        <span className="text-[rgba(234,241,248,0.72)]">Paid bookings that started at a free spot</span>
+                        <span className="text-[#5BE7DA] font-semibold tabular-nums">
+                          {metrics.hotspot.paidFromHotspot}
+                          <span className="text-[#6b7d96] font-normal"> of {metrics.hotspot.paidTotal}</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* The one panel here meant to be acted on rather than watched:
+                      every place somebody looked and found nothing to book. */}
+                  <div className="mt-4">
+                    <p className="text-[11px] font-semibold text-[#6b7d96] mb-1.5">
+                      Searched, nothing to book — the supply list
+                    </p>
+                    {noResults.length === 0 ? (
+                      <p className="text-xs text-[rgba(234,241,248,0.5)]">Nothing yet.</p>
+                    ) : noResults.slice(0, 25).map((r, i) => (
+                      <div key={i} className="flex items-center justify-between text-[12.5px] py-1 border-t border-white/5">
+                        <span className="text-[rgba(234,241,248,0.72)] truncate pr-3">{r.query}</span>
+                        <span className="text-[#5BE7DA] font-semibold tabular-nums flex-shrink-0">
+                          {r.sessions}<span className="text-[#6b7d96] font-normal"> people</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
           {/* Client-side check — shows even if the server endpoint can't load,
               which is exactly the case when Supabase isn't configured. */}
           {!isSupabaseEnabled && (
@@ -7413,6 +8219,16 @@ const AdminOverlay = ({ onClose }) => {
                   <Row ok={e.contactEmail} label={`CONTACT_EMAIL${e.contactEmailMasked?` · ${e.contactEmailMasked}`:''}`} hint="Not set — the app has nowhere to deliver signup/listing alerts." />
                   <Row ok={e.emailFromCustom} label={`EMAIL_FROM · ${e.emailFrom}`} hint="Using Resend's shared test sender — it ONLY delivers to your own Resend account email. Verify parkeasy.uk in Resend and set EMAIL_FROM to noreply@parkeasy.uk to reach everyone." />
                   <Row ok={e.serviceKey} label="SUPABASE_SERVICE_ROLE_KEY" hint="Not set — user counts & the signups list below stay empty. Supabase → Settings → API → service_role." />
+                  {/* Three rows and not one, because "push is broken" has
+                      three different causes and only one of them is visible
+                      from the app: a mismatched pair delivers nothing while
+                      every screen says alerts are on. See docs/push.md. */}
+                  <Row ok={e.pushKeys} label="VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY"
+                    hint="Not set — the app cannot send a notification to anybody. Run `npx web-push generate-vapid-keys` and add both to Vercel." />
+                  <Row ok={e.pushClientKey} label="VITE_VAPID_PUBLIC_KEY"
+                    hint="Not set — no browser can subscribe, so the send list stays empty. Set it to the SAME public key and redeploy (a VITE_ variable is baked into the build)." />
+                  <Row ok={e.pushKeysMatch} label="Push keys match"
+                    hint="VAPID_PUBLIC_KEY and VITE_VAPID_PUBLIC_KEY are different keys. Browsers subscribe with one and we sign with the other, so every push is rejected 403 and nothing is delivered — while the app still says alerts are on." />
                 </div>
                 <button onClick={sendTestEmail} disabled={testing}
                   className="mt-3 w-full py-2.5 rounded-xl font-bold text-xs text-[#06231f] btn-teal disabled:opacity-50">
@@ -7837,9 +8653,13 @@ const AdminOverlay = ({ onClose }) => {
           <div>
             <h3 className="font-display font-bold text-[13px] text-[#EAF1F8] uppercase tracking-widest mb-2.5">App data</h3>
             <div className="grid grid-cols-3 gap-2">
-              <Tile label="Parking spots" value={ALL_SPOTS.length} accent="#5BE7DA"/>
-              <Tile label="Hidden gems" value={ALL_SPOTS.filter(s=>s.badge==='hidden_gem').length} accent="#C9A7FF"/>
-              <Tile label="Towns covered" value={CITIES.length}/>
+              {/* The same numbers the homepage prints. These used to count the
+                  bundled arrays — 744 spots, 89 gems — which is the fallback
+                  list, not what the app serves. The gems figure in particular
+                  was 89 while the live table held 133. */}
+              <Tile label="Parking spots" value={adminStats.spaces} accent="#5BE7DA"/>
+              <Tile label="Hidden gems" value={adminStats.gems} accent="#C9A7FF"/>
+              <Tile label="Towns covered" value={adminStats.towns}/>
             </div>
           </div>
           <div className="text-[12px] leading-relaxed text-[#8da2bd] bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5">
@@ -8499,7 +9319,11 @@ export default function App() {
   // in one place. Closing passes null and is deliberately not an open.
   const openSpot = useCallback((sp) => {
     if (sp) {
-      trackSpotOpen(sp.badge);
+      // track() mirrors this to funnel.js's trackSpotOpen, so the Vercel
+      // dashboard keeps counting exactly what it counted before.
+      track(sp.rental ? 'listing_view' : 'gem_view',
+        { kind: sp.badge || 'unknown' },
+        { listingId: sp.listing?.id || null, town: sp.town || null });
       // The top of the free → paid funnel. Only free spots are in it; a paid
       // council car park is already somebody's paid choice.
       if (['free', 'hidden_gem'].includes(sp.badge)) {
@@ -8515,6 +9339,11 @@ export default function App() {
   const [isPremium,     setIsPremium]     = useState(()=>ls.get('pe_premium', false) || ls.get('pe_premium_until', 0) > Date.now());
   const [rewardUntil,   setRewardUntil]   = useState(null);   // timestamp → shows the congrats sheet
   const [showPricing,   setShowPricing]   = useState(false);
+  // The paywall opens from a dozen places — a locked gem card, the map popup,
+  // the row item, the user menu, the events overlay. Counting it here rather
+  // than at each of those is what makes gem_locked_view → premium_paywall_view
+  // → premium_paid a funnel instead of a dozen unrelated numbers.
+  useEffect(() => { if (showPricing) track('premium_paywall_view'); }, [showPricing]);
   const [infoPage,      setInfoPage]      = useState(null);
   const [cookieChoice,  setCookieChoice]  = useState(()=>ls.get('pe_cookie', null));
   const [detailSpot,    setDetailSpot]    = useState(null);
@@ -8933,6 +9762,11 @@ export default function App() {
     if (p.get('premium') === 'success') {
       setIsPremium(true);
       ls.set('pe_premium', true);
+      // Only here. The VIP list, the gem-approval reward and promo codes all
+      // call setIsPremium too, and counting those as premium_paid would put
+      // free grants in the conversion rate that decides whether the paywall
+      // works.
+      track('premium_paid');
       window.history.replaceState({}, '', window.location.pathname);
     }
     // Hidden-gem reward: when a community spot is approved, the founder emails
@@ -8991,9 +9825,26 @@ export default function App() {
       // anybody decides on; this is the analytics counterpart, and it is
       // cleared either way so one comparison card cannot claim a second
       // booking made later in the same tab.
-      if (cameFromHotspot()) trackBookingFromHotspot();
+      if (cameFromHotspot()) { trackBookingFromHotspot(); track('hotspot_to_booking_tap', { stage: 'paid' }); }
+      track('booking_paid', { from_hotspot: cameFromHotspot() ? 'yes' : 'no' });
       clearHotspotOrigin();
       setFlash({ tone: 'ok', msg: `✅ Booking confirmed — your payment went through.${reg ? ` Vehicle ${reg} — check it's right in Your bookings.` : ''}` });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (booking === 'requested') {
+      // A driveway. The card is AUTHORISED and the host has not agreed yet, so
+      // this must not say "confirmed" or "your payment went through" — both
+      // would be false, and the second one is the sort of false that arrives as
+      // a chargeback.
+      const reg = ls.get('pe_vehicle_reg', '') || '';
+      // No track() call here on purpose. A request is already recorded as
+      // bookings.status = 'awaiting_host', which survives a closed tab and can
+      // be joined to whether the host accepted — a client event on the return
+      // from Stripe can do neither, and adding an event name means a migration
+      // to widen log_app_event's allowlist for a worse version of a number the
+      // database already holds.
+      setFlash({ tone: 'warn', msg: `⏳ Request sent to the host — you have NOT been charged yet. `
+        + `We'll take the payment only if they accept, and release the hold if they don't.`
+        + `${reg ? ` Vehicle ${reg}.` : ''}` });
       window.history.replaceState({}, '', window.location.pathname);
     } else if (booking === 'cancelled') {
       setFlash({ tone: 'warn', msg: 'Booking cancelled — you weren’t charged.' });
@@ -9139,6 +9990,8 @@ export default function App() {
   const toggleHeading = (spot, on) => {
     const k = String(spot.id);
     reportOccupancy(spot.id, on ? 'start' : 'end', currentCity.id, 'heading');
+    // Only the 'on' tap is an event. Cancelling is not a second signal.
+    if (on) track('heading_tap', { kind: spot.badge || 'unknown' }, { town: currentCity.name });
     // Optimistic, so the badge and the button move on the tap rather than on
     // the next 60-second poll.
     setHeading(h => {
@@ -9161,6 +10014,7 @@ export default function App() {
     // Tell the next driver this one is taken. Optimistically bump the local
     // count too, so the badge appears immediately rather than after the poll.
     reportOccupancy(spot.id, 'start', currentCity.id);
+    track('parked_tap', { kind: spot.badge || 'unknown' }, { town: currentCity.name });
     setOccupancy(o => ({ ...o, [String(spot.id)]: (o[String(spot.id)] || 0) + 1 }));
     // Arriving supersedes being on the way. Without this the same driver would
     // be counted twice on one spot — once as parked, once as still coming.

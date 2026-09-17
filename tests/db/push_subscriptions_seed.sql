@@ -1,0 +1,15 @@
+-- Supabase's default privileges, which the test cluster does not have.
+--
+-- A hosted Supabase project ships with
+--
+--   alter default privileges in schema public grant all on tables to anon, authenticated;
+--
+-- so EVERY new table in public is granted to both roles the moment it is
+-- created. That is why push_subscriptions ends with a `revoke all`, and it is
+-- also why the test that asserts the revoke worked passes on nothing without
+-- this file: on a bare cluster the grants were never there to begin with, so
+-- deleting the revoke line changes neither the grants nor the test result — and
+-- the table would go to production readable and writable by anonymous callers.
+--
+-- Applied before the migration, so the migration's revoke has something to do.
+alter default privileges in schema public grant all on tables to anon, authenticated;

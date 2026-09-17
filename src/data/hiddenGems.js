@@ -117,7 +117,7 @@ export async function fetchGemStats() {
   try {
     const { data, error } = await supabase
       .from('hidden_gem_stats')
-      .select('published,verified,towns')
+      .select('published,verified,towns,published_ni,towns_ni')
       .maybeSingle();
     if (error) throw error;
     return data || null;

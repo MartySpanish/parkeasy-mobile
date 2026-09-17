@@ -1,4 +1,4 @@
-import { cameFromHotspot } from './funnel';
+import { hotspotOriginSpot, cameFromHotspot } from './funnel';
 // API helper. The serverless functions (/api/notify, /api/admin) only run on
 // Vercel hosting. parkeasy.uk currently serves the static build from GitHub
 // Pages, where those paths 404 — so every API call tries same-origin first
@@ -87,11 +87,39 @@ export async function createBookingSession({ listingId, durationHours, startsAt,
       // records it server-side. A client analytics event fired after the Stripe
       // redirect is lost whenever somebody closes the tab on the receipt page.
       fromHotspot: cameFromHotspot(),
+      // WHICH free spot. Without this the boolean above can say a booking came
+      // from a hotspot but not which one, so nobody can tell which gems are
+      // actually producing bookings.
+      fromHotspotSpotId: hotspotOriginSpot(),
     }),
   });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.url) throw new Error(d.error || 'Could not start checkout');
+  if (!r.ok || !d.url) {
+    // The CODE, not just the sentence. Without it errors.js cannot tell one of
+    // our own refusals — "this host hasn't set up payouts" — from a card
+    // decline, and it used to show card advice for both.
+    const err = new Error(d.error || 'Could not start checkout');
+    if (d.code) err.code = d.code;
+    throw err;
+  }
   return d.url;
+}
+
+/**
+ * Whether a listing can actually take a booking, asked before the Pay button
+ * is offered. Returns { bookable, reason, message }; bookable is null when the
+ * question could not be answered, which must never be treated as "no" — the
+ * flow still works, it just refuses later with an honest message.
+ */
+export async function fetchBookable(listingId) {
+  try {
+    const r = await apiFetch(`/api/listings/bookable?listingId=${encodeURIComponent(listingId)}`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok && r.status !== 404) return { bookable: null, reason: 'unknown' };
+    return { bookable: d.bookable ?? null, reason: d.reason || null, message: d.message || null };
+  } catch {
+    return { bookable: null, reason: 'unknown' };
+  }
 }
 
 // Buy a season/bundle pass → returns the Stripe Checkout URL.

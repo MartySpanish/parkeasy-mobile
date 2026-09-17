@@ -11,6 +11,9 @@
 // The generator already refuses to write a file that leaks. This checks the
 // file that was actually written, because the two can drift.
 import assert from 'node:assert/strict';
+import { inNorthernIreland } from '../../src/regions.js';
+import { readFileSync as _rf } from 'node:fs';
+const read = p => _rf(new URL(p, import.meta.url), 'utf8');
 import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
@@ -51,10 +54,37 @@ it('ordinary spots ARE named, or the page cannot be searched', () => {
     `only ${named}/${ordinary.length} ordinary spots are named — search would be useless`);
 });
 
-it('the stats are counted, not typed', () => {
-  assert.equal(data.stats.spaces, data.spaces.length);
-  assert.equal(data.stats.gems, gems.length);
-  assert.equal(data.stats.towns, new Set(data.spaces.map(s => s.town)).size);
+it('the headline total and the "including N gems" clause describe one set', () => {
+  // THE BUG THIS GUARDS. spaces.length holds the BUNDLED gems, which the app
+  // swaps out at runtime for the live ones. Publishing spaces.length beside a
+  // live gem count produces "744 spots including 133 hidden gems" — a sentence
+  // whose own second clause contradicts it, since 744 contains 89 gems.
+  const nonGem = data.spaces.filter(s => s.t !== 'gem').length;
+  assert.equal(data.stats.spaces, nonGem + data.stats.gems,
+    'the total is not non-gem spots plus the real gem count');
+
+  // AND THE SOURCE, because the data check above cannot see this on its own.
+  // When the build cannot reach Supabase the gem count falls back to the
+  // bundled one, and then nonGem + gems == spaces.length exactly — so a
+  // generator rewritten to publish spaces.length passes locally and ships the
+  // contradiction only from Vercel, where the live count differs. That
+  // mutation was tried and got through, which is why this line exists.
+  const generator = read('../../scripts/generate-globe-data.mjs');
+  assert.match(generator, /spaces: nonGemSpaces \+ gemTotal,/,
+    'the generator publishes a raw array length as the headline total again');
+  assert.equal(data.stats.spacesBundled, data.spaces.length,
+    'spacesBundled no longer matches the dots actually drawn');
+
+  // The Northern Ireland subset, still recorded even though the copy names all
+  // three territories.
+  const ni = data.spaces.filter(s => inNorthernIreland({ lat: s.c[1], lng: s.c[0], town: s.town }));
+  assert.equal(data.stats.spacesNi, ni.length, 'stats.spacesNi is not the NI subset');
+  assert.ok(data.stats.spacesNi < data.stats.spacesBundled,
+    'the NI subset equals the whole bundle — the filter is not being applied');
+
+  assert.ok(Number.isInteger(data.stats.gems) && data.stats.gems > 0,
+    'stats.gems is not a counted number');
+
   // 85% is in signed host agreements. It does not move on a marketing page.
   assert.equal(data.stats.hostShare, 85);
 });

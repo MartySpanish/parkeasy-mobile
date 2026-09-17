@@ -13,6 +13,7 @@
 //
 // The price is ALWAYS read from the DB, never from the client. TEST MODE ONLY.
 import Stripe from 'stripe';
+import { payoutReadiness } from '../_payouts.js';
 import { MIN_BOOKING_PENCE, priceBreakdown } from '../_pricing.js';
 
 const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
@@ -31,7 +32,7 @@ function applyCors(req, res) {
 
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed', code: 'bad_method' });
 
   const KEY = process.env.STRIPE_SECRET_KEY;
   const URL_ = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -39,13 +40,13 @@ export default async function handler(req, res) {
   const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const APP_URL = process.env.APP_URL || 'https://parkeasy.uk';
 
-  if (!KEY) return res.status(500).json({ error: 'Stripe not configured (STRIPE_SECRET_KEY)' });
+  if (!KEY) return res.status(500).json({ error: 'Stripe not configured (STRIPE_SECRET_KEY)', code: 'stripe_unconfigured' });
   if (!KEY.startsWith('sk_test_') && process.env.STRIPE_LIVE_ENABLED !== 'true') {
     console.error('checkout BLOCKED: live STRIPE_SECRET_KEY but STRIPE_LIVE_ENABLED is not "true". '
       + 'Set STRIPE_LIVE_ENABLED=true in the Vercel project to take live bookings.');
-    return res.status(403).json({ error: 'Card payments aren’t switched on just yet. Nothing has been charged — please try again shortly.' });
+    return res.status(403).json({ error: 'Card payments aren’t switched on just yet. Nothing has been charged — please try again shortly.', code: 'payments_off' });
   }
-  if (!URL_ || !SERVICE) return res.status(500).json({ error: 'Supabase not configured' });
+  if (!URL_ || !SERVICE) return res.status(500).json({ error: 'Supabase not configured', code: 'backend_unconfigured' });
 
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
   // Recurring bookings: same slot, weekly, paid once up front. Each week is
   // still an ordinary booking row (same cancellation rules per occurrence).
   const repeatWeeks = Math.max(1, Math.min(12, parseInt(body?.repeatWeeks || 1, 10)));
-  if (!listingId) return res.status(400).json({ error: 'Missing listingId' });
+  if (!listingId) return res.status(400).json({ error: 'Missing listingId', code: 'missing_listing' });
 
   // Vehicle registration — the host uses this to match a car to a paid booking.
   // Normalised uppercase without separators so 'ab12 cde' and 'AB12CDE' compare
@@ -68,10 +69,10 @@ export default async function handler(req, res) {
   // client — the button being disabled is a courtesy, not a control.
   const vehicleReg = String(body?.vehicleReg || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
   if (!vehicleReg) {
-    return res.status(400).json({ error: 'Please enter your vehicle registration so the host knows it’s you when you arrive.' });
+    return res.status(400).json({ error: 'Please enter your vehicle registration so the host knows it’s you when you arrive.', code: 'reg_required' });
   }
   if (vehicleReg.length < 2) {
-    return res.status(400).json({ error: 'That vehicle registration looks too short — please check it.' });
+    return res.status(400).json({ error: 'That vehicle registration looks too short — please check it.', code: 'reg_too_short' });
   }
 
   // Optional driver identity (guest checkout is allowed per Terms §3.1).
@@ -89,8 +90,8 @@ export default async function handler(req, res) {
   try {
     const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${encodeURIComponent(listingId)}&select=*`, { headers: svc });
     const listing = (await lr.json())?.[0];
-    if (!listing) return res.status(404).json({ error: 'Listing not found' });
-    if (listing.status !== 'active') return res.status(400).json({ error: 'This listing is not currently bookable' });
+    if (!listing) return res.status(404).json({ error: 'Listing not found', code: 'not_found' });
+    if (listing.status !== 'active') return res.status(400).json({ error: 'This listing is not currently bookable', code: 'not_active' });
 
     // Day-priced sites. Belfast Royal Academy is £15 per vehicle per day for a
     // fixed 8am–5pm window — there is no hourly rate and there shouldn't be:
@@ -108,7 +109,7 @@ export default async function handler(req, res) {
     const hasHour = Number(listing.price_per_hour) > 0;
     const hasDay  = Number(listing.price_per_day)  > 0;
     if (!hasHour && !hasDay) {
-      return res.status(400).json({ error: 'This listing has no price set' });
+      return res.status(400).json({ error: 'This listing has no price set', code: 'no_price' });
     }
     // Only a listing that HAS a day rate can be booked by the day, and a
     // listing with no hourly rate can only ever be booked by the day.
@@ -116,16 +117,24 @@ export default async function handler(req, res) {
     const dayPriced = hasDay && (!hasHour || wantsDay);
     let pricePerHour = Number(listing.price_per_hour);
     let pricePerDay  = Number(listing.price_per_day);
+    // Set when a per-date override applies, and shown on the checkout line.
+    let overrideLabel = null;
 
     // Event pricing: a per-date override replaces the base hourly price.
     if (startsAt) {
       try {
         const dateStr = String(startsAt).slice(0, 10);
-        const ovr = await fetch(`${URL_}/rest/v1/listing_price_overrides?listing_id=eq.${listing.id}&override_date=eq.${dateStr}&select=price_pence`, { headers: svc });
+        const ovr = await fetch(`${URL_}/rest/v1/listing_price_overrides?listing_id=eq.${listing.id}&override_date=eq.${dateStr}&select=price_pence,label`, { headers: svc });
         const o = ovr.ok ? (await ovr.json())?.[0] : null;
         if (o?.price_pence > 0) {
           if (dayPriced) pricePerDay = o.price_pence / 100;
           else pricePerHour = o.price_pence / 100;
+          // What the driver is told this is for. A higher price with no
+          // explanation reads as a mistake or a sting; "Event pricing — Ulster
+          // v Leinster" reads as a matchday, which is what it is. Snapshotted
+          // on the override, so renaming the event later cannot change what
+          // somebody was charged for.
+          overrideLabel = o.label || null;
         }
       } catch { /* fall back to base price */ }
     }
@@ -148,30 +157,22 @@ export default async function handler(req, res) {
     // ParkEasy and a human has to send the operator their share. What is owed
     // is snapshotted onto the booking below and totalled in
     // public.booking_settlements. Nothing else will remind anyone.
-    const invoiceMode = listing.payout_mode === 'invoice';
-    let host = null;
-    if (invoiceMode) {
-      // The share is a negotiated commercial term with no sensible default, so
-      // an invoice-mode listing missing it is a configuration mistake, not a
-      // reason to guess. The DB constraint should have stopped this; refuse
-      // rather than take money we cannot account for.
-      if (listing.operator_share_pct == null) {
-        return res.status(409).json({ error: 'This car park isn’t set up for payouts yet, so it can’t be booked. Please try again later.' });
-      }
-    } else {
-      // The host must have completed Connect onboarding (transfers active).
-      const hr = await fetch(`${URL_}/rest/v1/host_accounts?host_id=eq.${listing.owner_id}&select=*`, { headers: svc });
-      host = (await hr.json())?.[0];
-      if (!host?.stripe_account_id || !host.transfers_active) {
-        return res.status(409).json({ error: 'This host hasn’t finished setting up payouts yet, so the space can’t be booked.' });
-      }
+    // The gate itself lives in api/_payouts.js, because the booking panel asks
+    // the same question before it offers a Pay button. One rule, two callers:
+    // the alternative is a screen that says "Pay £6.99" over an endpoint that
+    // has already decided it cannot.
+    const payouts = await payoutReadiness(listing, { url: URL_, svc });
+    const invoiceMode = payouts.invoiceMode;
+    const host = payouts.host;
+    if (!payouts.ok) {
+      return res.status(409).json({ error: payouts.message, code: payouts.code });
     }
 
     // Double-booking prevention. A start time is required so we can check the
     // requested window against existing bookings for this listing.
-    if (!startsAt) return res.status(400).json({ error: 'Please choose a start date and time' });
+    if (!startsAt) return res.status(400).json({ error: 'Please choose a start date and time', code: 'start_required' });
     const startMs = Date.parse(startsAt);
-    if (Number.isNaN(startMs)) return res.status(400).json({ error: 'Invalid start time' });
+    if (Number.isNaN(startMs)) return res.status(400).json({ error: 'Invalid start time', code: 'start_invalid' });
     const spaces = Math.max(1, listing.spaces || 1);
     const PENDING_TTL_MS = 30 * 60000;
     const now = Date.now();
@@ -222,18 +223,18 @@ export default async function handler(req, res) {
           const pretty = new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
 
           if (blocked.has(day)) {
-            return res.status(400).json({ error: `This car park is closed on ${pretty}. Please pick a different date.` });
+            return res.status(400).json({ error: `This car park is closed on ${pretty}. Please pick a different date.`, code: 'closed_that_day' });
           }
           if (from && day < from) {
             const fromPretty = new Date(`${from}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
-            return res.status(400).json({ error: `This car park isn’t taking bookings until ${fromPretty}.` });
+            return res.status(400).json({ error: `This car park isn’t taking bookings until ${fromPretty}.`, code: 'before_window' });
           }
           if (until && day > until) {
             const untilPretty = new Date(`${until}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
-            return res.status(400).json({ error: `This car park isn’t taking bookings after ${untilPretty}.` });
+            return res.status(400).json({ error: `This car park isn’t taking bookings after ${untilPretty}.`, code: 'after_window' });
           }
           if (allowed && !allowed.has(iso) && !extra.has(day)) {
-            return res.status(400).json({ error: `This car park isn’t open on ${names[iso - 1]} ${pretty}. Please pick a different date.` });
+            return res.status(400).json({ error: `This car park isn’t open on ${names[iso - 1]} ${pretty}. Please pick a different date.`, code: 'closed_that_day' });
           }
         }
       }
@@ -252,6 +253,7 @@ export default async function handler(req, res) {
           error: repeatWeeks > 1
             ? `Week ${i + 1} of that repeat is already booked. Try a different time, or fewer weeks.`
             : 'That time is already booked. Try a different time or duration.',
+          code: 'slot_taken',
         });
       }
       occurrences.push({ starts_at: s0, ends_at: e0 });
@@ -272,6 +274,7 @@ export default async function handler(req, res) {
       const needHours = Math.ceil(MIN_BOOKING_PENCE / Math.max(1, Math.round(pricePerHour * 100)));
       return res.status(400).json({
         error: `Minimum booking is £${(MIN_BOOKING_PENCE / 100).toFixed(2)}. At £${pricePerHour.toFixed(2)}/hr that's ${needHours} hour${needHours !== 1 ? 's' : ''} — please book a bit longer.`,
+        code: 'below_minimum',
       });
     }
 
@@ -327,10 +330,45 @@ export default async function handler(req, res) {
     // from_hotspot: whether this booking started at a free spot. Stripe metadata
     // values are strings, so it is read back with === 'true' below.
     const fromHotspot = body?.fromHotspot === true || body?.fromHotspot === 'true';
+    // WHICH free spot sent them. Same text shape as spot_occupancy.spot_id — a
+    // gem's legacy id, or 'rental-<uuid>' — so a booking joins back to the gem.
+    // Bounded and stripped: it is a client-supplied string that lands in a
+    // column the admin screen groups by.
+    const fromHotspotSpotId = fromHotspot
+      ? (String(body?.fromHotspotSpotId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || null)
+      : null;
+    // ── Does this space need the host to say yes first? ────────────────────
+    //
+    // A club car park with forty spaces is instant. Somebody's driveway is a
+    // REQUEST: the host may have a car in it, be away, or simply not want that
+    // person that day, and a host who cannot say no has not agreed to anything.
+    //
+    // THE MONEY. capture_method 'manual' AUTHORISES the card here and captures
+    // only when the host accepts. Nothing is taken for a booking that is
+    // refused — no charge, no refund, no five-day wait for it to come back.
+    //
+    // Authorisations lapse after about a week, which sounds like it rules this
+    // out for a booking three weeks ahead. It does not: the hold only has to
+    // survive until the HOST ANSWERS, which is capped at 24 hours below, not
+    // until the parking date. Capture happens on acceptance and the booking
+    // then behaves like any other.
+    const needsApproval = listing.requires_host_approval === true;
+    // The sooner of 24 hours and the start time. A request for a space in three
+    // hours cannot sit for a day, and nobody should be left holding an
+    // authorisation for a slot that has already begun.
+    const firstStart = occurrences[0]?.starts_at ? Date.parse(occurrences[0].starts_at) : null;
+    const approvalDeadline = needsApproval
+      ? new Date(Math.min(now + 24 * 3600000, firstStart || Infinity)).toISOString()
+      : null;
+
     const meta = {
       listing_id: listing.id, host_id: listing.owner_id,
       duration: String(durationHours), weeks: String(repeatWeeks),
       from_hotspot: String(fromHotspot),
+      from_hotspot_spot: fromHotspotSpotId || '',
+      // Read by the webhook, which decides between 'paid' and 'awaiting_host'
+      // without having to re-read the listing (which may have changed).
+      needs_approval: String(needsApproval),
     };
 
     const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });
@@ -339,7 +377,7 @@ export default async function handler(req, res) {
       payment_method_types: ['card'],
       customer_email: driver?.email || undefined,
       line_items: [
-        { price_data: { currency: 'gbp', product_data: { name: repeatWeeks > 1 ? `Parking — ${listing.title || 'space'} (${repeatWeeks} weekly bookings)` : `Parking — ${listing.title || 'space'}`, description: listing.address || undefined }, unit_amount: bookingPricePence }, quantity: 1 },
+        { price_data: { currency: 'gbp', product_data: { name: repeatWeeks > 1 ? `Parking — ${listing.title || 'space'} (${repeatWeeks} weekly bookings)` : `Parking — ${listing.title || 'space'}`, description: overrideLabel || listing.address || undefined }, unit_amount: bookingPricePence }, quantity: 1 },
         { price_data: { currency: 'gbp', product_data: { name: eventDay ? 'Driver service fee (event day)' : 'Driver service fee' }, unit_amount: SERVICE_FEE_PENCE }, quantity: 1 },
         // Itemised so the driver sees exactly what the extra is for, and that
         // it belongs to the site rather than to us.
@@ -359,15 +397,23 @@ export default async function handler(req, res) {
       // destination, no application fee. Stripe rejects both on a charge with
       // no connected account, and there is nowhere for them to point anyway.
       payment_intent_data: invoiceMode
-        ? { metadata: meta }
+        ? { metadata: meta, ...(needsApproval ? { capture_method: 'manual' } : {}) }
         : {
             application_fee_amount: applicationFeePence,
             transfer_data: { destination: host.stripe_account_id },
             metadata: meta,
+            // Authorise now, capture when the host accepts. The application fee
+            // and the transfer to the host both happen at capture, so a
+            // declined request moves no money at all.
+            ...(needsApproval ? { capture_method: 'manual' } : {}),
           },
       metadata: meta,
       expires_at: Math.floor(now / 1000) + 30 * 60,   // hold the slot for 30 min max
-      success_url: `${APP_URL}/?booking=success&session_id={CHECKOUT_SESSION_ID}`,
+      // The return page has to say something different for a request: nothing
+      // has been charged and the host has not agreed yet. Carried in the URL
+      // rather than looked up, so the message is right on the first paint
+      // instead of after a round-trip.
+      success_url: `${APP_URL}/?booking=${needsApproval ? 'requested' : 'success'}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/?booking=cancelled`,
     });
 
@@ -396,6 +442,12 @@ export default async function handler(req, res) {
       // Null under invoice mode, and that is the flag the refund path reads:
       // no destination means no transfer to reverse.
       stripe_destination: host?.stripe_account_id || null, status: 'pending',
+      // Snapshotted, like payout_mode below and for the same reason: a host
+      // turning approval off next month must not retroactively change the rules
+      // of a booking already taken, and turning it on must not strand one that
+      // was sold as instant.
+      requires_host_approval: needsApproval,
+      approval_deadline: i === 0 ? approvalDeadline : null,
       // Snapshotted, not looked up later. A listing's payout mode and the
       // operator's share can both change; what was owed on a booking already
       // taken cannot.
@@ -406,6 +458,9 @@ export default async function handler(req, res) {
       // is one conversion from one comparison card, and counting it seven times
       // would flatter the funnel it exists to measure.
       from_hotspot: i === 0 ? fromHotspot : false,
+      // On the first occurrence only, same rule as the money: one comparison
+      // card produced one conversion, not seven.
+      from_hotspot_spot_id: i === 0 ? fromHotspotSpotId : null,
       recurrence_group: recurrenceGroup, recurrence_index: i,
     }));
     // The response here was previously ignored. If the insert failed we still
@@ -421,7 +476,7 @@ export default async function handler(req, res) {
       // this insert. That's a race we can only lose at write time, so report it
       // as "just taken" rather than a server error.
       if (/23P01|bookings_no_overlap/.test(detail)) {
-        return res.status(409).json({ error: 'That slot was just taken by another driver. Pick a different time — you haven’t been charged.' });
+        return res.status(409).json({ error: 'That slot was just taken by another driver. Pick a different time — you haven’t been charged.', code: 'slot_taken' });
       }
       // Degrade rather than block if the vehicle_reg migration hasn't been
       // applied yet: retry once without the column. A booking that records
@@ -433,13 +488,18 @@ export default async function handler(req, res) {
       }
       if (!ins.ok) {
         console.error('bookings insert failed', ins.status, detail.slice(0, 400));
-        return res.status(502).json({ error: 'We couldn’t hold that booking just now — nothing has been charged. Please try again in a moment.' });
+        return res.status(502).json({ error: 'We couldn’t hold that booking just now — nothing has been charged. Please try again in a moment.', code: 'hold_failed' });
       }
     }
 
     return res.status(200).json({ url: session.url });
   } catch (e) {
     console.error('checkout/create-session', e);
+    // NO code, deliberately. e.message here is whatever threw — a Stripe error,
+    // a PostgREST error, a TypeError — and none of those are written for a
+    // driver. errors.js only shows a server sentence when the server NAMED the
+    // refusal, so leaving this unnamed is what keeps a raw Stripe string off
+    // the screen and falls back to the generic copy.
     return res.status(500).json({ error: e.message || 'Could not start checkout' });
   }
 }

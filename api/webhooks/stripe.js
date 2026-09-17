@@ -82,6 +82,33 @@ const BLOCK_STATUS_FOR = {
   canceled: 'cancelled', incomplete_expired: 'cancelled',
 };
 
+// ── Partner subscriptions (F3) ──────────────────────────────────────────────
+//
+// A partner pays £25 or £60 a month for a card. The tier travels in the
+// subscription's metadata, set when the checkout link is created, rather than
+// being inferred from the price id — a price can be swapped or duplicated in
+// the Stripe dashboard, and a partner silently dropping from sponsored to
+// featured because somebody made a new price is the kind of bug nobody finds
+// until the partner does.
+const PARTNER_GRACE_DAYS = 7;
+
+async function partnerForSubscription(svc, URL_, subscriptionId) {
+  if (!subscriptionId) return null;
+  try {
+    const r = await fetch(`${URL_}/rest/v1/partners?stripe_subscription_id=eq.${encodeURIComponent(subscriptionId)}&select=*`, { headers: svc });
+    if (!r.ok) return null;
+    return (await r.json())?.[0] || null;
+  } catch { return null; }
+}
+
+async function patchPartner(svc, URL_, partnerId, patch) {
+  const r = await fetch(`${URL_}/rest/v1/partners?id=eq.${encodeURIComponent(partnerId)}`, {
+    method: 'PATCH', headers: svc, body: JSON.stringify(patch),
+  });
+  if (!r.ok) console.error('partner patch failed', partnerId, r.status, await r.text().catch(() => ''));
+  return r.ok;
+}
+
 async function syncCorporateBlock(svc, URL_, blockId, patch) {
   await fetch(`${URL_}/rest/v1/corporate_permit_blocks?id=eq.${encodeURIComponent(blockId)}`, {
     method: 'PATCH', headers: svc,
@@ -228,6 +255,75 @@ async function markBooking(svc, URL_, sessionId, patch) {
 }
 
 // Booking confirmation emails (driver + host + founder), via Resend. Best-effort.
+// A driveway host has a request waiting, and a driver is holding an
+// authorisation that lapses in 24 hours. Both need telling, and the host needs
+// the two buttons in the email itself — a host who has to find the app, log in
+// and hunt for a queue is a host who answers tomorrow.
+//
+// The links carry the booking's access_token, which is already how the
+// cancellation page authenticates without a login. Nothing in the email
+// identifies the driver beyond what the host needs to decide: when, how long,
+// and the plate.
+async function sendApprovalRequestEmails(svc, URL_, sessionId) {
+  const KEYR = process.env.RESEND_API_KEY;
+  const FROM = process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>';
+  const APP = process.env.APP_URL || 'https://parkeasy.uk';
+  if (!KEYR || !sessionId) return;
+
+  const br = await fetch(`${URL_}/rest/v1/bookings?stripe_session_id=eq.${encodeURIComponent(sessionId)}&select=*`, { headers: svc });
+  const b = (await br.json())?.[0];
+  if (!b) return;
+  let listing = null;
+  if (b.listing_id) {
+    const lr = await fetch(`${URL_}/rest/v1/rental_listings?id=eq.${b.listing_id}&select=title,address,contact_email,owner_email`, { headers: svc });
+    listing = (await lr.json())?.[0] || null;
+  }
+  const hostTo = listing?.contact_email || listing?.owner_email;
+  const when = b.starts_at
+    ? new Date(b.starts_at).toLocaleString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : 'a time to be confirmed';
+  const deadline = b.approval_deadline
+    ? new Date(b.approval_deadline).toLocaleString('en-GB', { timeZone: 'Europe/London', weekday: 'short', hour: '2-digit', minute: '2-digit' })
+    : 'in 24 hours';
+  const link = (answer) =>
+    `${APP}/api/bookings/respond?token=${encodeURIComponent(b.access_token)}&answer=${answer}`;
+
+  const send = async (to, subject, html) => {
+    if (!to) return;
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { Authorization: `Bearer ${KEYR}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: FROM, to: [to], bcc: bccFor([to]), subject, html }),
+      });
+      if (!r.ok) console.error('EMAIL FAILED', r.status, to, subject, await r.text().catch(() => ''));
+    } catch (e) { console.error('EMAIL FAILED', to, subject, String(e)); }
+  };
+
+  await send(hostTo, `Parking request — ${when}`,
+    `<p>Someone would like to park at <strong>${listing?.title || 'your space'}</strong>.</p>
+     <ul>
+       <li><strong>When:</strong> ${when}</li>
+       <li><strong>For:</strong> ${b.duration_hours || 1} hour(s)</li>
+       <li><strong>Vehicle:</strong> ${b.vehicle_reg || 'not given'}</li>
+     </ul>
+     <p><strong>Their card has been authorised, not charged.</strong> Nothing is taken
+        unless you accept, and nothing is taken at all if you say no.</p>
+     <p>
+       <a href="${link('accept')}" style="background:#2ED3C6;color:#06231f;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">Accept</a>
+       &nbsp;&nbsp;
+       <a href="${link('decline')}" style="background:#eee;color:#333;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">Decline</a>
+     </p>
+     <p style="color:#666;font-size:13px">If you do not answer by ${deadline} the request
+        lapses on its own and the driver is not charged.</p>`);
+
+  await send(b.driver_email, `Request sent — ${listing?.title || 'your parking'}`,
+    `<p>Your request for <strong>${listing?.title || 'the space'}</strong> on ${when} has gone to the host.</p>
+     <p><strong>You have not been charged.</strong> Your card is authorised only —
+        we take the payment if the host accepts, and release it if they do not.</p>
+     <p style="color:#666;font-size:13px">Most hosts answer within a few hours. If nobody
+        answers by ${deadline} the request lapses and the hold comes off automatically.</p>`);
+}
+
 async function sendBookingEmails(svc, URL_, sessionId) {
   const KEYR = process.env.RESEND_API_KEY;
   const FROM = process.env.EMAIL_FROM || 'ParkEasy <onboarding@resend.dev>';
@@ -407,6 +503,22 @@ export default async function handler(req, res) {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded': {
         const s = event.data.object;
+        // A partner subscribing to a card. MUST be handled before the Premium
+        // fallback below, which claims every session carrying neither a pass
+        // nor a listing — a barber paying £25 for a listing would otherwise be
+        // granted Premium instead.
+        //
+        // This is also the only moment the subscription id exists: in
+        // subscription mode Stripe creates it at payment, not when the checkout
+        // link is made, so the link endpoint has nothing to record and the
+        // webhook that fires on the first invoice would find no partner.
+        if (s.metadata?.partner_id) {
+          await patchPartner(svc, URL_, s.metadata.partner_id, {
+            stripe_subscription_id: s.subscription || null,
+            stripe_customer_id: s.customer || null,
+          });
+          break;
+        }
         if (!s.metadata?.pass_id && !s.metadata?.listing_id) {
           // No booking/pass metadata → a Premium purchase via a Stripe payment
           // link. Link it to the buyer's ParkEasy account by email so Premium
@@ -438,6 +550,21 @@ export default async function handler(req, res) {
               credits_remaining: parseInt(s.metadata.num_credits || '0', 10) || 0,
             }),
           }).catch(() => {});
+        } else if (s.metadata?.needs_approval === 'true') {
+          // A driveway. The card is AUTHORISED, not charged: this is a request
+          // until the host answers it, so the booking must not be marked paid
+          // and the driver must not get a confirmation for a space nobody has
+          // agreed to give them.
+          //
+          // The database refuses status 'paid' on an approval booking with no
+          // host_responded_at (bookings_host_approval_chk), so a future edit
+          // that sends this down the wrong branch fails loudly rather than
+          // quietly charging somebody.
+          await markBooking(svc, URL_, s.id, {
+            status: 'awaiting_host',
+            stripe_payment_intent: s.payment_intent || null,
+          });
+          await sendApprovalRequestEmails(svc, URL_, s.id).catch(e => console.error('approval request email', e));
         } else {
           await markBooking(svc, URL_, s.id, { status: 'paid', stripe_payment_intent: s.payment_intent || null });
           await sendBookingEmails(svc, URL_, s.id);
@@ -476,6 +603,27 @@ export default async function handler(req, res) {
           await syncCorporateBlock(svc, URL_, block.id, { status: 'active' });
           break;
         }
+        // A partner's monthly card. Must not fall through to the Premium grant
+        // below either — a barber paying for a listing is not buying Premium.
+        const paidPartner = await partnerForSubscription(svc, URL_, inv.subscription);
+        if (paidPartner) {
+          const tier = inv.lines?.data?.[0]?.metadata?.tier
+            || inv.subscription_details?.metadata?.tier
+            || paidPartner.tier;
+          await patchPartner(svc, URL_, paidPartner.id, {
+            tier: ['featured', 'sponsored'].includes(tier) ? tier : paidPartner.tier,
+            // sold_at is the FIRST payment and never moves; renewal_due_at is
+            // the next one. Overwriting sold_at on every renewal would lose the
+            // one date that says how long they have been a customer.
+            ...(paidPartner.sold_at ? {} : { sold_at: new Date().toISOString() }),
+            renewal_due_at: inv.lines?.data?.[0]?.period?.end
+              ? new Date(inv.lines.data[0].period.end * 1000).toISOString() : null,
+            // A successful payment clears the failure clock outright.
+            payment_failed_at: null,
+            active: true,
+          });
+          break;
+        }
         // Subscription renewal → extend account-linked Premium by a month.
         // (Requires the invoice.paid event ticked on the Stripe webhook.)
         const email = (inv.customer_email || inv.customer_details?.email || '').trim().toLowerCase();
@@ -497,6 +645,28 @@ export default async function handler(req, res) {
           // late. Cancelling is a decision somebody makes, not a side effect of
           // a failed direct debit.
           await syncCorporateBlock(svc, URL_, block.id, { status: 'paused' });
+          break;
+        }
+        // A partner's card payment failed.
+        //
+        // NOT dropped on the first failure — a card expiring on a Tuesday is
+        // not a cancellation, and pulling a barber's listing over one retry is
+        // how you lose the relationship rather than the payment. The clock
+        // starts on the first failure and the tier only falls back to 'listed'
+        // once the grace window has passed, which Stripe's retry schedule gives
+        // us several attempts inside.
+        const failedPartner = await partnerForSubscription(svc, URL_, inv.subscription);
+        if (failedPartner) {
+          const firstFailure = failedPartner.payment_failed_at
+            ? Date.parse(failedPartner.payment_failed_at) : Date.now();
+          const overdueDays = (Date.now() - firstFailure) / 86400000;
+          if (overdueDays >= PARTNER_GRACE_DAYS) {
+            await patchPartner(svc, URL_, failedPartner.id, { tier: 'listed' });
+            console.log(`partner ${failedPartner.slug}: ${Math.round(overdueDays)} days overdue — dropped to listed`);
+          } else if (!failedPartner.payment_failed_at) {
+            await patchPartner(svc, URL_, failedPartner.id, { payment_failed_at: new Date().toISOString() });
+            console.log(`partner ${failedPartner.slug}: payment failed, ${PARTNER_GRACE_DAYS}-day grace started`);
+          }
         }
         break;
       }
@@ -534,6 +704,16 @@ export default async function handler(req, res) {
         const corporateBlock = await corporateBlockFor(svc, URL_, sub.id);
         if (corporateBlock) {
           await syncCorporateBlock(svc, URL_, corporateBlock.id, { status: 'cancelled' });
+          break;
+        }
+        // A partner cancelled. The card comes down, but the ROW STAYS: their
+        // name, pin and 2,000-odd impression history are still worth having,
+        // and a cancelled partner who comes back should not have to be
+        // re-entered from scratch.
+        const goneP = await partnerForSubscription(svc, URL_, sub.id);
+        if (goneP) {
+          await patchPartner(svc, URL_, goneP.id, { tier: 'listed', stripe_subscription_id: null });
+          console.log(`partner ${goneP.slug}: subscription ended — back to listed`);
           break;
         }
         let email = (sub.customer_email || '').trim().toLowerCase();

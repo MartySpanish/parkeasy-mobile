@@ -102,22 +102,55 @@ export const trackBookingFromHotspot = () => send('booking_completed_from_hotspo
 // tab, and time-boxed so a card tapped this morning cannot attribute a booking
 // made this afternoon — an attribution that never expires eventually claims
 // credit for everything.
-const HOTSPOT_ORIGIN_KEY = 'pe_from_hotspot_at';
+//
+// WHICH SPOT, NOT JUST WHETHER. The mark used to be a bare timestamp, so
+// bookings.from_hotspot could say a booking started at a free spot but never
+// which one — and "which hotspots actually produce bookings" is the question
+// worth asking. It carries the spot id now, in the same text shape
+// spot_occupancy.spot_id uses (a gem's legacy id, or 'rental-<uuid>'), so the
+// booking can be joined back to the gem that sent it.
+const HOTSPOT_ORIGIN_KEY = 'pe_from_hotspot';
 const HOTSPOT_ORIGIN_TTL_MS = 30 * 60 * 1000;
+// The old key held a bare timestamp. Read once for a session that is already
+// mid-journey when this ships, so nobody loses attribution on deploy.
+const LEGACY_KEY = 'pe_from_hotspot_at';
 
-export const markHotspotOrigin = () => {
-  try { sessionStorage.setItem(HOTSPOT_ORIGIN_KEY, String(Date.now())); } catch { /* private mode */ }
-};
-
-export const cameFromHotspot = () => {
+export const markHotspotOrigin = (spotId = null) => {
   try {
-    const t = Number(sessionStorage.getItem(HOTSPOT_ORIGIN_KEY) || 0);
-    return t > 0 && Date.now() - t < HOTSPOT_ORIGIN_TTL_MS;
-  } catch { return false; }
+    sessionStorage.setItem(HOTSPOT_ORIGIN_KEY,
+      JSON.stringify({ at: Date.now(), spot: spotId == null ? null : String(spotId) }));
+  } catch { /* private mode */ }
 };
+
+// { at, spot } while the mark is live, or null. One reader, so the TTL cannot
+// be applied in one place and forgotten in another.
+const readOrigin = () => {
+  try {
+    const raw = sessionStorage.getItem(HOTSPOT_ORIGIN_KEY);
+    if (raw) {
+      const o = JSON.parse(raw);
+      const at = Number(o?.at) || 0;
+      if (at > 0 && Date.now() - at < HOTSPOT_ORIGIN_TTL_MS) {
+        return { at, spot: o?.spot ?? null };
+      }
+      return null;
+    }
+    const legacy = Number(sessionStorage.getItem(LEGACY_KEY) || 0);
+    if (legacy > 0 && Date.now() - legacy < HOTSPOT_ORIGIN_TTL_MS) return { at: legacy, spot: null };
+    return null;
+  } catch { return null; }
+};
+
+export const cameFromHotspot = () => readOrigin() != null;
+
+/** The spot that sent them, while the mark is live. Null if unknown. */
+export const hotspotOriginSpot = () => readOrigin()?.spot ?? null;
 
 export const clearHotspotOrigin = () => {
-  try { sessionStorage.removeItem(HOTSPOT_ORIGIN_KEY); } catch { /* private mode */ }
+  try {
+    sessionStorage.removeItem(HOTSPOT_ORIGIN_KEY);
+    sessionStorage.removeItem(LEGACY_KEY);
+  } catch { /* private mode */ }
 };
 
 // Walk minutes as a bucket. An exact figure plus a timestamp is a location.

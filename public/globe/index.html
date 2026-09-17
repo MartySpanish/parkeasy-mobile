@@ -255,7 +255,7 @@ let mode = 'globe', city = null, selected = null;
 let spin = -8;
 let view = { lambda: 8, phi: -18, scale: 249.5, tx: 0, ty: 0 };
 let tween = null, cityBase = null, cityT0 = 0;
-let niFit = null, globeFit = null, cityScale = 1;
+let niFit = null, globeFit = null, cityScale = 1, placeScale = 1;
 let t0 = performance.now();
 
 const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -267,13 +267,32 @@ function resize() {
   cv.width = W * DPR; cv.height = H * DPR;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   computeFits();
-  if (!tween) view = cameraFor(mode, city);
+  // The target for 'place' mode is the place, not its town — and cityBase has
+  // to be rebuilt too, or the flyover keeps drifting around where the old
+  // viewport's centre used to be.
+  if (!tween) {
+    view = cameraFor(mode, mode === 'place' ? selected : city);
+    if (mode === 'city' || mode === 'place') { cityBase = { ...view }; cityT0 = performance.now(); }
+  }
 }
 
 function mapLeft() {
   if (W <= 820) return 0;
   const side = document.querySelector('.side');
   return side ? side.getBoundingClientRect().right + 18 : 0;
+}
+
+// On a phone the sidebar is stacked ON TOP of a full-bleed canvas, so the top
+// of the screen is not map — anything drawn there lands on the search box and
+// the panel. computeFits already aims the camera at H*0.66 for that reason;
+// labels need to respect the same edge.
+function mapTop() { return W > 820 ? 0 : H * 0.40; }
+
+// Where a label is allowed to sit. Without this the close-up printed names
+// straight off both sides of the canvas — on a 414px screen "WELLINGTON PLACE
+// ON-STR…" was cut off mid-word, which is worse than not naming it.
+function labelBounds() {
+  return { x0: mapLeft() + 6, x1: W - 6, y0: mapTop() + 6, y1: H - 6 };
 }
 
 function computeFits() {
@@ -290,10 +309,32 @@ function computeFits() {
     niFit = { translate: p.translate(), scale: p.scale() };
   }
   cityScale = (Math.min(W, H) * 0.78) / (30 / 6371);
+  // A single space needs a frame measured in streets, not in towns. 30km wide
+  // is the right view of Belfast and the wrong view of Wellington Place: at
+  // that scale every space in the city centre lands within a few pixels of
+  // every other, so selecting one moved the camera nowhere and showed nothing
+  // new. 2.5km is close enough to see which street it is on.
+  placeScale = (Math.min(W, H) * 0.78) / (2.5 / 6371);
 }
+
+// Distance rings, chosen to fit the frame rather than fixed at 2/5/10km.
+// At street level a 2km ring is most of the screen and the 10km one is off it,
+// so the rings said nothing about the space in the middle.
+const RING_LADDER = [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100];
+function ringsFor(kmPx, maxPx) {
+  return RING_LADDER.filter(km => {
+    const r = km * kmPx;
+    return r > 26 && r < maxPx;
+  }).slice(0, 3);
+}
+const ringLabel = km => (km < 1 ? Math.round(km * 1000) + ' M' : km + ' KM');
 
 function cameraFor(m, target) {
   const wide = W > 820, ml = mapLeft();
+  if (m === 'place' && target) {
+    return { lambda: -target.c[0], phi: -target.c[1], scale: placeScale,
+      tx: ml + (W - ml) * 0.48, ty: wide ? H * 0.5 : H * 0.66 };
+  }
   if (m === 'city' && target) {
     return { lambda: -target.c[0], phi: -target.c[1], scale: cityScale,
       tx: ml + (W - ml) * 0.48, ty: wide ? H * 0.5 : H * 0.66 };
@@ -308,14 +349,21 @@ function cameraFor(m, target) {
 
 function goTo(m, target) {
   mode = m;
-  city = m === 'city' ? target : null;
-  if (m !== 'city') selected = null;
+  // 'place' keeps the town as context — closeUp still labels the areas around
+  // it — but the camera and the rings belong to the space itself.
+  if (m === 'city') { city = target; selected = null; }
+  else if (m === 'place') { city = townByName[target.town] || city || TOWNS[0]; selected = target; }
+  else { city = null; selected = null; }
+  // The stylesheet only ever asks whether this is the globe, so 'place' behaves
+  // like 'city' in the sidebar without a rule of its own.
   document.body.dataset.mode = m;
   document.getElementById('btn-globe').setAttribute('aria-pressed', String(m === 'globe'));
   document.getElementById('btn-ni').setAttribute('aria-pressed', String(m !== 'globe'));
   const to = cameraFor(m, target);
-  if (m === 'city') { cityBase = { ...to }; cityT0 = performance.now() + 1800; }
-  tween = { from: { ...view }, to, start: performance.now(), dur: m === 'city' ? 1800 : 1400, dive: m === 'city' };
+  const close = m === 'city' || m === 'place';
+  if (close) { cityBase = { ...to }; cityT0 = performance.now() + 1800; }
+  tween = { from: { ...view }, to, start: performance.now(),
+            dur: m === 'place' ? 1500 : m === 'city' ? 1800 : 1400, dive: close };
   schedule();
 }
 
@@ -402,10 +450,10 @@ function selectTown(t) {
 
 function selectPlace(p) {
   if (!p) return;
-  selected = p;
-  const t = townByName[p.town] || TOWNS[0];
-  goTo('city', t);
-  selected = p;
+  // goTo('city', town) was the bug Marty photographed: picking Wellington Place
+  // and picking Cave Hill produced the same camera, and picking anything at all
+  // while already in Belfast produced no movement whatsoever.
+  goTo('place', p);
   renderDetail(p);
 }
 
@@ -460,7 +508,14 @@ function renderDetail(p) {
   document.getElementById('results').hidden = true;
   el.querySelectorAll('[data-goto]').forEach(b =>
     b.onclick = () => selectPlace(PLACES.find(x => x.id === b.dataset.goto)));
-  document.getElementById('d-back').onclick = () => { selected = null; renderList(); };
+  // Back out of the camera as well as out of the panel. Without this the list
+  // says "all spaces" while the map is still parked two streets from the one
+  // just closed.
+  document.getElementById('d-back').onclick = () => {
+    const t = city;
+    if (t) goTo('city', t); else selected = null;   // goTo clears the selection itself
+    renderList();
+  };
 }
 
 document.getElementById('q').addEventListener('input', renderList);
@@ -539,16 +594,22 @@ function frame(now) {
   } else if (mode === 'globe') {
     spin += dt * 0.0055;
     view = cameraFor('globe');
-  } else if (mode === 'city' && cityBase) {
-    // slow flyover: the camera circles the town and breathes, never quite settling
+  } else if ((mode === 'city' || mode === 'place') && cityBase && city) {
+    // slow flyover: the camera circles and breathes, never quite settling.
+    //
+    // Scaled to the frame. The town wobble is about a kilometre of longitude,
+    // which is 3% of a 30km view and a third of a 2.5km one — at street level
+    // the same numbers swing the space in and out of shot. amp keeps the
+    // movement the same FRACTION of the frame at either distance.
+    const amp = mode === 'place' ? 0.09 : 1;
     const s = (now - cityT0) / 1000;
     const lonScale = 1 / Math.max(0.2, Math.cos(city.c[1] * Math.PI / 180));
     view = {
-      lambda: cityBase.lambda + Math.cos(s * 0.14) * 0.009 * lonScale,
-      phi: cityBase.phi + Math.sin(s * 0.14) * 0.006,
-      scale: cityBase.scale * (1 + 0.045 * Math.sin(s * 0.10) + Math.min(0.10, s * 0.0016)),
-      tx: cityBase.tx + Math.sin(s * 0.09) * 6,
-      ty: cityBase.ty + Math.cos(s * 0.11) * 4
+      lambda: cityBase.lambda + Math.cos(s * 0.14) * 0.009 * lonScale * amp,
+      phi: cityBase.phi + Math.sin(s * 0.14) * 0.006 * amp,
+      scale: cityBase.scale * (1 + 0.045 * amp * Math.sin(s * 0.10) + Math.min(0.10, s * 0.0016) * amp),
+      tx: cityBase.tx + Math.sin(s * 0.09) * 6 * amp,
+      ty: cityBase.ty + Math.cos(s * 0.11) * 4 * amp
     };
   }
   projection.rotate([view.lambda, view.phi, 0]).scale(view.scale).translate([view.tx, view.ty]);
@@ -733,21 +794,35 @@ function regional(now, a) {
 
 function closeUp(now, a) {
   if (!city) return;
-  const centre = projection(city.c);
+  // WHAT THE RINGS MEASURE FROM. The town, until a space is selected — then the
+  // space, because "how far is this from the middle of Belfast" is not the
+  // question somebody asks after tapping Wellington Place. They want to know
+  // what is within a five minute walk of it.
+  const focus = (mode === 'place' && selected) ? selected : city;
+  const centre = projection(focus.c);
+  const townPt = projection(city.c);
   ctx.save(); ctx.globalAlpha = a;
 
   const kmPx = view.scale / 6371;
-  [2, 5, 10].forEach(km => {
+  ringsFor(kmPx, Math.min(W - mapLeft(), H) * 0.52).forEach(km => {
     ctx.beginPath(); ctx.arc(centre[0], centre[1], km * kmPx, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(234,241,248,.10)'; ctx.lineWidth = 1; ctx.stroke();
     ctx.font = '600 9px Manrope, sans-serif'; ctx.fillStyle = 'rgba(124,139,161,.85)';
-    ctx.fillText(km + ' KM', centre[0] + 5, centre[1] - km * kmPx - 4);
+    ctx.fillText(ringLabel(km), centre[0] + 5, centre[1] - km * kmPx - 4);
   });
 
   const placed = [];
-  ctx.beginPath(); ctx.arc(centre[0], centre[1], 5, 0, Math.PI * 2);
+  // The town keeps its own dot wherever it happens to fall — at street level
+  // that is usually off to one side, which is the orientation somebody needs.
+  ctx.beginPath(); ctx.arc(townPt[0], townPt[1], 5, 0, Math.PI * 2);
   ctx.fillStyle = '#EAF1F8'; ctx.fill();
-  label(city.n.toUpperCase(), centre, placed, { size: 13, weight: 700, colour: '#EAF1F8' });
+  // Its NAME waits its turn when a space is selected. Labels are placed
+  // first-come-first-served, and on a 414px screen "BELFAST" claimed the one
+  // box that "WELLINGTON PLACE ON-STREET" could have fitted in — so the map
+  // zoomed to the space Marty asked for and then declined to name it.
+  const townLabel = () => label(city.n.toUpperCase(), townPt, placed,
+    { size: 13, weight: 700, colour: '#EAF1F8' });
+  if (mode !== 'place') townLabel();
 
   (AREAS[city.n] || []).forEach(area => {
     const q = projection(area.c);
@@ -762,27 +837,68 @@ function closeUp(now, a) {
   // on the city-centre placeholder its NOT NULL columns demand. A label on a
   // map is a claim that something is THERE. He is in the list and the search,
   // which is where a partner without a door belongs.
-  const here = PLACES.filter(p => filters[p.t] && p.pinnable !== false
-    && Number.isFinite(p.c?.[0]) && d3.geoDistance(p.c, city.c) * 6371 < 26);
+  // Measured from the focus, so a street-level view is populated by what is
+  // near the SPACE. Filtering on the town centre left a space out on the edge
+  // of the city looking at an empty screen with everything 20km behind it.
+  //
+  // The selected place is always included: it can be further from its own town
+  // centre than the radius, and the one marker that must never be missing from
+  // this view is the one the panel is describing.
+  const reach = mode === 'place' ? 6 : 26;
+  const here = PLACES.filter(p => filters[p.t] && Number.isFinite(p.c?.[0])
+    && (selected && p.id === selected.id
+        || (p.pinnable !== false && d3.geoDistance(p.c, focus.c) * 6371 < reach)));
   const order = { free: 0, gem: 1, paid: 2, host: 3, partner: 4 };
-  here.sort((x, y) => order[x.t] - order[y.t]).forEach((p, i) => {
+  const sorted = here.slice().sort((x, y) => order[x.t] - order[y.t]);
+  const isSel = p => selected && selected.id === p.id;
+  const kmFrom = p => d3.geoDistance(p.c, focus.c) * 6371;
+
+  // MARKERS for everything in reach — a dot is cheap and gives the street
+  // context. LABELS are rationed below, because text is not.
+  sorted.forEach(p => {
     const q = projection(p.c);
-    const isSel = selected && selected.id === p.id;
-    if (isSel) {
+    if (isSel(p)) {
       const k = (now % 1600) / 1600;
       ctx.beginPath(); ctx.arc(q[0], q[1], 12 + k * 26, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(234,241,248,' + (0.6 * (1 - k)) + ')'; ctx.lineWidth = 1.5; ctx.stroke();
     }
-    marker(q, p.t, now, isSel);
-    if (p.t === 'host' || p.t === 'partner' || isSel) {
-      label(p.n.toUpperCase(), q, placed, {
-        size: p.t === 'partner' ? 11 : 11,
-        weight: 700,
-        colour: p.t === 'partner' ? '#BFF1EC' : '#8BEFE4',
-        gap: 12
-      });
-    }
+    marker(q, p.t, now, isSel(p));
   });
+
+  // WHICH ONES GET NAMED.
+  //
+  // The first attempt at the close-up labelled every space within 6km, which
+  // at this scale is forty-odd names filling the frame edge to edge — and the
+  // one the panel was describing looked exactly like the other thirty-nine.
+  // Getting closer has to mean seeing MORE about one space, not more text.
+  //
+  // So: the selected space first, so it wins the collision contest outright
+  // (label() places first-come-first-served), then what is genuinely within a
+  // few minutes' walk, nearest first, capped.
+  const sel = sorted.find(isSel);
+  let named;
+  if (mode === 'place') {
+    // Nine names fit a laptop and bury a phone. The cap is the screen's, not
+    // a number picked once and applied everywhere.
+    named = sorted
+      .filter(p => !isSel(p) && kmFrom(p) <= 0.6)
+      .sort((a, b) => (order[b.t] - order[a.t]) || (kmFrom(a) - kmFrom(b)))
+      .slice(0, W > 820 ? 9 : 4);
+  } else {
+    named = sorted.filter(p => !isSel(p) && (p.t === 'host' || p.t === 'partner'));
+  }
+  if (sel) named.unshift(sel);
+
+  named.forEach(p => {
+    const q = projection(p.c);
+    // The selected one is bigger, white, and forced: it is the single thing
+    // this view exists to show, so it is the one label allowed to sit where it
+    // does not quite fit rather than be dropped.
+    label(p.n.toUpperCase(), q, placed, isSel(p)
+      ? { size: 13, weight: 800, colour: '#FFFFFF', gap: 15, force: true }
+      : { size: 11, weight: 700, colour: p.t === 'partner' ? '#BFF1EC' : '#8BEFE4', gap: 12 });
+  });
+  if (mode === 'place') townLabel();
   ctx.restore();
 }
 
@@ -791,7 +907,12 @@ function label(text, p, placed, o) {
   ctx.font = o.weight + ' ' + size + 'px Manrope, sans-serif';
   const w = ctx.measureText(text).width;
   const box = (x1, dy) => ({ x1: x1 - 2, y1: p[1] + dy - size * 0.7, x2: x1 + w + 2, y2: p[1] + dy + size * 0.45 });
-  const hits = r => placed.some(q => !(r.x2 < q.x1 || r.x1 > q.x2 || r.y2 < q.y1 || r.y1 > q.y2));
+  const b = labelBounds();
+  const inside = r => r.x1 >= b.x0 && r.x2 <= b.x1 && r.y1 >= b.y0 && r.y2 <= b.y1;
+  // A position that collides OR runs off the map is no position at all. Text
+  // clipped by the canvas edge reads as a bug; a name that simply is not there
+  // reads as a map with room to breathe.
+  const hits = r => !inside(r) || placed.some(q => !(r.x2 < q.x1 || r.x1 > q.x2 || r.y2 < q.y1 || r.y1 > q.y2));
   const n = o.nudge || 0;
   const tries = [
     [p[0] + gap, n], [p[0] - gap - w, n], [p[0] + gap, 0], [p[0] - gap - w, 0],
@@ -811,6 +932,13 @@ function label(text, p, placed, o) {
         if (!hits(r)) { found = { x, dy, r, leader: true }; break outer; }
       }
     }
+  }
+  if (!found && o.force) {
+    // Below the marker, slid horizontally until it is on the map. Collisions
+    // are accepted here; a missing name is not.
+    const x = Math.max(b.x0, Math.min(b.x1 - w - 4, p[0] - w / 2));
+    const dy = gap + size * 0.6;
+    found = { x, dy, r: box(x, dy) };
   }
   if (!found) return;
   placed.push(found.r);

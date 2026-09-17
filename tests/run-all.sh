@@ -96,6 +96,109 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  apcoa publish gate     $(grep -c 'PASS  ' /tmp/pe-t8.log) checks" \
     || { fail=1; echo "  apcoa publish gate     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t8.log; }
 
+  # The seed goes in BEFORE the region migration on purpose: it is what gives
+  # the backfill rows to act on. Without it every row is classified by the
+  # trigger instead and a bounding-box backfill passes.
+  tests/db/run.sh supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  supabase/migrations/20260823_no_free_tasters.sql \
+                  tests/db/gem_region_seed.sql \
+                  supabase/migrations/20260902_gem_region.sql \
+                  tests/db/gem_region.test.sql                      > /tmp/pe-t10.log 2>&1 \
+    && echo "  gem region             $(grep -c 'PASS  ' /tmp/pe-t10.log) checks" \
+    || { fail=1; echo "  gem region             FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t10.log; }
+
+  # The seed goes in BEFORE the migration so its backfill has rows to act on.
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260725_bookings_functional.sql \
+                  supabase/migrations/20260728_booking_vehicle_reg.sql \
+                  supabase/migrations/20260820_booking_from_hotspot.sql \
+                  tests/db/host_approval_seed.sql \
+                  supabase/migrations/20260907_host_approval.sql \
+                  tests/db/host_approval.test.sql                   > /tmp/pe-t11.log 2>&1 \
+    && echo "  host approval          $(grep -c 'PASS  ' /tmp/pe-t11.log) checks" \
+    || { fail=1; echo "  host approval          FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t11.log; }
+
+  # Seed first: the grandfathering backfill needs partners that predate it.
+  tests/db/run.sh supabase/migrations/20260821_partners_table.sql \
+                  tests/db/partner_tiers_seed.sql \
+                  supabase/migrations/20260907_partner_tiers.sql \
+                  tests/db/partner_tiers.test.sql                   > /tmp/pe-t12.log 2>&1 \
+    && echo "  partner tiers          $(grep -c 'PASS  ' /tmp/pe-t12.log) checks" \
+    || { fail=1; echo "  partner tiers          FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t12.log; }
+
+  tests/db/run.sh supabase/migrations/20260821_partners_table.sql \
+                  supabase/migrations/20260907_partner_tiers.sql \
+                  supabase/migrations/20260907_partner_stats.sql \
+                  tests/db/partner_stats.test.sql                  > /tmp/pe-t13.log 2>&1 \
+    && echo "  partner stats          $(grep -c 'PASS  ' /tmp/pe-t13.log) checks" \
+    || { fail=1; echo "  partner stats          FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t13.log; }
+
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  tests/db/event_pricing_seed.sql \
+                  supabase/migrations/20260907_event_pricing.sql \
+                  tests/db/event_pricing.test.sql                  > /tmp/pe-t15.log 2>&1 \
+    && echo "  event pricing          $(grep -c 'PASS  ' /tmp/pe-t15.log) checks" \
+    || { fail=1; echo "  event pricing          FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t15.log; }
+
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260725_bookings_functional.sql \
+                  supabase/migrations/20260728_booking_vehicle_reg.sql \
+                  supabase/migrations/20260820_booking_from_hotspot.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  tests/db/hotspot_conversion_seed.sql \
+                  supabase/migrations/20260915_hotspot_conversion.sql \
+                  tests/db/hotspot_conversion.test.sql             > /tmp/pe-t16.log 2>&1 \
+    && echo "  hotspot conversion     $(grep -c 'PASS  ' /tmp/pe-t16.log) checks" \
+    || { fail=1; echo "  hotspot conversion     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t16.log; }
+
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260819_parking_requests.sql \
+                  supabase/migrations/20260728_spot_occupancy.sql \
+                  supabase/migrations/20260812_spot_claims_heading.sql \
+                  tests/db/demand_map_seed.sql \
+                  supabase/migrations/20260707_promo_codes.sql \
+                  supabase/migrations/20260720_spot_submissions.sql \
+                  supabase/migrations/20260820_hidden_gems.sql \
+                  supabase/migrations/20260915_demand_map.sql \
+                  tests/db/demand_map.test.sql                     > /tmp/pe-t17.log 2>&1 \
+    && echo "  demand map             $(grep -c 'PASS  ' /tmp/pe-t17.log) checks" \
+    || { fail=1; echo "  demand map             FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t17.log; }
+
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260725_bookings_functional.sql \
+                  supabase/migrations/20260725_season_passes.sql \
+                  supabase/migrations/20260728_booking_vehicle_reg.sql \
+                  supabase/migrations/20260820_booking_from_hotspot.sql \
+                  supabase/migrations/20260907_host_approval.sql \
+                  supabase/migrations/20260915_pass_approval.sql \
+                  tests/db/pass_approval.test.sql                  > /tmp/pe-t18.log 2>&1 \
+    && echo "  pass approval          $(grep -c 'PASS  ' /tmp/pe-t18.log) checks" \
+    || { fail=1; echo "  pass approval          FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t18.log; }
+
+  tests/db/run.sh tests/db/qr_landing_seed.sql \
+                  supabase/migrations/20260907_qr_landing.sql \
+                  tests/db/qr_landing.test.sql                     > /tmp/pe-t14.log 2>&1 \
+    && echo "  qr landing             $(grep -c 'PASS  ' /tmp/pe-t14.log) checks" \
+    || { fail=1; echo "  qr landing             FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t14.log; }
+
+  tests/db/run.sh supabase/migrations/20260902_app_events_ingest.sql \
+                  tests/db/app_events.test.sql                      > /tmp/pe-t9.log 2>&1 \
+    && echo "  app events ingest      $(grep -c 'PASS  ' /tmp/pe-t9.log) checks" \
+    || { fail=1; echo "  app events ingest      FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t9.log; }
+
+  tests/db/run.sh tests/db/push_subscriptions_seed.sql \
+                  supabase/migrations/20260915_push_subscriptions.sql \
+                  tests/db/push_subscriptions.test.sql             > /tmp/pe-t19.log 2>&1 \
+    && echo "  push subscriptions     $(grep -c 'PASS  ' /tmp/pe-t19.log) checks" \
+    || { fail=1; echo "  push subscriptions     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t19.log; }
+
   echo "── Concurrency ──────────────────────────────────────────────────────"
   tests/db/concurrency.sh 2>&1 | grep -E 'permits,|PASSED|FAIL' || fail=1
 else

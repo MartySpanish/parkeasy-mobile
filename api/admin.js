@@ -65,6 +65,15 @@ export default async function handler(req, res) {
     emailFrom: process.env.EMAIL_FROM || 'onboarding@resend.dev (Resend test sender)',
     emailFromCustom: !!process.env.EMAIL_FROM,
     serviceKey: !!SERVICE,
+    // Push: three variables that have to agree, and the one failure mode that
+    // says nothing. VITE_VAPID_PUBLIC_KEY is what the browser subscribes with
+    // and VAPID_PUBLIC_KEY is what signs the send; if they are not the same
+    // key, every push comes back 403 and no notification is ever delivered
+    // while every screen in the app says notifications are on.
+    pushKeys: !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+    pushClientKey: !!process.env.VITE_VAPID_PUBLIC_KEY,
+    pushKeysMatch: !!(process.env.VAPID_PUBLIC_KEY && process.env.VITE_VAPID_PUBLIC_KEY
+      && process.env.VAPID_PUBLIC_KEY === process.env.VITE_VAPID_PUBLIC_KEY),
   };
 
   // ── Live test email: sends to CONTACT_EMAIL and returns the REAL Resend
@@ -157,6 +166,197 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     let p = req.body;
     if (typeof p === 'string') { try { p = JSON.parse(p); } catch { p = {}; } }
+    // ── /admin/metrics ──────────────────────────────────────────────────
+    //
+    // One RPC. The aggregation is app_events_summary() in the database,
+    // granted to service_role only, because doing it here would mean pulling
+    // every event row over the wire to count it — which stops working at
+    // exactly the volume that makes the numbers worth looking at.
+    //
+    // The caller has already been checked against ADMINS above; this endpoint
+    // is the only thing on the internet holding a key that can run it.
+    if (p?.action === 'metrics') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel — the metrics query needs it.' });
+      const days = Math.max(1, Math.min(Number(p.days) || 30, 365));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/app_events_summary`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+
+        // The free -> paid funnel, from the AUTHORITATIVE side.
+        //
+        // app_events counts the card being shown and the tap; bookings.from_hotspot
+        // counts the ones that actually paid, written server-side from checkout
+        // metadata. A client event after a Stripe redirect is lost every time
+        // somebody closes the receipt tab, which is exactly when a booking is
+        // most complete — so the money number comes from the database.
+        const countOf = async (query) => {
+          try {
+            const c = await fetch(`${URL_}/rest/v1/bookings?${query}&select=id`, {
+              headers: { ...svcH, Prefer: 'count=exact', Range: '0-0' },
+            });
+            const range = c.headers.get('content-range') || '';
+            return Number(range.split('/')[1]) || 0;
+          } catch { return 0; }
+        };
+        const [paidTotal, paidFromHotspot] = await Promise.all([
+          countOf('status=eq.paid'),
+          countOf('status=eq.paid&from_hotspot=is.true'),
+        ]);
+
+        return res.status(200).json({
+          ok: true,
+          summary: JSON.parse(text),
+          hotspot: { paidTotal, paidFromHotspot },
+        });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'metrics query failed' });
+      }
+    }
+
+    // ── Partner tiers and their numbers ─────────────────────────────────
+    //
+    // The stats are the sales tool: "your card was seen 290 times last month
+    // and 19 people tapped through". partner_stats() does the aggregation in
+    // SQL and is service_role only, because it returns the whole book of
+    // business — what each partner pays and when they renew.
+    if (p?.action === 'partner-stats') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const days = Math.max(1, Math.min(Number(p.days) || 30, 365));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/partner_stats`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, days, partners: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'partner stats failed' });
+      }
+    }
+
+    // Move a partner between tiers by hand — a comp, a downgrade, or setting
+    // the tier after taking payment some other way. The Stripe path writes the
+    // same column from the webhook; this is the manual override beside it.
+    if (p?.action === 'set-partner-tier') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const allowed = ['listed', 'featured', 'sponsored'];
+      if (!p.partnerId || !allowed.includes(p.tier)) {
+        return res.status(200).json({ ok: false, error: 'Need a partner and one of listed/featured/sponsored.' });
+      }
+      try {
+        const r = await fetch(`${URL_}/rest/v1/partners?id=eq.${encodeURIComponent(p.partnerId)}`, {
+          method: 'PATCH', headers: { ...svcH, Prefer: 'return=representation' },
+          body: JSON.stringify({ tier: p.tier }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, tier: p.tier });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'tier change failed' });
+      }
+    }
+
+    // QR codes: scans per code, with lands_on beside them so a wrong target is
+    // visible on the same screen as the zero it produced.
+    if (p?.action === 'qr-stats') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const days = Math.max(1, Math.min(Number(p.days) || 90, 365));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/qr_scan_stats`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, days, codes: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'qr stats failed' });
+      }
+    }
+
+    // Event-day pricing: what to price up, and the button that does it.
+    if (p?.action === 'event-pricing') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const radius = Math.max(200, Math.min(Number(p.radiusM) || 2000, 20000));
+      const days = Math.max(1, Math.min(Number(p.days) || 90, 365));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/event_pricing_suggestions`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_radius_m: radius, p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, radius, days, suggestions: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'event pricing failed' });
+      }
+    }
+
+    // Apply one. NOT applied automatically anywhere: the host agreed a price,
+    // so raising it is a decision somebody makes, once, with their nod.
+    if (p?.action === 'set-event-price') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const pricePence = Math.round(Number(p.pricePence) || 0);
+      if (!p.listingId || !p.date || !(pricePence > 0)) {
+        return res.status(200).json({ ok: false, error: 'Need a listing, a date and a price above zero.' });
+      }
+      // A sanity ceiling. A fat finger on a suggestion button should not put a
+      // £2,000 day rate in front of a driver.
+      if (pricePence > 50000) {
+        return res.status(200).json({ ok: false, error: `£${(pricePence / 100).toFixed(2)} looks wrong — the cap is £500 a day.` });
+      }
+      try {
+        const r = await fetch(`${URL_}/rest/v1/listing_price_overrides?on_conflict=listing_id,override_date`, {
+          method: 'POST',
+          headers: { ...svcH, Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify({
+            listing_id: p.listingId, override_date: p.date, price_pence: pricePence,
+            event_id: p.eventId || null, label: p.label || null,
+            updated_at: new Date().toISOString(),
+          }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, pricePence });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'could not set the price' });
+      }
+    }
+
+    // Per-hotspot conversion: which free spots send people to a paid space.
+    if (p?.action === 'hotspot-stats') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const days = Math.max(1, Math.min(Number(p.days) || 90, 365));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/hotspot_conversion_stats`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, days, spots: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'hotspot stats failed' });
+      }
+    }
+
+    // The demand map. Where people want parking and cannot get it — the page
+    // you put in front of a church committee.
+    if (p?.action === 'demand') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const days = Math.max(1, Math.min(Number(p.days) || 90, 365));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/demand_points`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, days, points: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'demand query failed' });
+      }
+    }
+
     if (p?.action === 'sync-partners') {
       const steps = [];
       const run = async (label, url, method, payload, extraHeaders) => {
