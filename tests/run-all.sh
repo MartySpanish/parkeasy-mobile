@@ -199,6 +199,15 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  push subscriptions     $(grep -c 'PASS  ' /tmp/pe-t19.log) checks" \
     || { fail=1; echo "  push subscriptions     FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t19.log; }
 
+  tests/db/run.sh tests/db/booking_paid_seed.sql \
+                  supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260902_app_events_ingest.sql \
+                  supabase/migrations/20260925_booking_paid_authoritative.sql \
+                  tests/db/booking_paid.test.sql                   > /tmp/pe-t25.log 2>&1 \
+    && echo "  booking paid           $(grep -c 'PASS  ' /tmp/pe-t25.log) checks" \
+    || { fail=1; echo "  booking paid           FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t25.log; }
+
   tests/db/run.sh tests/db/event_alerts_seed.sql \
                   supabase/migrations/20260919_event_alerts.sql \
                   tests/db/event_alerts.test.sql                   > /tmp/pe-t24.log 2>&1 \

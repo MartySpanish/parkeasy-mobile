@@ -337,6 +337,17 @@ export default async function handler(req, res) {
     const fromHotspotSpotId = fromHotspot
       ? (String(body?.fromHotspotSpotId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || null)
       : null;
+
+    // The driver's browsing session, echoed into Stripe metadata so the webhook
+    // can log 'booking_paid' as that session when the payment really lands.
+    // Accepted only in the exact uuid shape the app generates: it is a
+    // client-supplied string that ends up in an analytics table, and anything
+    // else is dropped rather than stored.
+    const analyticsSession =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        .test(String(body?.analyticsSession || ''))
+        ? String(body.analyticsSession).toLowerCase()
+        : null;
     // ── Does this space need the host to say yes first? ────────────────────
     //
     // A club car park with forty spaces is instant. Somebody's driveway is a
@@ -369,6 +380,13 @@ export default async function handler(req, res) {
       // Read by the webhook, which decides between 'paid' and 'awaiting_host'
       // without having to re-read the listing (which may have changed).
       needs_approval: String(needsApproval),
+      // Also read by the webhook, to log the paid event under the same
+      // browsing session the browser would have used, and against the driver's
+      // account when they had one (a guest checkout has none, and a funnel
+      // that counted only signed-in drivers would miss the people this
+      // business most needs to see).
+      analytics_session: analyticsSession || '',
+      driver_id: driver?.id || '',
     };
 
     const stripe = new Stripe(KEY, { httpClient: Stripe.createFetchHttpClient(), maxNetworkRetries: 2, timeout: 20000 });

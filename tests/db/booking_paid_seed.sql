@@ -1,0 +1,13 @@
+-- Supabase's default privileges, which the test cluster does not have.
+--
+-- A hosted project ships with
+--
+--   alter default privileges in schema public grant all on tables to anon, authenticated;
+--
+-- so every new table and view in public is granted to both roles the moment it
+-- is created. users_never_booked ends with a `revoke all`, and the checks that
+-- assert anon cannot read it pass on nothing without this: on a bare cluster
+-- the grant was never there, so deleting the revoke changes neither the grants
+-- nor the test result — and every registered email would go to production
+-- readable by anonymous callers.
+alter default privileges in schema public grant all on tables to anon, authenticated;
