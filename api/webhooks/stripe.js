@@ -246,6 +246,35 @@ async function grantPremiumFromPaymentLink(svc, URL_, s) {
   await grantPremiumByEmail(svc, URL_, email, days);
 }
 
+/**
+ * Log 'booking_paid' into app_events, once per Stripe checkout.
+ *
+ * Everything it needs is on the Stripe session: the checkout id (which makes
+ * the write idempotent, because Stripe delivers at least once and retries for
+ * days), the browsing session we put in metadata at checkout, the listing, and
+ * what the driver actually paid.
+ *
+ * value_pence comes from Stripe's own amount_total rather than from our
+ * bookings row: this is the money that moved, and it is the figure to report.
+ */
+async function logBookingPaid(svc, URL_, s) {
+  if (!s?.id) return;
+  const r = await fetch(`${URL_}/rest/v1/rpc/log_booking_paid`, {
+    method: 'POST', headers: svc,
+    body: JSON.stringify({
+      p_stripe_session: s.id,
+      p_session_id: s.metadata?.analytics_session || null,
+      p_listing_id: s.metadata?.listing_id || null,
+      p_value_pence: Number.isFinite(s.amount_total) ? s.amount_total : null,
+      // The driver's account, when they had one. A guest checkout has none,
+      // and a funnel that counted only signed-in drivers would miss the ones
+      // this business most needs to see.
+      p_user_id: s.metadata?.driver_id || null,   // '' from metadata → null
+    }),
+  });
+  if (!r.ok) throw new Error(`log_booking_paid ${r.status} ${await r.text().catch(() => '')}`);
+}
+
 async function markBooking(svc, URL_, sessionId, patch) {
   if (!sessionId) return;
   await fetch(`${URL_}/rest/v1/bookings?stripe_session_id=eq.${sessionId}`, {
@@ -567,6 +596,19 @@ export default async function handler(req, res) {
           await sendApprovalRequestEmails(svc, URL_, s.id).catch(e => console.error('approval request email', e));
         } else {
           await markBooking(svc, URL_, s.id, { status: 'paid', stripe_payment_intent: s.payment_intent || null });
+          // THE FUNNEL'S BOTTOM STEP, from the side that cannot be closed.
+          //
+          // 'booking_paid' was fired only by the browser on its way back from
+          // Stripe, so every driver who paid and then shut the receipt tab was
+          // missing from the one number that says whether any of this works.
+          // Logged under the browsing session carried through Stripe metadata,
+          // so the browser's own event (when it does arrive) is the same
+          // session and the funnel counts one booking either way.
+          //
+          // Never awaited into the response and never allowed to throw: a
+          // failure here must not turn a successful payment into a webhook
+          // Stripe retries.
+          await logBookingPaid(svc, URL_, s).catch(e => console.error('booking_paid event', e));
           await sendBookingEmails(svc, URL_, s.id);
         }
         break;

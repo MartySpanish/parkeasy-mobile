@@ -1,4 +1,5 @@
 import { hotspotOriginSpot, cameFromHotspot } from './funnel';
+import { sessionId } from './analytics';
 // API helper. The serverless functions (/api/notify, /api/admin) only run on
 // Vercel hosting. parkeasy.uk currently serves the static build from GitHub
 // Pages, where those paths 404 — so every API call tries same-origin first
@@ -87,6 +88,11 @@ export async function createBookingSession({ listingId, durationHours, startsAt,
       // records it server-side. A client analytics event fired after the Stripe
       // redirect is lost whenever somebody closes the tab on the receipt page.
       fromHotspot: cameFromHotspot(),
+      // THE BROWSING SESSION, carried to Stripe and back so the paid event can
+      // be logged server-side under the same id the browser uses. Without it
+      // the bottom of the funnel is measured on whether somebody kept the
+      // receipt tab open — see supabase/migrations/20260925_booking_paid_authoritative.sql.
+      analyticsSession: sessionId(),
       // WHICH free spot. Without this the boolean above can say a booking came
       // from a hotspot but not which one, so nobody can tell which gems are
       // actually producing bookings.

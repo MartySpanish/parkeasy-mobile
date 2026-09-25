@@ -11,6 +11,14 @@ create table if not exists auth.users (
   email text
 );
 
+-- created_at, which real auth.users has and this stub did not. Added rather
+-- than worked around: users_never_booked reports how long somebody has been
+-- registered without ever parking, and that is the number that decides whether
+-- a win-back email is a nudge or a different letter entirely. `add column if
+-- not exists` so every existing suite is untouched.
+alter table auth.users
+  add column if not exists created_at timestamptz not null default now();
+
 -- Supabase sets request.jwt.claims per request; auth.uid() reads it. Tests set
 -- the same GUC with set_config, so the RLS policies exercise the real code path.
 create or replace function auth.uid() returns uuid
