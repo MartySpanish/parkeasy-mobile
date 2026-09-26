@@ -53,6 +53,12 @@ export const PREMIUM_BENEFITS = [
     text: 'Offline maps — the areas you’ve looked at keep working with no signal',
     tier: 'premium',
     proof: { file: 'public/sw.js', needle: 'TILE_CACHE' },
+    // TRUE ONLY WHILE THE TILES MAY BE STORED. The cache in sw.js is real, but
+    // it can only hold tiles the licence lets us keep — OSM's and CARTO's, not
+    // Google's. With Google serving the basemap this claim would be a full
+    // cache-shaped hole, so the benefit is withheld rather than sold. See
+    // buildTilesCacheable() in mapTiles.js for why that is a licence question.
+    needs: 'cacheableTiles',
   },
   {
     icon: '💎',
@@ -70,7 +76,20 @@ export const PREMIUM_BENEFITS = [
   },
 ];
 
-/** The claims Premium is actually charged for. */
-export const paidBenefits = () => PREMIUM_BENEFITS.filter(b => b.tier === 'premium');
+/**
+ * Is a benefit currently deliverable?
+ *
+ * A benefit with no `needs` is unconditional. One that needs cacheable tiles is
+ * only true while the basemap provider allows storing them — see
+ * buildTilesCacheable(). Pure, and takes the capability rather than reading it,
+ * so both answers are testable from Node.
+ */
+export const benefitAvailable = (b, caps = {}) =>
+  !b.needs || Boolean(caps[b.needs]);
+
+/** The claims Premium is actually charged for, minus any it cannot deliver. */
+export const paidBenefits = (caps = { cacheableTiles: true }) =>
+  PREMIUM_BENEFITS.filter(b => b.tier === 'premium' && benefitAvailable(b, caps));
 /** The ones that are true for everybody, shown under their own heading. */
-export const freeBenefits = () => PREMIUM_BENEFITS.filter(b => b.tier === 'everyone');
+export const freeBenefits = (caps = { cacheableTiles: true }) =>
+  PREMIUM_BENEFITS.filter(b => b.tier === 'everyone' && benefitAvailable(b, caps));

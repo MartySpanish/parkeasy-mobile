@@ -339,7 +339,31 @@ export const ensureGoogleSession = async () => {
   }
 };
 
+/**
+ * May this provider's tiles be STORED on the device for offline use?
+ *
+ * This is a licence question wearing the clothes of a boolean, and it decides
+ * whether a paid feature is real.
+ *
+ * OSM and CARTO tiles may be cached — public/sw.js does exactly that, and the
+ * Premium "offline maps" benefit is built on it. Google's Map Tiles terms
+ * restrict pre-fetching and storing tiles, so its tiles are NOT cached, which
+ * means that with Google serving the basemap there is nothing in the cache and
+ * offline maps cannot work.
+ *
+ * WHY THIS EXISTS RATHER THAN A COMMENT. src/premium.js opens by listing the
+ * two Premium claims that were once untrue, and the first of them is "Offline
+ * maps — works without signal" when there were no offline maps: somebody paid
+ * £29 a year partly for that. Switching the basemap to Google silently
+ * recreates that exact lie, and the existing proof check would not catch it,
+ * because sw.js still contains TILE_CACHE — the cache is real, it is just
+ * permanently empty. So the app asks this question directly and stops selling
+ * the feature when the answer is no.
+ */
+export const buildTilesCacheable = (provider) => provider !== 'google';
+
 export const tileProvider = () => buildProvider(cartoKey(), googleTiles());
+export const tilesCacheable = () => buildTilesCacheable(tileProvider());
 export const usingGoogle = () => tileProvider() === 'google';
 export const usingCarto = () => tileProvider() === 'carto';
 export const tileUrl = () => buildTileUrl(cartoKey(), isLight(), googleTiles());

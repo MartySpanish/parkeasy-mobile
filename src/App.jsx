@@ -17,7 +17,7 @@ import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, fetchBookable, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
-import { tileLayerProps, tileThemeClass } from './mapTiles';
+import { tileLayerProps, tileThemeClass, tilesCacheable } from './mapTiles';
 import { pushSupport, isPushEnabled, enablePush, disablePush } from './push';
 import { getParked, startParked, endParked, setTimer, cancelTimer, timeLeft, shareParked, directionsToCar, metresBetween, walkLabel, walkMinutes } from './parked';
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
@@ -1306,7 +1306,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
                 through), and "notifications when spots free up" is real but
                 free to everybody. The first is now built; the second is below,
                 under its own heading, described as what it is. */}
-            {paidBenefits().map(b=>(
+            {paidBenefits({ cacheableTiles: tilesCacheable() }).map(b=>(
               <div key={b.text} className="flex items-center gap-3 text-sm text-[#cdd9e8]">
                 <span className="w-6 text-center text-base">{b.icon}</span><span>{b.text}</span>
               </div>
@@ -1314,7 +1314,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
           </div>
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#6b7d96]">Free for everyone</p>
-            {freeBenefits().map(b=>(
+            {freeBenefits({ cacheableTiles: tilesCacheable() }).map(b=>(
               <div key={b.text} className="flex items-center gap-3 text-sm text-[rgba(234,241,248,0.55)]">
                 <span className="w-6 text-center text-base">{b.icon}</span><span>{b.text}</span>
               </div>
@@ -1663,7 +1663,7 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
         {/* Visible, because a feature somebody paid for that they cannot see
             is a feature they will not believe they got. And clearable, because
             a map cache is space on their phone. */}
-        {isPremium && (
+        {isPremium && tilesCacheable() && (
           <button onClick={()=>{ clearOfflineMaps(); setOfflineMaps(true); toast('Stored maps cleared'); }}
             className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl font-bold text-xs text-[#EAF1F8] bg-white/8 border border-white/15 active:scale-95 transition">
             <span className="flex items-center gap-2">
@@ -9733,7 +9733,10 @@ export default function App() {
   // deletes what is stored — "stop storing maps on my phone" has to mean that,
   // or a lapsed subscriber is left with fifty megabytes and no way to shift it.
   useEffect(() => {
-    if (isPremium) setOfflineMaps(true);
+    // Gated on tilesCacheable(), not just on Premium. With Google serving the
+    // basemap its tiles may not be stored, so switching caching "on" would fill
+    // nothing and offline maps would be a claim with an empty cache behind it.
+    if (isPremium && tilesCacheable()) setOfflineMaps(true);
     else { setOfflineMaps(false); clearOfflineMaps(); }
   }, [isPremium]);
 
