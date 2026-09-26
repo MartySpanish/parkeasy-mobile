@@ -133,6 +133,36 @@
   .toggle button:hover[aria-pressed="false"]{background:rgba(46,211,198,.16)}
   .toggle button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
+  /* Strategy overlays. A separate control from the Globe/NI view switch above,
+     because these answer a different question — that one is WHERE AM I
+     LOOKING, this one is WHAT IS DRAWN ON IT — and each layer toggles on its
+     own. The swatch carries the layer's own colour so the legend and the map
+     cannot drift apart. */
+  .layers{grid-row:1;grid-column:2;justify-self:end;align-self:start;margin-top:58px;
+    display:flex;flex-direction:column;gap:6px;pointer-events:auto;align-items:flex-end}
+  .layers button{appearance:none;background:rgba(11,18,32,.72);border:2px solid var(--rule);
+    color:var(--ink);font:600 11px/1 Manrope, sans-serif;letter-spacing:.09em;text-transform:uppercase;
+    padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;
+    transition:background .18s,border-color .18s,opacity .18s;opacity:.55}
+  .layers button[aria-pressed="true"]{opacity:1;border-color:var(--accent)}
+  .layers button:hover{opacity:1}
+  .layers button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .layers .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .layers .dot.sq{border-radius:1px}
+
+  /* Marker readout. Sits above the canvas and is positioned per frame, because
+     the globe spins — a tooltip placed once would slide off its own marker. */
+  .tip{position:absolute;z-index:5;pointer-events:none;max-width:260px;
+    background:rgba(8,14,26,.96);border:2px solid var(--rule);padding:10px 12px;
+    transform:translate(-50%,calc(-100% - 14px));opacity:0;transition:opacity .12s}
+  .tip[data-on="1"]{opacity:1}
+  .tip b{display:block;font-size:13px;letter-spacing:-.01em}
+  .tip .sub{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;margin-top:3px}
+  .tip .stat{font-size:12px;line-height:1.4;color:#C7D3E2;margin-top:7px}
+  .tip .tag{display:inline-block;font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+    font-weight:700;padding:2px 6px;margin-top:7px;color:#04120F}
+
   .foot{grid-row:2;grid-column:1/-1;margin-top:18px}
   .rule{height:2px;background:var(--rule)}
   .footrow{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
@@ -163,6 +193,7 @@
 </template>
 <div id="stage">
   <canvas id="map"></canvas>
+  <div class="tip" id="tip" role="status" aria-live="polite"></div>
   <div class="layer">
     <div class="side">
       <div class="brand"><span></span>ParkEasy</div>
@@ -182,6 +213,7 @@
       <button id="btn-globe" aria-pressed="true">Globe</button>
       <button id="btn-ni" aria-pressed="false">Northern Ireland</button>
     </div>
+    <div class="layers" id="layers" role="group" aria-label="Map layers"></div>
     <div class="foot">
       <div class="rule"></div>
       <div class="footrow">
@@ -206,6 +238,38 @@ const TYPES = {
   gem:     { label: 'Hidden gem', plural: 'Hidden gems' }
 };
 const filters = { host: true, partner: true, paid: true, free: true, gem: true };
+
+/* ---------- strategy overlays ----------
+   Two reference layers drawn over the world view, loaded from
+   /globe/markets.json. Both are STATIC data the founder supplied, not a live
+   feed and not measurements taken from ParkEasy — markets.json says so at the
+   top and the tooltips label them, because a number on a map is read as a fact
+   about the map.
+
+   TIER COLOURS CARRY THE MEANING, so they are defined once here and the legend
+   swatches are painted from the same table. Home is the accent the whole site
+   already uses for ParkEasy itself; blue reads as "go"; amber as "contested".
+
+   Operators are drawn as a BUILDING, deliberately not a pin. A pin on this map
+   means a place you can park, and these are head offices — APCOA's Stuttgart
+   HQ is not somewhere anybody parks. Different shape, different question. */
+const TIERS = {
+  home: { colour: '#2ED3C6', label: 'Home market' },
+  1:    { colour: '#5B9DFF', label: 'Tier 1 — near-term' },
+  2:    { colour: '#F5B544', label: 'Tier 2 — competitive' }
+};
+const OPERATOR_COLOUR = '#C2A8FF';
+const tierOf = h => TIERS[h.tier] || TIERS[1];
+
+const LAYERS = {
+  hotspots:  { label: 'Target markets', shape: 'dot', colour: '#5B9DFF' },
+  operators: { label: 'Operators',      shape: 'sq',  colour: OPERATOR_COLOUR }
+};
+const layerOn = { hotspots: true, operators: true };
+let MARKETS = { hotspots: [], operators: [] };
+// The marker the pointer is over, and the one clicked open. Pinning also stops
+// the globe spinning — otherwise the thing being read rotates away mid-sentence.
+let hovered = null, pinned = null;
 
 const TOWNS = [
   { n: "Belfast", c: [-5.9301, 54.5973], rank: 0 },
@@ -259,6 +323,12 @@ let niFit = null, globeFit = null, cityScale = 1, placeScale = 1;
 let t0 = performance.now();
 
 const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+// markets.json is static and hand-written, but it still reaches innerHTML, and
+// "escape it because it is data" is the rule that survives somebody later
+// pointing this at a feed.
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
 const clamp01 = v => Math.max(0, Math.min(1, v));
 
 function resize() {
@@ -539,6 +609,19 @@ document.addEventListener('keydown', e => {
 
 /* ---------- interaction on the map ---------- */
 
+/* The overlay markers, hit-tested separately from the parking ones. They are
+   the only thing clickable in globe mode, where hitAt() below bails out. */
+function marketAt(x, y) {
+  let best = null, bd = 18;
+  marketPoints().forEach(m => {
+    if (!facing(m.c)) return;
+    const q = projection(m.c);
+    const d = Math.hypot(q[0] - x, q[1] - y);
+    if (d < bd) { bd = d; best = m; }
+  });
+  return best;
+}
+
 function hitAt(x, y) {
   if (mode === 'globe' || !land) return null;
   let best = null, bd = 22;
@@ -562,11 +645,36 @@ function hitAt(x, y) {
 
 cv.addEventListener('mousemove', e => {
   const r = cv.getBoundingClientRect();
-  cv.style.cursor = hitAt(e.clientX - r.left, e.clientY - r.top) ? 'pointer' : 'default';
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  const m = marketAt(x, y);
+  // Hovering a different marker replaces what the tooltip says; a pinned one
+  // stays put until it is dismissed, so a click does not evaporate on the way
+  // to reading it.
+  if ((m && m.ref) !== (hovered && hovered.ref)) {
+    hovered = m;
+    if (!pinned) setTip(m);
+    schedule();
+  }
+  cv.style.cursor = (m || hitAt(x, y)) ? 'pointer' : 'default';
+});
+cv.addEventListener('mouseleave', () => {
+  hovered = null;
+  if (!pinned) setTip(null);
 });
 cv.addEventListener('click', e => {
   const r = cv.getBoundingClientRect();
-  const h = hitAt(e.clientX - r.left, e.clientY - r.top);
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  const m = marketAt(x, y);
+  if (m) {
+    // Clicking the open one closes it, which is the only way back to a
+    // spinning globe once something is pinned.
+    pinned = (pinned && pinned.ref === m.ref) ? null : m;
+    setTip(pinned || hovered);
+    schedule();
+    return;
+  }
+  if (pinned) { pinned = null; setTip(hovered); }
+  const h = hitAt(x, y);
   if (!h) return;
   if (h.kind === 'place') selectPlace(h.ref);
   else selectTown(h.ref);
@@ -592,7 +700,9 @@ function frame(now) {
     };
     if (k === 1) { tween = null; if (mode === 'globe') spin = view.lambda; }
   } else if (mode === 'globe') {
-    spin += dt * 0.0055;
+    // Held still while a marker is open. The globe rotating would carry the
+    // thing being read off the edge of the world mid-sentence.
+    if (!pinned) spin += dt * 0.0055;
     view = cameraFor('globe');
   } else if ((mode === 'city' || mode === 'place') && cityBase && city) {
     // slow flyover: the camera circles and breathes, never quite settling.
@@ -614,6 +724,7 @@ function frame(now) {
   }
   projection.rotate([view.lambda, view.phi, 0]).scale(view.scale).translate([view.tx, view.ty]);
   draw(now);
+  paintTip();
   lastFrame = now;
   schedule();
 }
@@ -672,6 +783,10 @@ function draw(now) {
   ctx.beginPath(); path({ type: 'Sphere' });
   ctx.strokeStyle = 'rgba(46,211,198,' + (0.55 - 0.5 * zoom) + ')'; ctx.lineWidth = 2; ctx.stroke();
 
+  // The world layers belong to the world view: they fade out as the camera
+  // dives into Northern Ireland, where a marker on Sydney means nothing and a
+  // building icon over Lisburn would be mistaken for a car park.
+  if (zoom < 0.55) drawMarkets(now, 1 - zoom / 0.55);
   if (zoom < 0.35) beacon(now, 1 - zoom / 0.35);
   if (zoom > 0.25 && cz < 0.85) regional(now, clamp01((zoom - 0.25) / 0.75) * (1 - cz / 0.85));
   if (cz > 0.2) closeUp(now, clamp01((cz - 0.2) / 0.8));
@@ -695,6 +810,120 @@ function beacon(now, a) {
   ctx.font = '600 12px Manrope, sans-serif'; ctx.fillStyle = '#EAF1F8';
   ctx.fillText('BELFAST', p[0] + 14, p[1] + 4);
   ctx.restore();
+}
+
+/* Is this lon/lat on the side of the globe facing us? d3's orthographic
+   projection happily returns coordinates for points round the back, which would
+   paint Sydney on top of Spain. Same guard beacon() uses. */
+function facing(c) {
+  const rot = projection.rotate();
+  return d3.geoDistance(c, [-rot[0], -rot[1]]) < Math.PI / 2 - 0.02;
+}
+
+const marketPoints = () => {
+  const out = [];
+  if (layerOn.hotspots) MARKETS.hotspots.forEach(h =>
+    out.push({ kind: 'hotspot', layer: 'hotspots', ref: h, c: [h.lng, h.lat] }));
+  if (layerOn.operators) MARKETS.operators.forEach(o =>
+    out.push({ kind: 'operator', layer: 'operators', ref: o, c: [o.lng, o.lat] }));
+  return out;
+};
+
+function drawMarkets(now, a) {
+  const pts = marketPoints();
+  if (!pts.length) return;
+  ctx.save();
+  ctx.globalAlpha = a;
+  pts.forEach(m => {
+    if (!facing(m.c)) return;
+    const q = projection(m.c);
+    const live = (pinned && pinned.ref === m.ref) || (hovered && hovered.ref === m.ref);
+    if (m.kind === 'hotspot') {
+      const col = tierOf(m.ref).colour;
+      // The home market keeps a pulse: it is the one that actually exists.
+      if (m.ref.tier === 'home') {
+        const k = (now % 2600) / 2600;
+        ctx.beginPath(); ctx.arc(q[0], q[1], 5 + k * 34, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(46,211,198,' + (0.55 * (1 - k)).toFixed(3) + ')';
+        ctx.lineWidth = 2; ctx.stroke();
+      }
+      ctx.beginPath(); ctx.arc(q[0], q[1], live ? 7 : 5, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.fill();
+      ctx.strokeStyle = 'rgba(4,18,15,.85)'; ctx.lineWidth = 1.5; ctx.stroke();
+    } else {
+      // A little building: base block plus two window rows. Reads as premises
+      // at 14px, which is all it has to do.
+      const w = live ? 13 : 11, h = live ? 13 : 11;
+      ctx.save(); ctx.translate(q[0], q[1]);
+      ctx.fillStyle = OPERATOR_COLOUR;
+      ctx.fillRect(-w / 2, -h / 2, w, h);
+      ctx.fillStyle = 'rgba(8,14,26,.9)';
+      const u = w / 5;
+      ctx.fillRect(-u * 1.5, -u * 1.2, u, u);
+      ctx.fillRect(u * 0.5, -u * 1.2, u, u);
+      ctx.fillRect(-u * 1.5, u * 0.3, u, u);
+      ctx.fillRect(u * 0.5, u * 0.3, u, u);
+      ctx.restore();
+    }
+  });
+  ctx.restore();
+}
+
+/* The tooltip is DOM, not canvas, so it stays selectable and readable by a
+   screen reader. Positioned every frame against the live projection. */
+function paintTip() {
+  const el = document.getElementById('tip');
+  const m = pinned || hovered;
+  if (!m || !facing(m.c)) { el.dataset.on = '0'; return; }
+  const q = projection(m.c);
+  el.style.left = q[0] + 'px';
+  el.style.top = q[1] + 'px';
+  el.dataset.on = '1';
+}
+
+function tipHTML(m) {
+  if (m.kind === 'hotspot') {
+    const h = m.ref, t = tierOf(h);
+    return '<b>' + esc(h.city) + '</b>'
+      + '<div class="sub">' + esc(h.country) + '</div>'
+      + '<div class="stat">' + esc(h.stat) + '</div>'
+      + '<span class="tag" style="background:' + t.colour + '">' + esc(t.label) + '</span>';
+  }
+  const o = m.ref;
+  return '<b>' + esc(o.operator) + '</b>'
+    + '<div class="sub">HQ · ' + esc(o.hq_city) + ', ' + esc(o.hq_country) + '</div>'
+    + '<div class="stat">Operates in ' + o.countries_active
+    + ' countr' + (o.countries_active === 1 ? 'y' : 'ies')
+    + (o.notes ? '. ' + esc(o.notes) : '') + '</div>'
+    + '<span class="tag" style="background:' + OPERATOR_COLOUR + '">Head office</span>';
+}
+
+function setTip(m) {
+  const el = document.getElementById('tip');
+  if (m) el.innerHTML = tipHTML(m);
+  paintTip();
+}
+
+function buildLayerToggles() {
+  const wrap = document.getElementById('layers');
+  wrap.innerHTML = Object.keys(LAYERS).map(k => {
+    const l = LAYERS[k];
+    return '<button data-l="' + k + '" aria-pressed="' + layerOn[k] + '">'
+      + '<i class="dot ' + (l.shape === 'sq' ? 'sq' : '') + '" style="background:' + l.colour + '"></i>'
+      + l.label + '</button>';
+  }).join('');
+  wrap.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const k = b.dataset.l;
+    layerOn[k] = !layerOn[k];
+    b.setAttribute('aria-pressed', String(layerOn[k]));
+    // Anything open in a layer just switched off must close with it.
+    if (!layerOn[k]) {
+      if (pinned && pinned.layer === k) pinned = null;
+      if (hovered && hovered.layer === k) hovered = null;
+      setTip(null);
+    }
+    schedule();
+  });
 }
 
 function marker(p, type, now, big) {
@@ -1107,8 +1336,15 @@ Promise.all([
   d3.json('/globe/countries-110m.json'),
   d3.json('/globe/ni-ireland.json'),
   d3.json('/globe/places.json'),
-  livePartners()
-]).then(([topo, local, places, partners]) => {
+  livePartners(),
+  // Absent rather than fatal: the overlays are a reference layer, and the
+  // coverage map is the page's actual job. Same discipline as livePartners().
+  d3.json('/globe/markets.json').catch(() => null)
+]).then(([topo, local, places, partners, markets]) => {
+  if (markets) MARKETS = {
+    hotspots: Array.isArray(markets.hotspots) ? markets.hotspots : [],
+    operators: Array.isArray(markets.operators) ? markets.operators : []
+  };
   land = topojson.merge(topo, topo.objects.countries.geometries);
   ni = local.ni;
   ireland = local.ireland;
@@ -1129,6 +1365,7 @@ Promise.all([
   attachParking(PLACES);
   paintStats(places.stats);
   buildFilters();
+  buildLayerToggles();
   renderList();
   resize();
   view = cameraFor('globe');
