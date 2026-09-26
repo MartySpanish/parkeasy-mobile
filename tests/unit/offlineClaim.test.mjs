@@ -84,4 +84,18 @@ it('the app gates caching and the paywall on the same capability', () => {
     'the account menu still says "Offline maps on" when nothing can be stored');
 });
 
+it('the install prompt does not promise a map it cannot draw', () => {
+  // "Works offline" read as a promise about the whole app, map included. The
+  // shell and the spot list are genuinely offline — cached, and the spots ship
+  // in the bundle — but tiles are only stored when the licence allows, so the
+  // map is the one part that can be blank. The copy now claims only the part
+  // that is always true.
+  assert.ok(!/Works offline · No App Store/.test(app),
+    'the install card promises the app "works offline", which now overstates the map');
+  assert.ok(!/home screen — works offline/.test(app),
+    'the install banner promises "works offline", which now overstates the map');
+  assert.match(app, /Your spots work offline/,
+    'the honest offline claim is gone — say what does work rather than nothing');
+});
+
 console.log(`\n  ${passed} checks passed\n`);

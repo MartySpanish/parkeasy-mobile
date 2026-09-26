@@ -5171,7 +5171,13 @@ const IOSGuide = ({ onClose }) => (
           </div>
         ))}
         <div className="bg-[#2ED3C6]/10 border border-[#2ED3C6]/25 rounded-2xl p-3 text-center">
-          <p className="text-xs text-[#5BE7DA] font-medium">Works offline · No App Store needed · Free forever</p>
+          {/* "Works offline" promised more than it delivers. The app shell and
+              the spot list genuinely do work with no signal — they are cached
+              and the spots ship in the bundle — but the MAP is only as offline
+              as its tiles, and those are only stored when the provider's
+              licence allows it (see buildTilesCacheable). Saying "your spots"
+              claims the part that is always true. */}
+          <p className="text-xs text-[#5BE7DA] font-medium">Your spots work offline · No App Store needed · Free forever</p>
         </div>
         <button onClick={onClose} className="w-full bg-[#0e1a2c] text-white py-3 rounded-xl font-bold hover:bg-[#16243a] transition">Got it</button>
       </div>
@@ -5188,7 +5194,7 @@ const InstallBanner = ({ onInstall, onDismiss, isIOS }) => (
     <div className="flex-1 min-w-0">
       <p className="font-bold text-sm leading-tight">Install ParkEasy</p>
       <p className="text-[#5BE7DA] text-xs leading-tight mt-0.5">
-        {isIOS ? 'Tap Share → Add to Home Screen' : 'Add to your home screen — works offline'}
+        {isIOS ? 'Tap Share → Add to Home Screen' : 'Add to your home screen — opens like an app'}
       </p>
     </div>
     <button onClick={onInstall}
