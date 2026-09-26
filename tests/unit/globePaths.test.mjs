@@ -12,7 +12,7 @@
 // the whole page down. Checked as source text: the page is plain HTML with an
 // inline script and cannot be imported.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 const html = readFileSync(new URL('../../public/globe/index.html', import.meta.url), 'utf8');
 const vercel = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8'));
@@ -53,16 +53,22 @@ it('no d3.json() load on the globe page is relative', () => {
 
 it('every local file the page asks for is one the build produces', () => {
   // A path that is absolute but wrong fails exactly as loudly as a relative one.
-  const SHIPPED = new Set([
-    '/globe/config.js', '/globe/d3.min.js', '/globe/topojson-client.min.js',
-    '/globe/countries-110m.json', '/globe/ni-ireland.json', '/globe/places.json',
-  ]);
+  //
+  // CHECKED AGAINST THE DISK, not against a list kept by hand. The list version
+  // of this could only ever catch a file the page asks for and nobody added to
+  // the list — it could not catch the opposite and more likely mistake, a path
+  // that looks right and names a file that is not there. Everything under
+  // public/ is copied to the site root by Vite, so "in public/globe" and "the
+  // build writes it" are the same statement.
   const asked = [
     ...[...html.matchAll(/<script[^>]*\ssrc=["']([^"']+)["']/g)].map(m => m[1]),
     ...[...html.matchAll(/d3\.json\(\s*['"]([^'"]+)['"]/g)].map(m => m[1]),
   ].filter(u => u.startsWith('/globe/'));
   assert.ok(asked.length >= 6, `expected at least 6 local loads, found ${asked.length}`);
-  for (const u of asked) assert.ok(SHIPPED.has(u), `${u} is not a file the build writes`);
+  for (const u of asked) {
+    const onDisk = new URL('../../public' + u, import.meta.url);
+    assert.ok(existsSync(onDisk), `${u} is not a file the build writes`);
+  }
 });
 
 it('the host split is not quoted on the globe', () => {

@@ -63,8 +63,14 @@ it('nothing free is sold as Premium', () => {
   }
   // And both sections are actually rendered — a source of truth nothing reads
   // is a comment.
-  assert.match(app, /\{paidBenefits\(\)\.map\(b=>\(/, 'the paid list is not rendered');
-  assert.match(app, /\{freeBenefits\(\)\.map\(b=>\(/, 'the free list is not rendered');
+  // Called WITH the capability object, not bare: a benefit that needs storable
+  // tiles must not be listed when the basemap provider forbids storing them.
+  // See tests/unit/offlineClaim.test.mjs — calling these bare would sell
+  // offline maps over a cache that can never fill.
+  assert.match(app, /\{paidBenefits\(\{ cacheableTiles: tilesCacheable\(\) \}\)\.map\(b=>\(/,
+    'the paid list is not rendered, or is rendered without the capability check');
+  assert.match(app, /\{freeBenefits\(\{ cacheableTiles: tilesCacheable\(\) \}\)\.map\(b=>\(/,
+    'the free list is not rendered, or is rendered without the capability check');
   assert.match(app, /Free for everyone/, 'the free section has no heading');
   // The old hardcoded array is gone, or there are two lists to keep in step.
   assert.ok(!/\['🗺️','Offline maps/.test(app), 'the hardcoded benefit array is back');
@@ -164,10 +170,12 @@ it('the worker caches nothing until the page says the driver is entitled', () =>
 it('entitlement is re-posted on every load, not set once', () => {
   // tilesOn is a variable in memory. The browser stops and restarts a worker
   // whenever it likes, and it comes back false.
-  assert.match(app, /if \(isPremium\) setOfflineMaps\(true\);/, 'the worker is never told');
+  // Premium AND storable tiles — see tests/unit/offlineClaim.test.mjs.
+  assert.match(app, /if \(isPremium && tilesCacheable\(\)\) setOfflineMaps\(true\);/,
+    'the worker is never told, or is told without checking the tiles may be stored');
   // Read from the effect itself. App.jsx has other effects keyed on
   // [isPremium] and a bare search for one was satisfied by those.
-  const eff = app.slice(app.indexOf('if (isPremium) setOfflineMaps(true);'));
+  const eff = app.slice(app.indexOf('if (isPremium && tilesCacheable()) setOfflineMaps(true);'));
   assert.match(eff.slice(0, 300), /\}, \[isPremium\]\);/,
     'the message is not re-sent when entitlement changes');
   assert.match(off, /sw\?\.controller/, 'the controlling worker is not messaged');
