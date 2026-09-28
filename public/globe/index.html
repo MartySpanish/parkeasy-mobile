@@ -1317,10 +1317,18 @@ function paintStats(stats) {
   if (!stats) return;
   const row = document.querySelector('.stats');
   if (!row) return;
+  // NORTHERN IRELAND FIGURES, because the headline above says "Every space
+  // Northern Ireland already has." These were the same number until the Gem
+  // Scout run added spots in Dublin, Galway, Mayo, Sligo and Donegal — from
+  // that moment `stats.spaces` counts the island and the tile under an NI
+  // headline would overstate it by everything south of the border. The
+  // generator has computed both all along (see spacesNi in
+  // scripts/generate-globe-data.mjs) for exactly this day. Falls back to the
+  // totals so an older places.json still paints something.
   const cells = [
-    [stats.spaces, 'Spaces mapped'],
-    [stats.gems, 'Hidden gems'],
-    [stats.towns, 'Towns covered'],
+    [stats.spacesNi ?? stats.spaces, 'Spaces mapped'],
+    [stats.gemsNi ?? stats.gems, 'Hidden gems'],
+    [stats.townsNi ?? stats.towns, 'Towns covered'],
     // The split used to be the fourth tile, quoting the host's percentage.
     // Marty pulled it, here and from the in-app hosts card, for one reason: a
     // treasurer reading a percentage is doing arithmetic, not signing up. The

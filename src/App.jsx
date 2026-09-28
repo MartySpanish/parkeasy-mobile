@@ -327,6 +327,27 @@ const CITIES = [
   { id:'ballycastle',   name:'Ballycastle',       center:[55.2034,-6.2453],   region:'Northern Ireland' },
   { id:'banbridge',     name:'Banbridge',         center:[54.3484,-6.2705],   region:'Northern Ireland' },
   { id:'magherafelt',   name:'Magherafelt',       center:[54.7558,-6.6070],   region:'Northern Ireland' },
+  // Towns the Gem Scout run reached. Each centre is the mean of that town's
+  // own spots rather than a notional town centre: picking the town should put
+  // the map where the parking actually is, and it avoids inventing a
+  // coordinate nobody verified.
+  { id:'achill', name:'Achill', center:[53.9699,-10.1381], region:'Republic of Ireland' },
+  { id:'armagh', name:'Armagh', center:[54.3453,-6.6558], region:'Northern Ireland' },
+  { id:'ballina', name:'Ballina', center:[54.1256,-9.1591], region:'Republic of Ireland' },
+  { id:'ballymoney', name:'Ballymoney', center:[55.0706,-6.5175], region:'Northern Ireland' },
+  { id:'ballynahinch', name:'Ballynahinch', center:[54.4045,-5.8952], region:'Northern Ireland' },
+  { id:'bundoran', name:'Bundoran', center:[54.4832,-8.2816], region:'Republic of Ireland' },
+  { id:'comber', name:'Comber', center:[54.5477,-5.7468], region:'Northern Ireland' },
+  { id:'dunfanaghy', name:'Dunfanaghy', center:[55.1878,-7.9646], region:'Republic of Ireland' },
+  { id:'holywood', name:'Holywood', center:[54.6419,-5.8268], region:'Northern Ireland' },
+  { id:'kilkeel', name:'Kilkeel', center:[54.0605,-5.9910], region:'Northern Ireland' },
+  { id:'limavady', name:'Limavady', center:[55.0542,-6.9477], region:'Northern Ireland' },
+  { id:'louisburgh', name:'Louisburgh', center:[53.7702,-9.7590], region:'Republic of Ireland' },
+  { id:'malin head', name:'Malin Head', center:[55.3800,-7.3735], region:'Republic of Ireland' },
+  { id:'mulranny', name:'Mulranny', center:[53.9044,-9.7842], region:'Republic of Ireland' },
+  { id:'newtownards', name:'Newtownards', center:[54.5945,-5.6903], region:'Northern Ireland' },
+  { id:'sligo', name:'Sligo', center:[54.3101,-8.4870], region:'Republic of Ireland' },
+  { id:'warrenpoint', name:'Warrenpoint', center:[54.0993,-6.2506], region:'Northern Ireland' },
   { id:'dublin',        name:'Dublin',            center:[53.3498,-6.2603],   region:'Republic of Ireland' },
   { id:'cork',          name:'Cork',              center:[51.8985,-8.4756],   region:'Republic of Ireland' },
   { id:'galway',        name:'Galway',            center:[53.2707,-9.0568],   region:'Republic of Ireland' },
