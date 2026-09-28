@@ -109,14 +109,30 @@ it('the Donegal towns the header warned about are excluded BY NAME', () => {
   }
 });
 
-it('the globe tiles quote the NI figures, not the island totals', () => {
-  // The headline above them says "Every space Northern Ireland already has."
-  const fn = globe.slice(globe.indexOf('function paintStats'), globe.indexOf('function paintStats') + 1400);
-  assert.match(fn, /stats\.spacesNi \?\? stats\.spaces/, 'the spaces tile is back to the island-wide total');
-  assert.match(fn, /stats\.gemsNi \?\? stats\.gems/, 'the gems tile is back to the island-wide total');
-  assert.match(fn, /stats\.townsNi \?\? stats\.towns/, 'the towns tile is back to the island-wide total');
-  assert.match(globe, /Northern Ireland <em>already has\.<\/em>/,
-    'the NI headline is gone — if the page is island-wide now, the tiles should be the totals again');
+it('the globe tiles agree with the scope its headline claims', () => {
+  // THE PAIRING IS THE RULE, not either number. The page was headlined "Every
+  // space Northern Ireland already has" and its tiles had to be spacesNi;
+  // it is now headlined "Find parking anywhere" with the coverage stated in
+  // the lede, so the tiles are the totals. Either is honest. Claiming one
+  // scope and counting the other is not, and that is the only thing this
+  // check forbids — which keeps it useful whichever way the page goes next.
+  const h1 = globe.slice(globe.indexOf('<h1>'), globe.indexOf('</h1>') + 5);
+  assert.ok(h1.length > 10, 'the headline is gone');
+  const fn = globe.slice(globe.indexOf('function paintStats'),
+                         globe.indexOf('function paintStats') + 1800);
+  const claimsNiOnly = /Northern Ireland/i.test(h1);
+  const tilesAreNi = /stats\.spacesNi/.test(fn);
+
+  assert.equal(tilesAreNi, claimsNiOnly, claimsNiOnly
+    ? 'the headline says Northern Ireland but the tiles count the whole island'
+    : 'the headline no longer says Northern Ireland, so the tiles should be the totals');
+
+  // Whichever side it is on, all three tiles must be on the SAME side: two
+  // island numbers beside one NI number is the worst of both.
+  const fields = ['spaces', 'gems', 'towns']
+    .map(k => new RegExp(`stats\\.${k}Ni`).test(fn));
+  assert.equal(new Set(fields).size, 1,
+    `the three tiles disagree with each other about scope: ${JSON.stringify(fields)}`);
 });
 
 it('the generated data still carries both counts, and they differ', () => {
