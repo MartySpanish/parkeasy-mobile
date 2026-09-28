@@ -28,6 +28,22 @@ const NI_BOX = { latMin: 54.0, latMax: 55.4, lngMin: -8.2, lngMax: -5.4 };
 export const NON_NI_CITIES = new Set([
   'dublin', 'cork', 'galway',              // Republic of Ireland
   'manchester', 'glasgow', 'edinburgh', 'perth',  // Britain
+  // Added by the Gem Scout run, which went island-wide. Listed by name for the
+  // reason the header gives: Donegal reaches further north than most of
+  // Northern Ireland, so MALIN HEAD and DUNFANAGHY both sit inside NI_BOX and
+  // were counted as Northern Ireland until they were named here — the precise
+  // failure this file was written to predict. The Mayo and Sligo towns fall
+  // outside the box on longitude and were already excluded; they are listed
+  // anyway so the count never depends on which side of a rectangle a town
+  // happens to fall.
+  'malin head', 'dunfanaghy', 'creeslough',   // Co. Donegal
+  'sligo', 'strandhill', 'rosses point', 'glencar', 'drumcliff',  // Co. Sligo
+  'bundoran',                                  // Co. Donegal (south)
+  'westport', 'mulranny', 'achill', 'ballina', 'castlebar',
+  'newport', 'louisburgh',                     // Co. Mayo
+  'howth', 'dollymount', 'raheny', 'sandymount', 'dun laoghaire',
+  'sandycove', 'killiney', 'malahide', 'portmarnock',  // Dublin metro
+  'barna', 'oranmore',                         // Co. Galway
 ]);
 
 /**
