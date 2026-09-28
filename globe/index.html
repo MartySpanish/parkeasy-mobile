@@ -198,8 +198,13 @@
     <div class="side">
       <div class="brand"><span></span>ParkEasy</div>
       <div class="headline">
-        <h1>Every space Northern Ireland <em>already has.</em></h1>
-        <p class="lede">Free bays, hidden gems, paid car parks and host sites — on one map, with the local businesses beside them.</p>
+        <h1>Find parking <em>anywhere.</em></h1>
+        <!-- TWO CLAIMS, KEPT APART ON PURPOSE. The search is worldwide: type any
+             place on Earth and the globe flies to it. The COVERAGE is Ireland,
+             and saying otherwise would be the kind of number a stranger can
+             disprove in one tap. The tiles below count what is mapped; this
+             line says where that is. -->
+        <p class="lede">Search anywhere on Earth and the globe flies to it, with the nearest spaces listed. Ireland is mapped in detail — free bays, hidden gems, paid car parks and host sites, with the local businesses beside them.</p>
       </div>
       <div class="search">
         <input id="q" type="search" placeholder="Search a town, space or partner" autocomplete="off" aria-label="Search">
@@ -298,7 +303,39 @@ const TOWNS = [
   { n: "Downpatrick", c: [-5.7169, 54.3287], rank: 2 },
   { n: "Newcastle", c: [-5.8890, 54.2170], rank: 2 }
 ];
-const townByName = Object.fromEntries(TOWNS.map(t => [t.n, t]));
+let townByName = Object.fromEntries(TOWNS.map(t => [t.n, t]));
+
+/**
+ * Fold any town that has spots but no entry above into TOWNS.
+ *
+ * The list started as 25 hand-placed Northern Ireland towns with tuned label
+ * offsets. The data has since outgrown it — the Gem Scout run alone added
+ * seventeen — and a town missing from here is a town the search box cannot
+ * find and the map will not label, however many spaces sit in it.
+ *
+ * Derived entries get rank 2, the lowest, so they never outrank a hand-placed
+ * label, and their centre is the mean of their own spots: it is where the
+ * parking is, and it avoids inventing a town centre nobody checked. Called
+ * after places.json loads, because that is the first moment the full list of
+ * towns exists.
+ *
+ * ARCS is deliberately NOT rebuilt. Those arcs run from each town to Belfast
+ * and read as the Northern Ireland network; drawing one from Achill would say
+ * something about this business that is not true yet.
+ */
+function foldInDataTowns(places) {
+  const seen = new Set(TOWNS.map(t => t.n));
+  const acc = {};
+  for (const p of places) {
+    if (!p.town || seen.has(p.town)) continue;
+    const a = acc[p.town] || (acc[p.town] = { lng: 0, lat: 0, n: 0 });
+    a.lng += p.c[0]; a.lat += p.c[1]; a.n++;
+  }
+  for (const [n, a] of Object.entries(acc)) {
+    TOWNS.push({ n, c: [a.lng / a.n, a.lat / a.n], rank: 2, derived: true });
+  }
+  townByName = Object.fromEntries(TOWNS.map(t => [t.n, t]));
+}
 
 const ARCS = TOWNS.filter(t => t.n !== "Belfast").map(t => {
   const inter = d3.geoInterpolate(t.c, BELFAST);
@@ -458,6 +495,99 @@ function matches(q) {
   return { towns, places };
 }
 
+/* ---------- anywhere on Earth ----------
+   A driver does not think in our town list. They think "Aspire Lounge" or
+   "Cromore Road", and until now a search we did not recognise returned
+   "Nothing matches that" — which is how the admin dashboard ended up with a
+   list of real places people wanted and could not find.
+
+   So an unrecognised search is geocoded and the globe flies there, with the
+   nearest mapped spaces listed by distance. Where we have nothing yet, the
+   honest answer is "nothing within Xkm" at the right place on the map, not a
+   dead end.
+
+   Nominatim, because it is free, keyless and already allowed by the site CSP.
+   Its usage policy asks for no more than one request a second, which is why
+   this only fires on an explicit Enter or button press — never per keystroke. */
+const geoCache = new Map();
+let geoBusy = false;
+
+async function geocode(q) {
+  const key = q.toLowerCase().trim();
+  if (geoCache.has(key)) return geoCache.get(key);
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='
+    + encodeURIComponent(q);
+  const r = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!r.ok) throw new Error('geocode ' + r.status);
+  const j = await r.json();
+  const hit = Array.isArray(j) && j[0] ? {
+    n: String(j[0].display_name || q).split(',').slice(0, 2).join(',').trim(),
+    c: [Number(j[0].lon), Number(j[0].lat)],
+  } : null;
+  // A miss is cached too, or a typo costs a request every time it is retried.
+  geoCache.set(key, hit);
+  return hit;
+}
+
+const R_EARTH = 6371;
+function kmBetween(a, b) {
+  const rad = Math.PI / 180;
+  const dLat = (b[1] - a[1]) * rad, dLng = (b[0] - a[0]) * rad;
+  const s = Math.sin(dLat / 2) ** 2
+    + Math.cos(a[1] * rad) * Math.cos(b[1] * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R_EARTH * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+/**
+ * The mapped spaces closest to a point, nearest first — and only ones a driver
+ * could actually use.
+ *
+ * NEAREST_KM IS THE WHOLE POINT. Without a radius this returns the globally
+ * nearest spaces, which for a search in Tokyo meant a car park in Perth, 7,920
+ * km away, listed as a result. Every row was true and the answer was a lie:
+ * it implies coverage where there is none, which is the same overstatement as
+ * a wrong restriction, just wearing a distance column.
+ *
+ * 25 km is about as far as anyone drives to park and then walk. Beyond it the
+ * honest answer is that we have nothing there, and renderList says so.
+ */
+const NEAREST_KM = 25;
+function nearestTo(c, limit = 40, maxKm = NEAREST_KM) {
+  return PLACES.filter(p => filters[p.t])
+    .map(p => ({ p, km: kmBetween(c, p.c) }))
+    .filter(x => x.km <= maxKm)
+    .sort((x, y) => x.km - y.km)
+    .slice(0, limit);
+}
+
+async function goAnywhere(q) {
+  if (!q || geoBusy) return;
+  const el = document.getElementById('results');
+  geoBusy = true;
+  el.innerHTML = '<div class="empty">Looking for “' + esc(q) + '”…</div>';
+  el.hidden = false;
+  try {
+    const hit = await geocode(q);
+    if (!hit || !Number.isFinite(hit.c[0]) || !Number.isFinite(hit.c[1])) {
+      el.innerHTML = '<div class="empty">Could not find “' + esc(q) + '” anywhere. '
+        + 'Try a town, a postcode, or a landmark.</div>';
+      return;
+    }
+    // adhoc marks a place that is not one of our towns, so the list shows the
+    // nearest spaces by distance rather than filtering on a town name that
+    // matches nothing.
+    selected = null;
+    goTo('city', { ...hit, adhoc: true });
+    document.getElementById('q').value = '';
+    renderList();
+  } catch {
+    el.innerHTML = '<div class="empty">Could not reach the place lookup just now. '
+      + 'Check your connection and try again.</div>';
+  } finally {
+    geoBusy = false;
+  }
+}
+
 function renderList() {
   const q = document.getElementById('q').value.trim().toLowerCase();
   const el = document.getElementById('results');
@@ -466,6 +596,12 @@ function renderList() {
   if (q) {
     ({ towns, places } = matches(q));
     places = places.sort(byPartnerFirst).slice(0, 60);
+  } else if (mode === 'city' && city && city.adhoc) {
+    // Somewhere the driver searched for that is not one of our towns. There is
+    // no town name to filter on, so the list is what is actually near them.
+    towns = [];
+    const near = nearestTo(city.c);
+    places = near.map(({ p, km }) => ({ ...p, _km: km }));
   } else if (mode === 'city' && city) {
     towns = [];
     // Partners in this town lead it. Everything else keeps its place — the
@@ -491,7 +627,12 @@ function renderList() {
         // about a business — can I park there — with a counted number rather
         // than an adjective.
         let s = p.town;
-        if ((p.t === 'partner' || p.t === 'host') && p.nearby > 0) {
+        // How far, when the driver searched a point rather than picked a town.
+        // Distance is the only thing they actually asked about.
+        if (typeof p._km === 'number') {
+          s = (p._km < 1 ? Math.round(p._km * 1000) + ' m' : p._km.toFixed(1) + ' km')
+            + ' · ' + p.town;
+        } else if ((p.t === 'partner' || p.t === 'host') && p.nearby > 0) {
           s = p.nearby + ' space' + (p.nearby === 1 ? '' : 's') + ' · ' + p.walkMin + ' min walk';
         } else if (p.online) {
           s = 'Online';
@@ -501,12 +642,31 @@ function renderList() {
       }).join('');
     });
   }
-  if (!html) html = '<div class="empty">Nothing matches that. Try a town name — Belfast, Newry, Portrush — or a partner.</div>';
+  // A search that matches nothing we hold is not a dead end any more: it is
+  // offered to the geocoder, which is the whole point of the worldwide search.
+  // The button is explicit rather than automatic so the lookup fires once, on
+  // intent, and stays inside Nominatim's one-request-a-second policy.
+  if (!html && q) {
+    const raw = document.getElementById('q').value.trim();
+    html = '<div class="empty">Nothing mapped under that name.<br><br>'
+      + '<button class="row go" data-go="1"><i style="background:var(--accent)"></i>'
+      + 'Search the world for “' + esc(raw) + '”<s>fly there</s></button></div>';
+  } else if (!html) {
+    html = '<div class="empty">Search any town, space, partner — or anywhere on Earth.</div>';
+  }
+  // A named town with nothing in it yet still deserves the honest answer.
+  if (mode === 'city' && city && city.adhoc && !places.length) {
+    html = '<div class="empty">Nothing mapped within ' + NEAREST_KM + ' km of '
+      + esc(city.n) + ' yet.<br>The globe has moved there — the spaces have not '
+      + 'been added.</div>';
+  }
   el.innerHTML = html;
   el.hidden = false;
   document.getElementById('detail').hidden = true;
   el.querySelectorAll('[data-town]').forEach(b => b.onclick = () => selectTown(townByName[b.dataset.town]));
   el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => selectPlace(PLACES.find(p => p.id === b.dataset.id)));
+  el.querySelectorAll('[data-go]').forEach(b => b.onclick =
+    () => goAnywhere(document.getElementById('q').value.trim()));
 }
 
 function countIn(town) { return PLACES.filter(p => p.town === town).length; }
@@ -596,6 +756,10 @@ document.getElementById('q').addEventListener('keydown', e => {
   const { towns, places } = matches(q);
   if (towns.length) selectTown(towns[0]);
   else if (places.length) selectPlace(places[0]);
+  // What we hold comes first — a driver typing "Belfast" wants our Belfast,
+  // not a geocoder's. Enter on something we do not hold is the intent the
+  // worldwide lookup waits for.
+  else goAnywhere(e.target.value.trim());
 });
 document.getElementById('clear').onclick = () => {
   document.getElementById('q').value = '';
@@ -1317,6 +1481,16 @@ function paintStats(stats) {
   if (!stats) return;
   const row = document.querySelector('.stats');
   if (!row) return;
+  // THE TILES MUST MATCH THE SCOPE THE HEADLINE CLAIMS, and the headline no
+  // longer says Northern Ireland — so these are the island-wide totals. When
+  // the page was headlined "Every space Northern Ireland already has" these
+  // read spacesNi/gemsNi/townsNi, because counting Dublin and Galway under
+  // that sentence would have overstated it by everything south of the border.
+  //
+  // The pairing is the rule, not either number: tests/unit/regionSplit.test.mjs
+  // reads the headline and requires the tiles to agree with it, in whichever
+  // direction. Both counts are in the generated data, so flipping the scope is
+  // a change of three words and three fields, never a recount.
   const cells = [
     [stats.spaces, 'Spaces mapped'],
     [stats.gems, 'Hidden gems'],
@@ -1363,6 +1537,9 @@ Promise.all([
     ...places.spaces.map(s => ({ ...s, n: s.n || (TYPES[s.t].label + ' space') }))
   ].map(p => ({ ...p, id: p.t + '-' + (i++) }));
   attachParking(PLACES);
+  // Before the first renderList, so every town with spots is searchable and
+  // labelled from the outset rather than appearing after some later redraw.
+  foldInDataTowns(PLACES);
   paintStats(places.stats);
   buildFilters();
   buildLayerToggles();
