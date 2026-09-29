@@ -1,31 +1,71 @@
-name: Build Android APK
+name: Android release (Play Store)
+
+# Builds the SIGNED Android App Bundle (.aab) that gets uploaded to Google
+# Play, plus a signed .apk for installing straight onto a phone to test the
+# exact same build.
+#
+# Run it from GitHub → Actions → "Android release (Play Store)" → Run workflow,
+# or push a tag like `android-v1.0.0`. It does NOT run on every push to main:
+# the Android app loads the live parkeasy.uk site, so web changes reach app
+# users the moment Vercel deploys — a new store build is only needed when the
+# native shell itself changes (icon, permissions, Capacitor upgrade).
+#
+# NEEDS FOUR REPOSITORY SECRETS (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64   the upload keystore, base64-encoded
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS         parkeasy-upload
+#   ANDROID_KEY_PASSWORD      (same as the keystore password)
+# See docs/ANDROID_RELEASE.md.
 
 on:
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version shown on the store (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
   push:
-    branches:
-      - main
+    tags:
+      - 'android-v*'
 
 permissions:
-  contents: write
+  contents: read
 
-# Cancel any in-progress build when a new commit lands, so runs don't pile up.
 concurrency:
-  group: android-build-${{ github.ref }}
+  group: android-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-apk:
+  release:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
-      # Keep Gradle in a single foreground process (no lingering daemon that can
-      # stall on the free runner) and give the JVM enough headroom.
       GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Every run is a higher number than the last, which Play requires. The
+      # +100 offset keeps it above any versionCode uploaded by hand before this.
+      # The version name comes from the Run-workflow box, or the tag with its
+      # `android-v` prefix removed.
+      - name: Work out version code and name
+        run: |
+          echo "ANDROID_VERSION_CODE=$((GITHUB_RUN_NUMBER + 100))" >> "$GITHUB_ENV"
+          NAME="${{ inputs.version_name }}"
+          if [ -z "$NAME" ]; then NAME="${GITHUB_REF_NAME#android-v}"; fi
+          echo "ANDROID_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "versionCode=$((GITHUB_RUN_NUMBER + 100)) versionName=$NAME"
+
+      - name: Check the signing secrets are present
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KS" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is not set. Add the four ANDROID_* secrets (docs/ANDROID_RELEASE.md) and re-run."
+            exit 1
+          fi
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -33,47 +73,63 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Node 20
+      - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      - name: Setup Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web (Capacitor mode)
-        run: npm run build:cap
+      # The shell loads https://parkeasy.uk, so the bundled web build is only a
+      # fallback screen — but Capacitor requires webDir to exist to sync.
+      - name: Build web
+        run: npx vite build
 
-      - name: Install Capacitor CLI
-        run: npm install -g @capacitor/cli
-
-      - name: Add Android platform
-        run: npx cap add android
-
-      - name: Sync Capacitor
+      - name: Sync Capacitor → android/
         run: npx cap sync android
 
-      - name: Make Gradlew executable
-        run: chmod +x android/gradlew
+      - name: Apply release patches (permissions, signing, splash)
+        run: node scripts/android-prepare.mjs
 
-      - name: Build debug APK
+      - name: Decode upload keystore
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KS" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed App Bundle and APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
 
-      - name: Upload APK artifact
+      - name: Rename outputs
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/bundle/release/app-release.aab "out/ParkEasy-${ANDROID_VERSION_NAME}-${ANDROID_VERSION_CODE}.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk  "out/ParkEasy-${ANDROID_VERSION_NAME}-${ANDROID_VERSION_CODE}.apk"
+          ls -la out
+
+      - name: Upload .aab (upload this one to Google Play)
         uses: actions/upload-artifact@v4
         with:
-          name: ParkEasy-Belfast-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+          name: ParkEasy-play-store-bundle
+          path: out/*.aab
+          retention-days: 90
+
+      - name: Upload .apk (install this one on a phone to test)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParkEasy-test-apk
+          path: out/*.apk
+          retention-days: 90
