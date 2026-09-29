@@ -49,6 +49,14 @@
       "destination": "/api/q?code=:code"
     },
     {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/delete-account",
+      "destination": "/delete-account.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

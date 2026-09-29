@@ -1,8 +1,23 @@
 {
   "appId": "com.parkeasy.belfast",
-  "appName": "ParkEasy Belfast",
+  "appName": "ParkEasy",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "url": "https://parkeasy.uk",
+    "androidScheme": "https",
+    "allowNavigation": [
+      "parkeasy.uk",
+      "www.parkeasy.uk",
+      "*.vercel.app",
+      "checkout.stripe.com",
+      "connect.stripe.com",
+      "js.stripe.com",
+      "*.stripe.com",
+      "*.supabase.co"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0A0F1A"
   }
 }

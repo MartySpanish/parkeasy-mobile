@@ -1443,6 +1443,15 @@ const PushToggle = () => {
   // saying, since it is the single commonest reason this is missing.
   if (support.reason === 'no-push' || support.reason === 'no-service-worker'
       || support.reason === 'no-notification') {
+    // The Android app's WebView has no web push. Saying "add to home screen"
+    // there would be nonsense — it is already on the home screen.
+    if (window.Capacitor) {
+      return (
+        <p className="text-[11px] text-[#6b7d96] leading-snug">
+          Push alerts are coming to the Android app. Until then we&apos;ll email you instead.
+        </p>
+      );
+    }
     return (
       <p className="text-[11px] text-[#6b7d96] leading-snug">
         Alerts need ParkEasy on your home screen — tap Share then &ldquo;Add to Home Screen&rdquo;.
@@ -9266,7 +9275,7 @@ const INFO_PAGES = {
         </ul>
 
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">9 · Your rights</h3>
-        <p>You have the right to access, correct, erase, restrict or object to the processing of your data, to data portability, and to withdraw consent. To exercise any right, contact us at <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a>. You also have the right to complain to the <strong className="text-[#EAF1F8]">ICO</strong> (<a className="text-[#5BE7DA] underline" href="https://ico.org.uk" target="_blank" rel="noreferrer">ico.org.uk</a>), though we&apos;d welcome the chance to resolve any concern first.</p>
+        <p>You have the right to access, correct, erase, restrict or object to the processing of your data, to data portability, and to withdraw consent. To exercise any right, contact us at <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a>. To delete your account and the data linked to it, see <a className="text-[#5BE7DA] underline" href="/delete-account" target="_blank" rel="noreferrer">parkeasy.uk/delete-account</a>. You also have the right to complain to the <strong className="text-[#EAF1F8]">ICO</strong> (<a className="text-[#5BE7DA] underline" href="https://ico.org.uk" target="_blank" rel="noreferrer">ico.org.uk</a>), though we&apos;d welcome the chance to resolve any concern first.</p>
 
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">10 · Cookies</h3>
         <p>We use cookies necessary for the Platform to function and, with your consent, for analytics. You can change your choice any time via the cookie banner.</p>
@@ -9852,7 +9861,9 @@ export default function App() {
   }, [theme]);
 
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
+  // The Android app (Capacitor) is by definition installed: it must never be
+  // asked to add itself to a home screen.
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone || !!window.Capacitor;
 
   const currentCity = CITIES.find(c => c.id === city) || CITIES[0];
   // Seeded spots for the city + any community spots the user has added there.

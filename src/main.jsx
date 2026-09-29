@@ -7,7 +7,10 @@ import { refreshPushSubscription, savePushSubscription } from './push'
 
 // Vercel Web Analytics — visitor/page-view tracking, viewable in the Vercel
 // dashboard (parkeasy project → Analytics). No-ops outside Vercel hosting.
-if (!window.Capacitor && /(vercel\.app|parkeasy\.uk)$/.test(location.hostname)) inject()
+// The Android app (Capacitor) loads the live parkeasy.uk site, so its hostname
+// passes this test and its visits are counted alongside the web — that is
+// deliberate: an install that is never opened is what the store numbers hide.
+if (/(vercel\.app|parkeasy\.uk)$/.test(location.hostname)) inject()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -15,7 +18,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 
-// Register service worker for PWA / offline support (skip inside Capacitor native app)
+// Register service worker for PWA / offline support. Skipped inside the
+// Capacitor native app: the Android WebView cannot deliver web push, and a
+// worker that reloads the page on takeover fights the native shell's own
+// lifecycle. Native push is a later step (see docs/ANDROID_RELEASE.md).
 if ('serviceWorker' in navigator && !window.Capacitor) {
   window.addEventListener('load', () => {
     // If a controller already exists, this page is controlled by an older SW.
