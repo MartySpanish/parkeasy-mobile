@@ -16,84 +16,21 @@ function applyCors(req, res) {
   return false;
 }
 
-// WHAT A LISTING MUST HAVE BEFORE IT CAN BE PUBLISHED, and why an
-// organisation's bar is now LOWER than a driveway's rather than higher.
+// The gate itself lives in src/data/publishGateCore.js and is re-exported here.
 //
-// It used to be the other way round: an organisation had twelve requirements
-// to a driveway's seven — four photos instead of two, a legal name, an
-// organisation type, a registration number, a named access contact with a
-// mobile, and thirty characters of access method. That is the form put in
-// front of a GAA club treasurer or a parish secretary, which is precisely the
-// host worth more than fifty driveways, and the one least likely to finish a
-// long form on a phone.
-//
-// The gate was doing that work for nothing, because an organisation listing
-// does not go live when it is published: it goes to `pending_approval` and
-// emails the founder (see below). A human reads every one of them. So the
-// registration number, the access contact and the access write-up were being
-// demanded BEFORE a review that exists to ask for exactly those things — and
-// the cost of demanding them early is the treasurer who closes the tab.
-//
-// They are not dropped. approvalChecklist() below returns them for the
-// founder's queue, where they can be asked for by someone who can also explain
-// why. A residential listing keeps its full gate, because that one DOES go
-// live immediately and the gate is the only thing standing in front of it.
-//
-// Competitors put the bar in the same place: JustPark publishes on postcode,
-// type, access note, availability, price and a photo, then reviews within a
-// day or two; SpotHero's independent-seller route is a short form and a human
-// who replies. Neither gates on nine fields up front.
-export function listingRequirements(l) {
-  const missing = [];
-  const photos = l.photos || [];
-  const isOrg = l.host_type === 'organization';
-  // One photo for an organisation: the founder sees the listing before anybody
-  // else does and can ask for more. Two for a driveway, which does not get read.
-  const minPhotos = isOrg ? 1 : 2;
-  if (photos.length < minPhotos) missing.push(`${minPhotos - photos.length} more photo${minPhotos - photos.length !== 1 ? 's' : ''} (min ${minPhotos})`);
-  if (photos.length > 10) missing.push('Maximum 10 photos');
-  if ((l.instructions || '').trim().length < 30) missing.push(`"How to find it" too short — ${(l.instructions || '').trim().length}/30 characters`);
-  if (l.lat == null || l.lng == null) missing.push('Verified address (pick from the suggestions)');
-  if (!(l.price_per_hour ?? l.price_per_day ?? l.price_per_month)) missing.push('A price');
-  if (!l.availability) missing.push('Availability preset');
-  if (!(l.contact_phone || '').trim()) missing.push('Host mobile number');
-  const cap = l.spaces ?? 1;
-  if (!(cap >= 1 && cap <= 200)) missing.push('Capacity between 1 and 200');
-  if (l.space_type === 'ev_charger') {
-    const a = l.amenities || [];
-    if (!a.some(x => String(x).startsWith('speed:'))) missing.push('Charger speed');
-    if (!a.some(x => String(x).startsWith('connector:'))) missing.push('Connector type');
-  }
-  if (isOrg) {
-    // Who they are still blocks: it is the one thing the founder cannot work
-    // out from the listing, and it decides whether this is a club car park or
-    // somebody letting a field they do not own.
-    if (!(l.org_name || '').trim()) missing.push('Organization legal name');
-    if (!l.org_type) missing.push('Organization type');
-  }
-  return missing;
-}
+// It used to live in this file, with a hand-kept twin in App.jsx — and that twin
+// is how the last change to the rule quietly did nothing: this file lowered the
+// bar for organisations and the form in front of the host went on demanding the
+// old one, so the treasurer still could not submit. One copy now, imported by
+// both, with a test that fails if a second one appears.
+export { listingRequirements, approvalChecklist } from '../src/data/publishGateCore.js';
+import { listingRequirements, approvalChecklist } from '../src/data/publishGateCore.js';
 
-/**
- * The things a published organisation listing still owes, for the founder's
- * approval queue rather than for the host's form.
- *
- * These were publish blockers. They are all questions a human asks better than
- * a validator does — "no registration number" is a real answer for a parish
- * hall, and a one-line access note is fine if the answer is genuinely "gate is
- * open, park anywhere". Returned so the approval screen and the notification
- * email can list them, and so nothing quietly stops being asked for.
- */
-export function approvalChecklist(l) {
-  if (!l || l.host_type !== 'organization') return [];
-  const owed = [];
-  const photos = l.photos || [];
-  if (photos.length < 4) owed.push(`${4 - photos.length} more photo${4 - photos.length !== 1 ? 's' : ''} (4 is the bar for an organisation)`);
-  if (!(l.org_registration || '').trim()) owed.push('Registration number (or "none" with a reason)');
-  if (!(l.access_contact_name || '').trim() || !(l.access_contact_phone || '').trim()) owed.push('Named access contact (name + mobile)');
-  if ((l.access_method || '').trim().length < 30) owed.push('Fuller access method — how a driver actually gets in');
-  return owed;
-}
+// Host-controlled text reaches an HTML email, so it is escaped. A listing
+// title is whatever they typed.
+const esc = (v) => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
