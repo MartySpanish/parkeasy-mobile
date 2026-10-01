@@ -34,6 +34,42 @@ export const PARTNER_CATEGORIES = {
 };
 
 /**
+ * Categories whose partners may lead a LOCATION search — a search for a place,
+ * with no category tapped.
+ *
+ * WHY THIS LIST IS SHORT. Searching "Waterfront" put every partner within
+ * 1.5km of the Waterfront above the first parking space, which in Belfast city
+ * centre is nearly all of them: a screen of adverts in front of somebody who
+ * typed a destination and wants a space. Proximity on its own turned out to be
+ * no signal at all, because in a city centre everything is near everything.
+ *
+ * A category TAP is different and still leads — that is a driver stating what
+ * they want. A place is not: it says where they are going, not what they are
+ * going for.
+ *
+ * So the test is no longer "is it close" but "is parking part of the errand".
+ * A hotel passes: you look up where you are staying and the question that
+ * follows is where to leave the car, overnight, for money. A gym, a café or a
+ * bar two streets away does not — it is a decent suggestion and it keeps its
+ * interleaved slot further down the list, where it costs nobody the answer.
+ *
+ * Add a category here only when a driver searching that place is likely to
+ * need parking AT it rather than near it.
+ */
+// 'airports' is here on the same reasoning as hotels — you leave the car for
+// days and the parking IS the errand — although no partner is tagged with it
+// yet, so today this list behaves exactly as ['hotels'] would.
+export const LEADS_ON_PLACE = ['hotels', 'airports'];
+
+/**
+ * How many partners may lead on location alone. One.
+ *
+ * Even the right kind of advert stops being useful at two: the complaint that
+ * produced this rule was the scrolling, not the category.
+ */
+export const MAX_PLACE_LEADS = 1;
+
+/**
  * Split partners into the ones that lead a category and the ones that don't.
  *
  * Lives here, exported and pure, so it can be tested without a database. The
@@ -74,10 +110,18 @@ export function splitPartnersByCategory(partners, catId, geo, radiusM = 1500) {
     // actually answers "does this number mean anything", and it is already
     // what gates the parking map and the nearby-spots list. Same question,
     // same answer, everywhere.
-    const byPlace = geo && p.geo_verified && typeof p.lat === 'number'
+    //
+    // AND the partner must be the kind that can lead a place at all — see
+    // LEADS_ON_PLACE above. Being near where somebody searched is not a reason
+    // to go in front of the parking space they asked for.
+    const canLeadPlace = (PARTNER_CATEGORIES[p.slug] || []).some(c => LEADS_ON_PLACE.includes(c));
+    const byPlace = geo && canLeadPlace && p.geo_verified && typeof p.lat === 'number'
       && Math.hypot((p.lat - geo.lat) * 111320, (p.lng - geo.lng) * 65000) <= radiusM;
     if (byCategory) lead.push(p);
-    else if (byPlace) nearby.push(p);
+    // Over the cap it goes to rest, NOT nowhere. A partner that stops leading
+    // keeps its interleaved slot; this moves adverts down the list, it does not
+    // take anybody out of the app they are paying to be in.
+    else if (byPlace && nearby.length < MAX_PLACE_LEADS) nearby.push(p);
     else rest.push(p);
   }
   // A CATEGORY match beats a PROXIMITY match, always. Tapping "Travel &

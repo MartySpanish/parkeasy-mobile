@@ -41,6 +41,7 @@ import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySi
 import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
 import { fetchReferrals, ensureCode, referralLine, referralLink, rememberCode, claimPendingCode, claimMessage } from './data/referrals';
 import { PREMIUM_BENEFITS, paidBenefits, freeBenefits } from './premium';
+import { listingRequirements as checkRequirements, approvalChecklist, minPhotosFor, MIN_PRICE_PER_HOUR, MIN_PRICE_PER_DAY } from './data/publishGateCore';
 import { toast, onToast } from './toast';
 import { setOfflineMaps, clearOfflineMaps } from './offlineMaps';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
@@ -6433,14 +6434,6 @@ const suggestedPrice = (lat, lng) => {
   const c = nearestCity(lat, lng);
   return ['belfast','derry'].includes(c?.id) ? 3.0 : 2.0;
 };
-// Floor for a listing's hourly rate. Anything under this can't reach the £4
-// minimum booking in a sensible number of hours.
-const MIN_PRICE_PER_HOUR = 1.5;
-// A day rate is a different shape of thing, not 24 x the hourly one: the sites
-// that use it are clubs and schools selling a fixed gate window for a matchday.
-// Davitt Park is £20 and Belfast Royal Academy £15, so the floor is set below
-// both — it exists to catch a typo (£3 for a whole day), not to set the market.
-const MIN_PRICE_PER_DAY = 5;
 
 // Restriction wording a submitter picks -> public map badge. Anything that
 // isn't clearly unrestricted is shown as timed rather than free, so an
@@ -6451,45 +6444,6 @@ const RESTRICTION_TO_PUBLIC_BADGE = {
   'Time limited':    'timed',
   'Evenings free':   'timed',
   'Weekends free':   'timed',
-};
-
-const checkRequirements = (l) => {
-  const missing = [];
-  const photos = l.photos || [];
-  const minPhotos = l.host_type === 'organization' ? 4 : 2;
-  if (photos.length < minPhotos) missing.push(`${minPhotos - photos.length} more photo${minPhotos-photos.length!==1?'s':''} (min ${minPhotos})`);
-  if (photos.length > 10) missing.push('Maximum 10 photos');
-  if ((l.instructions||'').trim().length < 30) missing.push(`"How to find it" too short — ${(l.instructions||'').trim().length}/30 characters`);
-  if (l.lat == null || l.lng == null) missing.push('Verified address (pick a suggestion)');
-  // A listing needs at least one rate and may carry both. Each is checked on
-  // its own: publishing a sound hourly rate alongside a mistyped day rate has
-  // to fail, or the day rate goes live at the typo.
-  if (!(l.price_per_hour ?? l.price_per_day ?? l.price_per_month)) missing.push('A price');
-  if (l.price_per_hour != null && Number(l.price_per_hour) < MIN_PRICE_PER_HOUR) missing.push(`Hourly price of at least £${MIN_PRICE_PER_HOUR.toFixed(2)}`);
-  if (l.price_per_day  != null && Number(l.price_per_day)  < MIN_PRICE_PER_DAY)  missing.push(`Day price of at least £${MIN_PRICE_PER_DAY.toFixed(2)}`);
-  // Both rates are allowed, but the day rate has to beat buying the same hours
-  // one at a time or it is a worse deal that the sheet still offers as "all day".
-  if (Number(l.price_per_hour) > 0 && Number(l.price_per_day) > 0
-      && Number(l.price_per_day) <= Number(l.price_per_hour)) {
-    missing.push('Day price higher than the hourly price');
-  }
-  if (!l.availability) missing.push('Availability preset');
-  if (!(l.contact_phone||'').trim()) missing.push('Your mobile number');
-  const cap = l.spaces ?? 1;
-  if (!(cap >= 1 && cap <= 200)) missing.push('Capacity between 1 and 200');
-  if (l.space_type === 'ev_charger') {
-    const a = l.amenities || [];
-    if (!a.some(x=>String(x).startsWith('speed:'))) missing.push('Charger speed');
-    if (!a.some(x=>String(x).startsWith('connector:'))) missing.push('Connector type');
-  }
-  if (l.host_type === 'organization') {
-    if (!(l.org_name||'').trim()) missing.push('Organization legal name');
-    if (!l.org_type) missing.push('Organization type');
-    if (!(l.org_registration||'').trim()) missing.push('Registration number (or "none — explain")');
-    if (!(l.access_contact_name||'').trim() || !(l.access_contact_phone||'').trim()) missing.push('Named access contact (name + mobile)');
-    if ((l.access_method||'').trim().length < 30) missing.push(`Access method too short — ${(l.access_method||'').trim().length}/30 characters`);
-  }
-  return missing;
 };
 
 // Compress an image file and upload it to Supabase Storage; returns public URL.
@@ -6621,7 +6575,13 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
   const canPublish = missing.length === 0;
   // Which verb-first step is the host on? Derived from what's actually done,
   // so the header can't disagree with the form's own requirements checklist.
-  const photosDone = photos.length >= requiredSlots.length;
+  // The four organisation slots are PROMPTS, not requirements: the gate asks
+  // for one photo from a club (the founder reviews the listing before it goes
+  // live and can ask for more). Counting tiles instead of the real minimum is
+  // what kept the step indicator on "Add your space photos" for a treasurer
+  // who had already given a perfectly good picture of the car park.
+  const minPhotos = minPhotosFor({ host_type: hostType });
+  const photosDone = photos.length >= minPhotos;
   const priceDone  = (listingShape.price_per_hour > 0) || (listingShape.price_per_day > 0);
   const datesDone  = !!f.availability;
   const stepIdx = !photosDone ? 0 : !priceDone ? 1 : !datesDone ? 2 : 3;
@@ -6811,15 +6771,28 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
               className={`text-xs px-3 py-2 rounded-full border font-semibold capitalize transition ${f.org_type===t?'teal-grad text-[#06231f] border-transparent':'bg-white/[0.05] border-white/12 text-[#cdd9e8]'}`}>{t}</button>
           ))}
         </div>
-        <label className={lbl}>Registration number *</label>
-        <input className={inp} placeholder='Charity no., Companies House no., or "none — explain"' value={f.org_registration} onChange={e=>set('org_registration',e.target.value)}/>
-        <label className={lbl}>Access contact on the day *</label>
-        <div className="grid grid-cols-2 gap-2">
-          <input className={inp} placeholder="Name (e.g. caretaker)" value={f.access_contact_name} onChange={e=>set('access_contact_name',e.target.value)}/>
-          <input className={inp} type="tel" placeholder="Their mobile" value={f.access_contact_phone} onChange={e=>set('access_contact_phone',e.target.value)}/>
+        {/* These three stopped being required. They are the ones a person asks
+            better than a form does — "none, we're a parish hall" is a real
+            answer to a registration number — and an organisation listing goes
+            to review before it goes live, so they are asked there instead of
+            standing between a treasurer and a submitted listing. Left on the
+            form because a club that has the answers to hand saves a phone
+            call by giving them now. */}
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3.5">
+          <p className="font-display font-bold text-[13px] text-[#EAF1F8]">Helpful, but not needed to submit</p>
+          <p className="text-[11px] text-[rgba(234,241,248,0.55)] mt-0.5 leading-relaxed">
+            We review every organisation listing before it goes live. Fill in what you know and we&apos;ll ask about the rest — or leave it all blank and submit now.
+          </p>
+          <label className={lbl}>Registration number</label>
+          <input className={inp} placeholder='Charity no., Companies House no., or "none — explain"' value={f.org_registration} onChange={e=>set('org_registration',e.target.value)}/>
+          <label className={lbl}>Access contact on the day</label>
+          <div className="grid grid-cols-2 gap-2">
+            <input className={inp} placeholder="Name (e.g. caretaker)" value={f.access_contact_name} onChange={e=>set('access_contact_name',e.target.value)}/>
+            <input className={inp} type="tel" placeholder="Their mobile" value={f.access_contact_phone} onChange={e=>set('access_contact_phone',e.target.value)}/>
+          </div>
+          <label className={lbl}>Access method</label>
+          <textarea className={inp} rows={2} placeholder='e.g. "Text the caretaker on arrival and he’ll open the barrier"' value={f.access_method} onChange={e=>set('access_method',e.target.value)}/>
         </div>
-        <label className={lbl}>Access method * <span className="normal-case font-medium text-[#6b7d96]">({(f.access_method||'').trim().length}/30 min)</span></label>
-        <textarea className={inp} rows={2} placeholder='e.g. "Text the caretaker on arrival and he’ll open the barrier"' value={f.access_method} onChange={e=>set('access_method',e.target.value)}/>
         <label className={lbl}>Capacity — number of spaces *</label>
         <input className={inp} type="number" min={1} max={200} value={f.spaces} onChange={e=>set('spaces',e.target.value)}/>
       </>)}
@@ -6840,15 +6813,20 @@ const ListSpaceForm = ({ user, onBack, onSuccess }) => {
         )}
       </div>
 
-      <label className={lbl}>Photos * <span className="normal-case font-medium text-[#6b7d96]">(min {requiredSlots.length}, max 10)</span></label>
+      <label className={lbl}>Photos * <span className="normal-case font-medium text-[#6b7d96]">(min {minPhotos}, max 10)</span></label>
+      {requiredSlots.length > minPhotos && (
+        <p className="text-[11px] text-[rgba(234,241,248,0.5)] -mt-1 mb-1.5 leading-relaxed">
+          {minPhotos === 1 ? 'One photo is enough to submit' : `${minPhotos} photos are enough to submit`} — the rest are prompts, and more of them makes a listing drivers trust.
+        </p>
+      )}
       <div className="grid grid-cols-3 gap-2">
-        {requiredSlots.map(sl=>(
+        {requiredSlots.map((sl,i)=>(
           <label key={sl.key} className={`relative aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center p-1.5 cursor-pointer overflow-hidden transition ${slots[sl.key]?'border-[#34E0A0]/50':'border-white/15 hover:border-[#5BE7DA]/50'}`}>
             {slots[sl.key]
               ? <img src={slots[sl.key]} alt={sl.label} className="absolute inset-0 w-full h-full object-cover"/>
               : uploading===sl.key
                 ? <span className="w-5 h-5 border-2 border-white/25 border-t-[#5BE7DA] rounded-full animate-spin"/>
-                : <><Camera size={16} className="text-[#6b7d96] mb-1"/><span className="text-[9px] font-semibold text-[#8da2bd] leading-tight">{sl.label}</span></>}
+                : <><Camera size={16} className="text-[#6b7d96] mb-1"/><span className="text-[9px] font-semibold text-[#8da2bd] leading-tight">{sl.label}</span>{i >= minPhotos && <span className="text-[8px] text-[#6b7d96] mt-0.5">optional</span>}</>}
             {slots[sl.key] && <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[#34E0A0] text-[#06231f] flex items-center justify-center"><Check size={11}/></span>}
             <input type="file" accept="image/*" className="hidden" onChange={onPickPhoto(sl.key,false)}/>
           </label>
@@ -7664,7 +7642,7 @@ const SpacesTab = ({ user, isPremium, onUpgrade }) => {
   return (
     <div className="p-4 pb-28">
       {needsFix.map(l=>{
-        const minP = l.host_type==='organization' ? 4 : 2;
+        const minP = minPhotosFor(l);
         const short = Math.max(0, minP - (l.photos?.length||0));
         return (
           <div key={l.id} className="flex items-start gap-2.5 bg-[#FFC24B]/10 border border-[#FFC24B]/30 text-[#FFD27A] text-xs px-3.5 py-3 rounded-2xl mb-3">
@@ -8952,7 +8930,19 @@ const AdminOverlay = ({ onClose }) => {
                         <p className="text-[12px] text-[rgba(234,241,248,0.55)]">{fmtDays(l.available_days) || l.availability || 'no days set'}{
                           l.gate_opens_at ? ` · gates ${hhmm(l.gate_opens_at)}–${hhmm(l.gate_closes_at)}` : ''}{
                           l.overnight_fee_pence > 0 ? ` · £${(l.overnight_fee_pence/100).toFixed(2)} left-in fee to host` : ''}</p>
-                        <p className="text-[12px] text-[rgba(234,241,248,0.55)]">Access: {l.access_contact_name} ({l.access_contact_phone}) — {l.access_method}</p>
+                        {l.access_contact_name || l.access_method ? (
+                          <p className="text-[12px] text-[rgba(234,241,248,0.55)]">Access: {l.access_contact_name || '—'} ({l.access_contact_phone || 'no number'}) — {l.access_method || 'not given'}</p>
+                        ) : null}
+                        {/* These stopped being publish blockers, so the queue is
+                            where they get asked for. Same list as the email. */}
+                        {approvalChecklist(l).length > 0 && (
+                          <div className="mt-2 rounded-xl border border-[#FFC24B]/30 bg-[#FFC24B]/8 px-3 py-2">
+                            <p className="text-[11px] font-bold text-[#FFD27A] uppercase tracking-wider">Still to ask them for</p>
+                            <ul className="text-[12px] text-[rgba(234,241,248,0.7)] mt-1 space-y-0.5 list-disc list-inside">
+                              {approvalChecklist(l).map((x,i)=>(<li key={i}>{x}</li>))}
+                            </ul>
+                          </div>
+                        )}
                         <p className="text-[12px] text-[rgba(234,241,248,0.55)]">Host: {l.contact_email} · {l.contact_phone}</p>
                         {(l.photos?.length > 0) && (
                           <div className="flex gap-1.5 mt-2.5 overflow-x-auto no-scrollbar">
