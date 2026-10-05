@@ -43,6 +43,7 @@ import { fetchReferrals, ensureCode, referralLine, referralLink, rememberCode, c
 import { PREMIUM_BENEFITS, paidBenefits, freeBenefits } from './premium';
 import { listingRequirements as checkRequirements, approvalChecklist, minPhotosFor, MIN_PRICE_PER_HOUR, MIN_PRICE_PER_DAY } from './data/publishGateCore';
 import { reputationLine, byBooking } from './data/driverReputationCore';
+import { councilFreeDay, isCouncilCarPark, chargesOutsideHours } from './data/councilCarParks';
 import { toast, onToast } from './toast';
 import { setOfflineMaps, clearOfflineMaps } from './offlineMaps';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
@@ -2265,6 +2266,33 @@ const SpotDetail = ({ spot, saved, onSave, mySignal, onSignal, signalCounts, onC
               repeated here — only the notes. If the header fell back to the map
               (broken image) the photo is simply absent, which is correct: we
               would otherwise show a broken image twice. */}
+          {/* Belfast City Council switches the machines off on six published
+              dates a year, charged car parks included, and nobody tells
+              drivers. Scoped to council car parks only (by === 'Belfast City
+              Council'), because it is the council's rule and not a general
+              one — and it says nothing at all once the published list runs
+              out, rather than guessing the next year's holidays. */}
+          {isCouncilCarPark(spot) && councilFreeDay() && (
+            <div className="mt-4 rounded-2xl px-4 py-3"
+              style={{background:'rgba(52,224,160,0.10)', border:'1px solid rgba(52,224,160,0.30)'}}>
+              <p className="text-[13px] font-bold text-[#6BEFB9]">Free all day today</p>
+              <p className="text-[12px] text-[rgba(234,241,248,0.6)] mt-0.5 leading-relaxed">
+                {councilFreeDay().name} — Belfast City Council does not charge at any of its car parks today.
+              </p>
+            </div>
+          )}
+          {/* The three council car parks that keep charging after hours. Every
+              other charged one in Belfast is free in the evening, which is
+              exactly why this needs saying out loud here. */}
+          {isCouncilCarPark(spot) && chargesOutsideHours(spot) && !councilFreeDay() && (
+            <div className="mt-4 rounded-2xl px-4 py-3"
+              style={{background:'rgba(255,194,75,0.10)', border:'1px solid rgba(255,194,75,0.30)'}}>
+              <p className="text-[13px] font-bold text-[#FFD27A]">Not free in the evening</p>
+              <p className="text-[12px] text-[rgba(234,241,248,0.6)] mt-0.5 leading-relaxed">
+                Most council car parks in Belfast are free outside charged hours. This is one of the few that is not — check the machine before you leave the car.
+              </p>
+            </div>
+          )}
           {spot.notes && (
             <p className="text-sm text-[rgba(234,241,248,0.65)] leading-relaxed italic border-l-[3px] border-[#2ED3C6] pl-3 mt-4">{spot.notes}</p>
           )}
