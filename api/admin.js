@@ -445,6 +445,40 @@ export default async function handler(req, res) {
       }
     }
 
+    // "Would the pitch be true at THIS address?" — the one question that
+    // decides whether to ring a club, answered before the call rather than
+    // after. Takes a point, returns counts of DISTINCT SESSIONS (and distinct
+    // people on the waitlist), never events: the live table's biggest apparent
+    // cluster is five events from ONE session, and "five people looked for
+    // parking near you" would have been a false statement to a stranger about
+    // their own property.
+    //
+    // service_role only, same as demand_points. It stays that way until the
+    // data is dense enough to say something true to a host directly — today
+    // the honest answer almost everywhere is "not enough to say yet".
+    if (p?.action === 'demand-near') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const lat = Number(p.lat), lng = Number(p.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(200).json({ ok: false, error: 'A lat and lng are required.' });
+      }
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/demand_near`, {
+          method: 'POST', headers: svcH,
+          body: JSON.stringify({
+            p_lat: lat, p_lng: lng,
+            p_radius_km: Number(p.radiusKm) || 1.5,
+            p_days: Math.max(1, Math.min(Number(p.days) || 90, 365)),
+          }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        return res.status(200).json({ ok: true, demand: JSON.parse(text) });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'demand query failed' });
+      }
+    }
+
     if (p?.action === 'sync-partners') {
       const steps = [];
       const run = async (label, url, method, payload, extraHeaders) => {
