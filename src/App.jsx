@@ -42,6 +42,7 @@ import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/poin
 import { fetchReferrals, ensureCode, referralLine, referralLink, rememberCode, claimPendingCode, claimMessage } from './data/referrals';
 import { PREMIUM_BENEFITS, paidBenefits, freeBenefits } from './premium';
 import { listingRequirements as checkRequirements, approvalChecklist, minPhotosFor, MIN_PRICE_PER_HOUR, MIN_PRICE_PER_DAY } from './data/publishGateCore';
+import { reputationLine, byBooking } from './data/driverReputationCore';
 import { toast, onToast } from './toast';
 import { setOfflineMaps, clearOfflineMaps } from './offlineMaps';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
@@ -7018,6 +7019,7 @@ const RatingPrompt = ({ pending, onDone }) => {
 // plus a calendar subscribe link. Reads the host's own bookings (RLS-scoped).
 const HostEarnings = ({ user }) => {
   const [rows, setRows] = useState(null);
+  const [reps, setReps] = useState(null);
   const [calToken, setCalToken] = useState(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -7028,8 +7030,20 @@ const HostEarnings = ({ user }) => {
         .select('id,starts_at,ends_at,duration_hours,status,vehicle_reg,booking_price_pence,application_fee_pence,service_fee_pence')
         .eq('host_id', user.id).in('status', ['paid','completed']);
       const { data: ha } = await supabase.from('host_accounts').select('calendar_token').eq('host_id', user.id).maybeSingle();
+      // Who is coming, not just what they drive. driver_reputation() returns
+      // rows ONLY for bookings whose host_id is the caller, and only
+      // aggregates — no name, no email, no review text, nothing about other
+      // sites. See 20261005_driver_reputation_for_host.sql for why it is that
+      // and not more.
+      let reps = null;
+      const ids = (data || []).map(b => b.id);
+      if (ids.length) {
+        const { data: rr } = await supabase.rpc('driver_reputation', { p_booking_ids: ids });
+        reps = byBooking(rr);
+      }
       if (!live) return;
       setRows(data || []);
+      setReps(reps);
       setCalToken(ha?.calendar_token || null);
     })();
     return () => { live = false; };
@@ -7079,10 +7093,27 @@ const HostEarnings = ({ user }) => {
                 <span className="font-mono font-bold text-[13px] text-[#06231f] bg-[#6BEFB9] px-2 py-1 rounded-md tracking-widest flex-shrink-0">
                   {b.vehicle_reg || '—'}
                 </span>
-                <span className="text-[12px] text-[#cdd9e8] truncate">
+                <span className="text-[12px] text-[#cdd9e8] truncate min-w-0 flex-1">
                   {new Date(b.starts_at).toLocaleString('en-GB', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
                   {b.duration_hours ? ` · ${b.duration_hours}h` : ''}
                 </span>
+                {/* NO RED/AMBER/GREEN. A host reads the number and decides for
+                    themselves; colour-coding two strangers' taps into a risk
+                    verdict about a named person is not ours to do. And with no
+                    ratings yet this says "First stay", which is a fact rather
+                    than either reassurance or a warning. */}
+                {(() => {
+                  const rep = reputationLine(reps?.get(b.id));
+                  if (!rep) return null;
+                  return (
+                    <span className={`text-[11px] font-semibold flex-shrink-0 px-2 py-1 rounded-lg border ${
+                      rep.tone === 'rated'
+                        ? 'text-[#6BEFB9] bg-[#34E0A0]/10 border-[#34E0A0]/25'
+                        : 'text-[rgba(234,241,248,0.6)] bg-white/5 border-white/12'}`}>
+                      {rep.label}
+                    </span>
+                  );
+                })()}
               </div>
             ))}
           </div>
