@@ -1242,6 +1242,15 @@ const BusinessModal = ({ onClose }) => {
 };
 
 // ── Pricing / Premium Modal ───────────────────────────────────────────────────
+// Inside the iOS app, Premium must not be SOLD: App Review guideline 3.1.1
+// treats a subscription to in-app digital content (the hidden-gem pins) as
+// in-app purchase, and a Stripe link or a price shown there is a rejection.
+// Existing subscribers still get their entitlement after signing in, which is
+// allowed; the Android app and the web are unaffected.
+const isIOSApp = () => {
+  try { return !!window.Capacitor && window.Capacitor.getPlatform?.() === 'ios'; } catch { return false; }
+};
+
 const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
   const [showCodeBox, setShowCodeBox] = useState(false);
   const [code,        setCode]        = useState('');
@@ -1359,6 +1368,11 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
               3.2% fee drag against 8.7% on monthly, and a year of access rather
               than a renewal decision every month. Prices here MUST match the
               Stripe links above. */}
+          {isIOSApp() ? (
+            <p className="text-sm text-[#aebfd4] leading-relaxed text-center">
+              Premium isn&apos;t available to buy in this app. If you already have Premium, sign in with the email you used and it&apos;s applied automatically.
+            </p>
+          ) : (<>
           <div className="grid grid-cols-2 gap-3">
             <a href={STRIPE_ANNUAL} target="_blank" rel="noreferrer"
               className="block rounded-2xl border-2 border-[#5BE7DA] p-4 text-center hover:bg-[#2ED3C6]/10 active:scale-[0.98] transition-all relative">
@@ -1388,6 +1402,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
             <p className="text-center text-[11px] text-[#6BEFB9] font-semibold">✓ Apple Pay is ready on this device</p>
           )}
           <p className="text-center text-xs text-[#6b7d96]">Secure payment via Stripe · Cancel any time</p>
+          </>)}
 
           {!showCodeBox ? (
             <button onClick={()=>setShowCodeBox(true)} className="block w-full text-center text-xs text-[#6b7d96] underline hover:text-[#aebfd4]">
@@ -1672,7 +1687,7 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
         <ReferralCard/>
         {!isPremium && (
           <button onClick={onUpgrade} className="w-full bg-yellow-400 text-[#FFD27A] py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
-            ★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr
+            {isIOSApp() ? '★ About Premium' : <>★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr</>}
           </button>
         )}
         {/* Only for somebody who actually has work permits. Shown to the 
@@ -4223,7 +4238,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
                     counts gems AND EV picks across every town — claiming they
                     were all gems, all in one city, would be two lies in five
                     words. Say what each number actually is. */}
-                Unlock <strong className="text-[#C9A7FF]">{gatedGems > 0 ? `${gatedGems} hidden gem${gatedGems!==1?'s':''}` : 'every hidden gem'}</strong> — the free spots locals keep to themselves — {gatedEv > 0 ? <>plus <strong className="text-[#C9A7FF]">{gatedEv} EV charger pick{gatedEv!==1?'s':''}</strong> across Northern Ireland.</> : 'plus every EV charger pick across the map.'} One parking ticket costs more than a month of Premium.
+                Unlock <strong className="text-[#C9A7FF]">{gatedGems > 0 ? `${gatedGems} hidden gem${gatedGems!==1?'s':''}` : 'every hidden gem'}</strong> — the free spots locals keep to themselves — {gatedEv > 0 ? <>plus <strong className="text-[#C9A7FF]">{gatedEv} EV charger pick{gatedEv!==1?'s':''}</strong> across Northern Ireland.</> : 'plus every EV charger pick across the map.'}{isIOSApp() ? '' : ' One parking ticket costs more than a month of Premium.'}
               </p>
               <button onClick={onUpgrade} className="mt-3 inline-flex items-center gap-1.5 font-display font-bold text-[12.5px] text-[#06231f] px-4 py-2.5 rounded-xl" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
                 See what you're missing<ChevronRight size={14}/>
