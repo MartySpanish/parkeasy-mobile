@@ -1,0 +1,5 @@
+versionName=1.0.0
+versionCode=378
+signed=0
+commit=2a4a18eef12c90089d2881b1651887ea1c55eff7
+run=37534162716
