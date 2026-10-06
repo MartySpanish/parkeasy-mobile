@@ -124,7 +124,24 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
+          set -o pipefail
+          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+
+      # The Actions log API is not reachable from everywhere; the branch is.
+      - name: Publish the Gradle log to the android-builds branch on failure
+        if: failure()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth 1 origin android-builds 2>/dev/null; then
+            git worktree add /tmp/builds origin/android-builds
+          else
+            git worktree add --detach /tmp/builds
+            (cd /tmp/builds && git checkout --orphan android-builds && git rm -rfq . 2>/dev/null; git clean -fdxq)
+          fi
+          mkdir -p /tmp/builds/logs
+          cp "$RUNNER_TEMP/gradle.log" "/tmp/builds/logs/run-${GITHUB_RUN_ID}.log" 2>/dev/null || echo "no gradle log" > "/tmp/builds/logs/run-${GITHUB_RUN_ID}.log"
+          cd /tmp/builds && git add -A && git commit -qm "Gradle log for failed run ${GITHUB_RUN_ID}" && git push origin HEAD:android-builds
 
       - name: Collect outputs
         run: |

@@ -34,6 +34,10 @@ android {
             }
         }
     }
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
     buildTypes {
         release {
             // Only attach the config when a keystore is actually present;

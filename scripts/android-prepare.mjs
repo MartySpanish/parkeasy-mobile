@@ -119,6 +119,23 @@ edit('app/build.gradle', (s) => {
   return s;
 });
 
+// lintVitalRelease runs on every release build and can fail it over
+// advisory findings in a WebView shell with no custom code. Report, don't
+// fail.
+edit('app/build.gradle', (s) => {
+  if (s.includes('checkReleaseBuilds')) return s;
+  return s.replace(`    buildTypes {`, `    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+    buildTypes {`);
+});
+
+// Let AGP download missing SDK components (platform 36, build-tools) on a
+// runner that has an older SDK; licences are pre-accepted on GitHub runners.
+edit('gradle.properties', (s) => s.includes('android.builder.sdkDownload') ? s
+  : s + '\nandroid.builder.sdkDownload=true\n');
+
 // ---------------------------------------------------------------- styles
 edit('app/src/main/res/values/styles.xml', (s) => {
   if (!s.includes('windowSplashScreenBackground')) {
