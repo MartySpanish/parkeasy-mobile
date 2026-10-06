@@ -22,6 +22,10 @@ const server = readFileSync(new URL('../../api/checkout/create-session.js', impo
 const app    = readFileSync(new URL('../../src/App.jsx', import.meta.url), 'utf8');
 const notify = readFileSync(new URL('../../src/notify.js', import.meta.url), 'utf8');
 const hosts  = readFileSync(new URL('../../public/hosts.html', import.meta.url), 'utf8');
+// The publish gate, imported rather than scraped: one module now backs both the
+// form and /api/publish-listing.
+const { listingRequirements: gate, MIN_PRICE_PER_HOUR, MIN_PRICE_PER_DAY } =
+  await import('../../src/data/publishGateCore.js');
 
 let passed = 0;
 const it = (what, fn) => { fn(); passed++; console.log(`  PASS  ${what}`); };
@@ -96,12 +100,41 @@ it('the day rate is actually persisted', () => {
 });
 
 it('both minimums are enforced, and a day must beat an hour', () => {
-  const at = app.indexOf('const checkRequirements = (l) => {');
-  const body = app.slice(at, app.indexOf('\n};', at));
-  assert.match(body, /MIN_PRICE_PER_HOUR/, 'the hourly minimum is gone');
-  assert.match(body, /MIN_PRICE_PER_DAY/,  'the day minimum is gone');
-  assert.match(body, /price_per_day\) <= Number\(l\.price_per_hour\)/,
-    'a day rate at or below the hourly rate is no longer rejected');
+  // This used to read the text of a copy of the gate that lived in App.jsx.
+  // That copy is gone — the rule now lives in one module both the form and
+  // /api/publish-listing import — so the minimums are RUN here instead of
+  // matched, which also means the api route is covered by the same check.
+  const priced = (over) => gate({
+    photos: ['a', 'b'],
+    instructions: 'Third gate on the left, blue door, space is behind the hedge.',
+    lat: 54.5973, lng: -5.9301, availability: 'weekends',
+    contact_phone: '07700900000', spaces: 1, host_type: 'residential', ...over,
+  });
+  assert.ok(MIN_PRICE_PER_HOUR > 0 && MIN_PRICE_PER_DAY > 0, 'the minimums are gone');
+  // Pinned at the boundary rather than by message wording: a penny under the
+  // floor is refused and the floor itself is accepted. That fails if the check
+  // is dropped, if the comparison is loosened to <=, or if the floor silently
+  // stops being MIN_PRICE_PER_HOUR — none of which a text match would notice.
+  assert.ok(priced({ price_per_hour: MIN_PRICE_PER_HOUR - 0.01 }).length > 0,
+    'the hourly minimum is gone — a rate under it publishes');
+  assert.deepEqual(priced({ price_per_hour: MIN_PRICE_PER_HOUR }), [],
+    'the hourly minimum refuses the minimum itself');
+  assert.ok(priced({ price_per_day: MIN_PRICE_PER_DAY - 0.01 }).length > 0,
+    'the day minimum is gone — a rate under it publishes');
+  assert.deepEqual(priced({ price_per_day: MIN_PRICE_PER_DAY }), [],
+    'the day minimum refuses the minimum itself');
+  // ABOVE BOTH FLOORS on purpose. A £3/hr–£2/day pair looks like it tests this
+  // rule and does not: £2 is already under the £5 day floor, so the day floor
+  // catches it and the comparison could be deleted unnoticed. Only a pair that
+  // clears both floors can prove the day-vs-hour rule is doing anything.
+  // Equal is not "higher", so an equal pair must be refused too.
+  assert.ok(priced({ price_per_hour: 20, price_per_day: 20 }).length > 0,
+    'a day rate equal to the hourly rate publishes as an all-day deal that is not one');
+  assert.ok(priced({ price_per_hour: 20, price_per_day: 15 }).length > 0,
+    'a day rate below the hourly rate publishes');
+  // And a listing that satisfies both passes, or the checks above prove nothing.
+  assert.deepEqual(priced({ price_per_hour: 3, price_per_day: 20 }), [],
+    'a listing with two sound rates is refused');
 });
 
 it('the sheet asks the driver only when there is a choice', () => {

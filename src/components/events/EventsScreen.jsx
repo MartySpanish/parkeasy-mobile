@@ -19,7 +19,8 @@
 // rather than presenting a radius search as if it were surveyed.
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronDown, Clock, MapPin, AlertTriangle, Users, Calendar, Bell } from 'lucide-react';
-import { upcomingEvents, venueOf, startOf, endOf, formatWhen } from '../../data/events';
+import { EVENTS, upcomingEvents, venueOf, startOf, endOf, formatWhen } from '../../data/events';
+import { hostPitch } from '../../data/eventDemandCore';
 import { parkingForEvent, TIER } from '../../data/eventParking';
 import { holdCopy } from '../../data/spaceHold';
 import { setEventAlert, fetchEventAlerts } from '../../data/eventAlerts';
@@ -210,6 +211,9 @@ const TierSection = ({ group, renderSpot, isPremium, sole = false }) => {
 const EventDetail = ({ ev, groups, onBack, renderSpot, isPremium, onOpenFleadh, onAddSpot, following, onFollow }) => {
   const venue = venueOf(ev);
   const hasBookable = groups.some(g => g.tier === TIER.BOOKABLE && g.items.length);
+  // Only computed for the ask below, so it costs nothing on an event that
+  // already has something bookable beside it.
+  const pitch = hasBookable ? null : hostPitch(ev, EVENTS, startOf, formatWhen);
   return (
     <>
       <button onClick={onBack}
@@ -288,10 +292,32 @@ const EventDetail = ({ ev, groups, onBack, renderSpot, isPremium, onOpenFleadh, 
           <p className="font-display font-bold text-[14px] text-[#EAF1F8]">
             Live near {venue?.name}?
           </p>
+          {/* THE NUMBER AND THE SECOND DATE ARE THE ARGUMENT. "Drivers are
+              looking for one" is the same sentence beside a 200-seat comedy
+              night and an eighteen-thousand-seat international, and it does not
+              persuade anybody to open a gate. The founder's own doorstep pitch
+              is "17,000 people are walking past your gate tonight… there's
+              another international a week today, so it's two nights, not one."
+              Both facts are already on the event; this just says them. Each
+              clause disappears on its own when its fact is missing, so a venue
+              with no crowd figure still gets a shorter true sentence. */}
           <p className="text-[12.5px] text-[#cdd9e8] mt-1 leading-relaxed">
-            Nobody is renting out a space here yet. Drivers coming to this event are looking for one —
-            list your driveway or yard and keep 85% of every booking.
+            Nobody is renting out a space here yet
+            {pitch?.crowd && <> and <strong className="text-[#EAF1F8]">{pitch.crowd} people</strong> are expected</>}.
+            {pitch?.repeat
+              ? <> It happens again — {pitch.repeat.name}, {pitch.repeat.when} — so that is two nights, not one.</>
+              : <> Drivers coming to this event are looking for one.</>}
+            {' '}List your driveway or yard and keep 85% of every booking.
           </p>
+          {/* The Davitt Park lesson, before anybody says yes rather than after.
+              A 19:45 kick-off does not end at 19:45, and a host who opens the
+              gate and shuts it at nine has locked the cars in. */}
+          {pitch?.until && (
+            <p className="text-[11.5px] text-[#9fb3cc] mt-2 leading-relaxed">
+              You would need to let cars out until about <strong className="text-[#cdd9e8]">{pitch.until.time}
+              {pitch.until.nextDay ? ' the next morning' : ''}</strong> — the event runs on well past its start time.
+            </p>
+          )}
           {onAddSpot && (
             <button onClick={onAddSpot}
               className="mt-3 w-full py-3 rounded-2xl font-display font-bold text-[14px] text-[#06231f] btn-teal active:scale-95 transition">

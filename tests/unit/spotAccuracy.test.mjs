@@ -24,6 +24,7 @@ import assert from 'node:assert/strict';
 
 const { EXTRA_SPOTS } = await import('../../src/extraSpots.js');
 const { EV_SPOTS } = await import('../../src/evSpots.js');
+const { chargesOutsideHours, isCouncilCarPark } = await import('../../src/data/councilCarParks.js');
 
 const flat = (o) => Object.values(o).flat();
 const all = [...flat(EXTRA_SPOTS), ...flat(EV_SPOTS)];
@@ -50,6 +51,28 @@ it('Junction One carries its 3-hour ANPR limit, not just "free"', () => {
   assert.match(field, /£100/, 'the £100 parking charge is not stated anywhere');
   assert.match(field, /24 hours a day|24\/7/i,
     'the limit is not stated as running 24/7 — a driver may assume it lapses after shop hours');
+});
+
+it('Smithfield does not imply free parking after six', () => {
+  // Belfast City Council: "All charged car parks (except Corporation Square,
+  // Corporation Street and Smithfield) are open and free to use outside of
+  // charged hours." Smithfield is an EXCEPTION — it keeps charging.
+  //
+  // Our entry said only "Charged Mon-Sat 8am-6pm, Thu to 9pm", which a driver
+  // reads as free after six, because that is what it means at every other
+  // council car park in Belfast. Same shape as Junction One: the stated hours
+  // were accurate and the inference they invited was wrong.
+  const s = byId(2001);
+  assert.ok(s, 'the Smithfield spot is gone');
+  assert.ok(chargesOutsideHours(s),
+    'Smithfield is no longer treated as an exception to the council\'s free-after-hours rule');
+  assert.match(s.restriction, /not free outside charged hours/i,
+    'the restriction field no longer warns that Smithfield keeps charging — a driver reads this line, not the notes');
+  // And the opposite error: a council car park that IS free after hours must
+  // not inherit the warning, or the whole signal stops meaning anything.
+  const kent = byId(2002);
+  assert.ok(!chargesOutsideHours(kent), 'Kent Street has been marked as an exception, which it is not');
+  assert.match(kent.notes, /free outside/i, 'Kent Street no longer says it is free outside charged hours');
 });
 
 it('Connswater states the closure as fact, not as a hedge', () => {
