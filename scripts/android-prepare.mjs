@@ -81,8 +81,8 @@ edit('app/build.gradle', (s) => {
       `        // CI passes the GitHub run number, so each upload to Play is a
         // strictly higher versionCode (Play rejects a repeat). Locally it
         // falls back to 1. versionName is what people see on the store.
-        versionCode (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInteger()
-        versionName (System.getenv("ANDROID_VERSION_NAME") ?: "1.0.0")`
+        versionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInteger()
+        versionName = (System.getenv("ANDROID_VERSION_NAME") ?: "1.0.0")`
     );
   }
   if (!s.includes('signingConfigs')) {
