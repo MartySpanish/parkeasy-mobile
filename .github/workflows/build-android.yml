@@ -1,8 +1,18 @@
 name: Android release (Play Store)
 
-# Builds the SIGNED Android App Bundle (.aab) that gets uploaded to Google
-# Play, plus a signed .apk for installing straight onto a phone to test the
-# exact same build.
+# Builds the Android App Bundle (.aab) that gets uploaded to Google Play, plus
+# an .apk for installing straight onto a phone to test the exact same build.
+#
+# TWO MODES, chosen automatically:
+#   signed    the four ANDROID_* repository secrets are set → the outputs are
+#             signed with the upload key and ready to upload to Play as they are.
+#   unsigned  no secrets → the outputs are built unsigned and published to the
+#             `android-builds` branch of this repo, from which they are signed
+#             with the upload keystore on a machine that holds it:
+#               jarsigner -keystore parkeasy-upload.jks -signedjar signed.aab unsigned.aab parkeasy-upload
+#             (docs/ANDROID_RELEASE.md). This is how the first builds were made
+#             before the secrets existed; it is also the fallback if they ever
+#             have to be rotated.
 #
 # Run it from GitHub → Actions → "Android release (Play Store)" → Run workflow,
 # or push a tag like `android-v1.0.0`. It does NOT run on every push to main:
@@ -10,12 +20,11 @@ name: Android release (Play Store)
 # users the moment Vercel deploys — a new store build is only needed when the
 # native shell itself changes (icon, permissions, Capacitor upgrade).
 #
-# NEEDS FOUR REPOSITORY SECRETS (Settings → Secrets and variables → Actions):
+# SECRETS (Settings → Secrets and variables → Actions):
 #   ANDROID_KEYSTORE_BASE64   the upload keystore, base64-encoded
 #   ANDROID_KEYSTORE_PASSWORD
 #   ANDROID_KEY_ALIAS         parkeasy-upload
 #   ANDROID_KEY_PASSWORD      (same as the keystore password)
-# See docs/ANDROID_RELEASE.md.
 
 on:
   workflow_dispatch:
@@ -29,7 +38,7 @@ on:
       - 'android-v*'
 
 permissions:
-  contents: read
+  contents: write   # to publish unsigned outputs to the android-builds branch
 
 concurrency:
   group: android-release-${{ github.ref }}
@@ -58,13 +67,16 @@ jobs:
           echo "ANDROID_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           echo "versionCode=$((GITHUB_RUN_NUMBER + 100)) versionName=$NAME"
 
-      - name: Check the signing secrets are present
+      - name: Decide signed or unsigned
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          if [ -z "$KS" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 secret is not set. Add the four ANDROID_* secrets (docs/ANDROID_RELEASE.md) and re-run."
-            exit 1
+          if [ -n "$KS" ]; then
+            echo "SIGNED=1" >> "$GITHUB_ENV"
+            echo "::notice::Signing secrets present — building a signed release."
+          else
+            echo "SIGNED=0" >> "$GITHUB_ENV"
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret — building UNSIGNED and publishing to the android-builds branch for signing elsewhere."
           fi
 
       - name: Setup Java 21
@@ -97,13 +109,14 @@ jobs:
         run: node scripts/android-prepare.mjs
 
       - name: Decode upload keystore
+        if: env.SIGNED == '1'
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           echo "$KS" | base64 -d > "$RUNNER_TEMP/upload.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
 
-      - name: Build signed App Bundle and APK
+      - name: Build App Bundle and APK
         working-directory: android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -113,11 +126,20 @@ jobs:
           chmod +x gradlew
           ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
 
-      - name: Rename outputs
+      - name: Collect outputs
         run: |
           mkdir -p out
-          cp android/app/build/outputs/bundle/release/app-release.aab "out/ParkEasy-${ANDROID_VERSION_NAME}-${ANDROID_VERSION_CODE}.aab"
-          cp android/app/build/outputs/apk/release/app-release.apk  "out/ParkEasy-${ANDROID_VERSION_NAME}-${ANDROID_VERSION_CODE}.apk"
+          SUFFIX=""; [ "$SIGNED" = "1" ] || SUFFIX="-unsigned"
+          cp android/app/build/outputs/bundle/release/app-release.aab "out/ParkEasy-${ANDROID_VERSION_NAME}-${ANDROID_VERSION_CODE}${SUFFIX}.aab"
+          APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" "out/ParkEasy-${ANDROID_VERSION_NAME}-${ANDROID_VERSION_CODE}${SUFFIX}.apk"
+          cat > out/BUILD.txt <<EOF
+          versionName=${ANDROID_VERSION_NAME}
+          versionCode=${ANDROID_VERSION_CODE}
+          signed=${SIGNED}
+          commit=${GITHUB_SHA}
+          run=${GITHUB_RUN_ID}
+          EOF
           ls -la out
 
       - name: Upload .aab (upload this one to Google Play)
@@ -133,3 +155,26 @@ jobs:
           name: ParkEasy-test-apk
           path: out/*.apk
           retention-days: 90
+
+      # Unsigned outputs are also pushed to a branch: nothing in them is secret
+      # (the same bytes are in the public artifact above) and a branch can be
+      # fetched with plain git from anywhere, which the Actions artifact API
+      # cannot always be. One commit per build, history kept.
+      - name: Publish unsigned outputs to the android-builds branch
+        if: env.SIGNED == '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          DIR="builds/${ANDROID_VERSION_NAME}-${ANDROID_VERSION_CODE}"
+          if git fetch --depth 1 origin android-builds 2>/dev/null; then
+            git worktree add /tmp/builds origin/android-builds
+          else
+            git worktree add --detach /tmp/builds
+            (cd /tmp/builds && git checkout --orphan android-builds && git rm -rfq . && git clean -fdxq)
+          fi
+          mkdir -p "/tmp/builds/$DIR" && cp out/* "/tmp/builds/$DIR/"
+          cd /tmp/builds
+          git add -A
+          git commit -qm "Unsigned Android build ${ANDROID_VERSION_NAME} (${ANDROID_VERSION_CODE}) from ${GITHUB_SHA::7}"
+          git push origin HEAD:android-builds
+          echo "::notice::Published to branch android-builds at $DIR"

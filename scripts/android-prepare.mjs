@@ -107,7 +107,12 @@ edit('app/build.gradle', (s) => {
     }
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            // Only attach the config when a keystore is actually present;
+            // otherwise Gradle produces an UNSIGNED bundle/apk instead of
+            // failing, which is what the no-secrets CI mode relies on.
+            if (System.getenv("ANDROID_KEYSTORE_PATH") != null) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false`
     );
   }
