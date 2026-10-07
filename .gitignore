@@ -30,3 +30,6 @@ dist-ssr
 
 # Generated at build time from VITE_SUPABASE_* — never committed.
 public/globe/config.js
+
+# Claude Code personal overrides (the committed .claude/settings.json is shared)
+.claude/settings.local.json
