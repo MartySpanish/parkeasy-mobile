@@ -300,6 +300,38 @@ const writeStore = (k, v) => {
 let session = '';
 let asked = false;
 
+// ---------------------------------------------------------- telling React
+//
+// THE BUG THIS FIXES. The session arrives asynchronously and is stored in the
+// module variable above. tileLayerProps() reads it at render time — but React
+// has no idea the variable changed, so nothing re-renders and the map keeps the
+// OSM url it mounted with. react-leaflet 4 DOES call layer.setUrl() when the
+// url prop changes (see its TileLayer.js), so the only missing piece was a
+// re-render; without one the switch to Google waited on some unrelated state
+// change happening to re-render that component, which on a static map screen
+// may be never.
+//
+// The practical effect was that a first-time visitor — nobody with a cached
+// token — got an OpenStreetMap map and kept it for the whole visit, and only a
+// second page load came up on Google. That is the wrong first impression of the
+// app and it is what this subscription exists to stop.
+const listeners = new Set();
+
+/** Subscribe to "the tile provider may have changed". Returns an unsubscribe. */
+export const onTilesChanged = (fn) => {
+  if (typeof fn !== 'function') return () => {};
+  listeners.add(fn);
+  return () => { listeners.delete(fn); };
+};
+
+// One listener throwing must not stop the others being told, or a single bad
+// subscriber leaves every other map on the fallback provider.
+const notifyTilesChanged = () => {
+  for (const fn of [...listeners]) {
+    try { fn(); } catch (e) { console.error('tile listener', e); }
+  }
+};
+
 /** The Google pair the builders want, or null while there is no session. */
 export const googleTiles = () => {
   const key = googleKey();
@@ -323,18 +355,43 @@ export const ensureGoogleSession = async () => {
   const fingerprint = buildSessionFingerprint(key, hiDpi);
 
   const cached = buildStoredSession(readStore(SESSION_STORE_KEY), fingerprint, Date.now());
-  if (cached) { session = cached; return session; }
+  // The cached path is synchronous at import time, so no listener exists yet to
+  // tell — the first render already reads the token. Notifying anyway is both
+  // harmless and correct if this is ever called again.
+  if (cached) { session = cached; notifyTilesChanged(); return session; }
 
   try {
     const req = buildSessionRequest(key, hiDpi);
     const res = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body });
-    if (!res || !res.ok) return '';
+    if (!res || !res.ok) {
+      // WHY THIS LOGS. Every failure here looks identical from the outside: the
+      // map quietly draws OpenStreetMap. Working out which failure it was has
+      // cost real time — the most common by far is a 403 because the Map Tiles
+      // API is not enabled, or has no billing account, on the project that owns
+      // the key; a referrer-restricted key also 403s on a vercel.app preview
+      // domain while working on parkeasy.uk. The status and Google's own
+      // message say which in one line, so nobody has to guess again.
+      const detail = await (res ? res.text().catch(() => '') : Promise.resolve(''));
+      console.warn(
+        `[ParkEasy] Google Map Tiles unavailable — HTTP ${res ? res.status : 'no response'}. `
+        + 'Falling back to CARTO/OpenStreetMap. Usually: Map Tiles API not enabled, '
+        + 'no billing on the key\'s project, or an HTTP-referrer restriction that '
+        + `excludes this domain. Google said: ${String(detail).slice(0, 300)}`);
+      return '';
+    }
     const record = buildSessionRecord(await res.json(), fingerprint);
-    if (!record) return '';
+    if (!record) {
+      console.warn('[ParkEasy] Google Map Tiles returned no usable session token.');
+      return '';
+    }
     session = record.session;
     writeStore(SESSION_STORE_KEY, JSON.stringify(record));
+    // The whole point of the subscription: the map mounted on a fallback and
+    // now has to be told to come back and read the Google url.
+    notifyTilesChanged();
     return session;
-  } catch {
+  } catch (e) {
+    console.warn('[ParkEasy] Google Map Tiles session request failed:', e?.message || e);
     return '';
   }
 };

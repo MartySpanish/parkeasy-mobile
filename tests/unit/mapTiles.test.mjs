@@ -38,7 +38,7 @@ import {
   buildSessionRecord, buildStoredSession, SESSION_SKEW_MS,
   tileUrl, tileAttribution, tileLayerProps, tileThemeClass, usingCarto,
   usingGoogle, tileProvider, googleTiles,
-  OSM_TILE_HOST, GOOGLE_TILE_HOST, GOOGLE_SESSION_ENDPOINT,
+  OSM_TILE_HOST, GOOGLE_TILE_HOST, GOOGLE_SESSION_ENDPOINT, onTilesChanged,
 } from '../../src/mapTiles.js';
 
 const read = p => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -407,17 +407,35 @@ it('App.jsx holds no tile url of its own', () => {
 });
 
 it('every map spreads the derived props and carries the theme class', () => {
-  const layers = appCode.match(/<TileLayer[^>]*\/>/g) || [];
-  assert.ok(layers.length >= 5, `expected the app's map layers, found ${layers.length}`);
+  // THE TILE LAYER MOVED. It used to be written out at each of App.jsx's five
+  // maps; it now lives once in BaseTileLayer, which subscribes so the map can
+  // switch to Google when the session token lands (see the checks at the end of
+  // this file). The rule is unchanged and is now checked in both places: App
+  // must render only the subscribing component, and that component must spread
+  // the derived props with nothing beside them.
+  // Comments stripped first: this file's own header quotes the old
+  // `<TileLayer {...tileLayerProps()}/>` to explain what changed, and matching
+  // that counted as a second tile layer.
+  const strip = (src) => src.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+  const baseCode = strip(read('../../src/components/map/BaseTileLayer.jsx'));
+  const layers = baseCode.match(/<TileLayer[^>]*\/>/g) || [];
+  assert.equal(layers.length, 1, `BaseTileLayer should hold exactly one tile layer, found ${layers.length}`);
   for (const l of layers) {
     assert.match(l, /\{\.\.\.tileLayerProps\(\)\}/, `tile layer not using the derived props: ${l}`);
     // A prop written out beside the spread overrides it — which is how a
     // hardcoded url or a stale attribution gets back in.
     assert.ok(!/\b(url|attribution|subdomains)=/.test(l), `prop overriding the spread: ${l}`);
   }
+  // And App.jsx must not have grown a bare one back: a <TileLayer> rendered
+  // there does not subscribe, so it keeps whatever provider it mounted with.
+  assert.deepEqual(strip(appCode).match(/<TileLayer[^>]*\/>/g) || [], [],
+    'App.jsx renders a TileLayer directly again — that one will not switch to Google after mount');
+
   const maps = appCode.match(/<MapContainer[\s>][^>]*/g) || [];
-  assert.equal(maps.length, layers.length,
-    `${maps.length} maps but ${layers.length} tile layers`);
+  const mounts = appCode.match(/<BaseTileLayer\s*\/>/g) || [];
+  assert.ok(mounts.length >= 5, `expected the app's map layers, found ${mounts.length}`);
+  assert.equal(maps.length, mounts.length,
+    `${maps.length} maps but ${mounts.length} tile layers`);
   for (const m of maps) {
     assert.match(m, /className=\{tileThemeClass\(\)\}/,
       `a map that will show light tiles in dark mode: ${m.slice(0, 80)}`);
@@ -442,3 +460,91 @@ it('the env-reading wrappers agree with the builders they wrap', () => {
 });
 
 console.log(`\n  ${passed} checks passed\n`);
+
+// ── The reason the map stayed on OpenStreetMap ────────────────────────────────
+//
+// The session token arrives asynchronously and lands in a module variable.
+// tileLayerProps() reads it at render time, so React never learned it had
+// changed: the map kept the OSM url it mounted with, and only a SECOND page
+// load came up on Google, when the cached token could be read synchronously.
+// A first-time visitor therefore saw OpenStreetMap for their entire visit.
+//
+// react-leaflet 4.2.1's TileLayer does call layer.setUrl() when the url prop
+// changes — verified in node_modules/react-leaflet/lib/TileLayer.js — so the
+// only missing piece was ever a re-render. These checks hold the subscription
+// that provides it, and the one component that owns it.
+it('the module can tell React that the provider changed', () => {
+  assert.equal(typeof onTilesChanged, 'function', 'there is no way to learn the session arrived');
+  let hits = 0;
+  const off = onTilesChanged(() => { hits++; });
+  assert.equal(typeof off, 'function', 'the subscription cannot be cancelled, so a map leaks a listener');
+  off();
+  // Unsubscribing twice is not an error.
+  off();
+  assert.equal(hits, 0, 'nothing has fired yet, so the fixture is wrong');
+  // Junk still yields a callable unsubscribe, so callers never have to guard.
+  // NOTE this is weaker than it looks: without the typeof guard the returned
+  // closure is a function anyway, so the behaviour above cannot detect a
+  // missing guard. The guard itself is asserted in source below, and labelled
+  // as such rather than dressed up as a behavioural check.
+  for (const junk of [null, undefined, 42, 'nope', {}]) {
+    assert.equal(typeof onTilesChanged(junk), 'function', `onTilesChanged(${String(junk)}) returned no unsubscribe`);
+  }
+  assert.match(read('../../src/mapTiles.js'), /if \(typeof fn !== 'function'\) return \(\) => \{\};/,
+    'the listener guard is gone — junk now enters the Set and relies on the try/catch in notify');
+});
+
+it('one bad listener cannot strand every other map on the fallback', () => {
+  const src = read('../../src/mapTiles.js');
+  const at = src.indexOf('const notifyTilesChanged');
+  assert.ok(at > 0, 'notifyTilesChanged is gone');
+  const body = src.slice(at, src.indexOf('\n};', at));
+  assert.match(body, /try \{ fn\(\); \} catch/,
+    'a throwing listener aborts the loop, so maps after it never hear the session arrived');
+  assert.match(body, /\[\.\.\.listeners\]/,
+    'the live Set is iterated, so a listener unsubscribing during notify can skip another');
+});
+
+it('the session arriving notifies, on both the cached and the fetched path', () => {
+  const src = read('../../src/mapTiles.js');
+  const fn = src.slice(src.indexOf('export const ensureGoogleSession'));
+  const body = fn.slice(0, fn.indexOf('\n};'));
+  assert.match(body, /if \(cached\) \{ session = cached; notifyTilesChanged\(\); return session; \}/,
+    'the cached path does not notify');
+  // The fetched path is the one that matters: it is the only path where a map
+  // is already mounted on the wrong provider.
+  const afterStore = body.slice(body.indexOf('writeStore(SESSION_STORE_KEY'));
+  assert.match(afterStore, /notifyTilesChanged\(\)/,
+    'the fetched session never notifies, so a mounted map stays on OpenStreetMap');
+});
+
+it('a fallback says WHY, because every failure looks the same from outside', () => {
+  const src = read('../../src/mapTiles.js');
+  // SCOPED TO THE MESSAGE, not the file. This module's header comment explains
+  // the same three causes, so matching the whole file passed even with the
+  // message gutted — a mutation proved exactly that.
+  const at = src.indexOf('[ParkEasy] Google Map Tiles unavailable');
+  assert.ok(at > 0, 'a failed session is silent, so a 403 is indistinguishable from no key at all');
+  const warn = src.slice(at, src.indexOf(');', at));
+  assert.match(warn, /HTTP \$\{res \? res\.status : 'no response'\}/,
+    'the message does not carry the status code, which is the one fact that identifies the cause');
+  assert.match(warn, /Google said: \$\{String\(detail\)/,
+    'Google\'s own error body is not shown, so the specific reason is thrown away');
+  // The three real causes, named in the MESSAGE so nobody has to guess again.
+  assert.match(warn, /Map Tiles API not enabled/, 'the message does not name the commonest cause');
+  assert.match(warn, /billing/i, 'the message does not mention billing');
+  assert.match(warn, /referrer/i, 'the message does not mention a referrer restriction');
+});
+
+it('every map renders the subscribing component, not a bare TileLayer', () => {
+  const base = read('../../src/components/map/BaseTileLayer.jsx');
+  assert.doesNotMatch(app, /<TileLayer \{\.\.\.tileLayerProps\(\)\}\/>/,
+    'a map renders tileLayerProps() directly again — that one will not switch to Google after mount');
+  assert.ok(app.split('<BaseTileLayer/>').length - 1 >= 5,
+    'not every map was switched over; the ones left behind keep their mount-time provider');
+  assert.match(base, /onTilesChanged\(\(\) => bump/, 'BaseTileLayer does not subscribe');
+  // Props read fresh each render, NOT cached in state: tileLayerProps() also
+  // depends on the theme, which changes with no notification at all.
+  assert.match(base, /return <TileLayer \{\.\.\.tileLayerProps\(\)\}\/>/,
+    'the props are cached in state, so a theme change leaves the old tiles');
+});

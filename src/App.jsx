@@ -17,7 +17,8 @@ import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, fetchBookable, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
-import { tileLayerProps, tileThemeClass, tilesCacheable } from './mapTiles';
+import { tileThemeClass, tilesCacheable } from './mapTiles';
+import BaseTileLayer from './components/map/BaseTileLayer';
 import { pushSupport, isPushEnabled, enablePush, disablePush } from './push';
 import { getParked, startParked, endParked, setTimer, cancelTimer, timeLeft, shareParked, directionsToCar, metresBetween, walkLabel, walkMinutes } from './parked';
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
@@ -2204,7 +2205,7 @@ const SpotDetail = ({ spot, saved, onSave, mySignal, onSignal, signalCounts, onC
             </>
           ) : (
             <MapContainer className={tileThemeClass()} key={spot.id} center={[spot.lat,spot.lng]} zoom={17} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
-              <TileLayer {...tileLayerProps()}/>
+              <BaseTileLayer/>
               <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
             </MapContainer>
           )}
@@ -2909,7 +2910,7 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
         {/* zoomControl off: it renders top-left, exactly under the close button.
             Drag and pinch still work, which is what a phone uses anyway. */}
         <MapContainer className={tileThemeClass()} center={[54.6008,-5.9272]} zoom={14} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-          <TileLayer {...tileLayerProps()}/>
+          <BaseTileLayer/>
           <Polygon positions={zonePositions} pathOptions={{color:'#FF5C5C',weight:3,fillColor:'#FF5C5C',fillOpacity:0.30}}/>
           {FLEADH.zoneStreets.filter(s=>s.label).map((s,i)=>(
             <Marker key={'st'+i} position={[s.lat,s.lng]} icon={streetPin(s.name)}/>
@@ -3089,7 +3090,7 @@ const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPr
   <div style={{height}} className={flat ? 'overflow-hidden border-y border-white/10' : 'rounded-2xl overflow-hidden border border-white/10 shadow-sm'}>
     <MapContainer className={tileThemeClass()} center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
-      <TileLayer {...tileLayerProps()}/>
+      <BaseTileLayer/>
       {center && <RecenterMap center={center} zoom={zoom}/>}
       {pin && (
         <Marker position={[pin.lat, pin.lng]} icon={searchPin(pin.label)} zIndexOffset={1000}>
@@ -6041,7 +6042,7 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
                 boundsOptions={{ padding: [34, 34], maxZoom: 13 }}
                 style={{width:'100%',height:'100%'}}
                 scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-                <TileLayer {...tileLayerProps()}/>
+                <BaseTileLayer/>
                 {sites.map(s => (
                   <Marker key={s.id} position={[s.lat, s.lng]} icon={pricePin(s, false)}
                     eventHandlers={{ click: () => onOpenSpot?.(s) }}/>
@@ -6098,7 +6099,7 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
         <div className="rounded-2xl overflow-hidden border border-white/10" style={{height:230}}>
           <MapContainer className={tileThemeClass()} center={[partner.lat, partner.lng]} zoom={16} style={{width:'100%',height:'100%'}}
             scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-            <TileLayer {...tileLayerProps()}/>
+            <BaseTileLayer/>
             {/* Above the parking pins: the business is the anchor of this map,
                 and a spot pin sitting on top of its name is confusing. */}
             <Marker position={[partner.lat, partner.lng]} icon={bizPin(partner.name)} zIndexOffset={1000}/>
