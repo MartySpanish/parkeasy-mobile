@@ -239,11 +239,90 @@ async function grantPremiumByEmail(svc, URL_, email, days) {
   });
 }
 
-async function grantPremiumFromPaymentLink(svc, URL_, s) {
+async function grantPremiumFromPaymentLink(svc, URL_, s, stripe) {
   const email = (s.customer_details?.email || s.customer_email || '').trim().toLowerCase();
   if (!email || !s.amount_total) return;
   const days = s.amount_total < 1000 ? 35 : 366;
   await grantPremiumByEmail(svc, URL_, email, days);
+  // The entitlement is granted above. Recording WHICH discount paid for it is
+  // separate and must never fail the grant — see logDiscountUse.
+  await logDiscountUse(svc, URL_, s, stripe).catch(e => console.error('discount log', e?.message || e));
+}
+
+/**
+ * Record that a subscription discount was used, in promo_redemptions.
+ *
+ * WHY THE ROW EXPIRES IMMEDIATELY, which looks wrong until you read the rest of
+ * this file. promo_redemptions is doing two jobs: it holds ENTITLEMENTS (the
+ * STRIPE-SUB row, and free-day promos like PARKEZ) and it is the only ledger
+ * we have. A discount is not an entitlement — the subscription is.
+ *
+ * If this row carried a 366-day expiry it would become a second, independent
+ * grant of Premium, and revokePremiumByEmail deliberately touches ONLY the
+ * STRIPE-SUB row ("a promo or hidden-gem reward is a separate grant and must
+ * survive someone cancelling"). Net effect: cancel on day two and SPOTS20
+ * would keep Premium alive for a year, free. So expires_at is set to the
+ * moment of redemption: an already-expired row can never grant anything, which
+ * is exactly the property wanted, and redeemed_at carries the real fact.
+ *
+ * The UNIQUE (user_id, code) constraint then gives one-use-per-account in our
+ * own database, alongside Stripe's own max_redemptions on the promotion code.
+ */
+async function logDiscountUse(svc, URL_, s, stripe) {
+  // No discount on this checkout: nothing to record, and no error.
+  if (!(s.total_details?.amount_discount > 0)) return;
+
+  // The session carries discount IDs, not the human code. Resolve it so the
+  // ledger says SPOTS20 rather than promo_1ABC — a row nobody can read against
+  // a campaign is not a ledger.
+  let code = null;
+  const promoId = s.discounts?.find(d => d?.promotion_code)?.promotion_code;
+  const promoRef = typeof promoId === 'string' ? promoId : promoId?.id || null;
+  if (promoRef && stripe) {
+    try {
+      const pc = await stripe.promotionCodes.retrieve(promoRef);
+      code = (pc?.code || '').trim().toUpperCase() || null;
+    } catch (e) { console.error('promo code lookup', e?.message || e); }
+  } else if (promoRef && !stripe) {
+    code = null;
+  }
+  // A discount with no resolvable promotion code is a coupon applied directly
+  // in the Dashboard. Still worth recording that money came off, under a name
+  // that cannot collide with a real campaign code.
+  const ledgerCode = code || 'STRIPE-DISCOUNT';
+
+  const email = (s.customer_details?.email || s.customer_email || '').trim().toLowerCase();
+  if (!email) return;
+
+  // Find the account, if there is one yet. A discount used before signup is
+  // recorded against the email, same as the entitlement path above.
+  let userId = null;
+  for (let page = 1; page <= 5 && !userId; page++) {
+    const r = await fetch(`${URL_}/auth/v1/admin/users?page=${page}&per_page=200`, { headers: svc });
+    if (!r.ok) break;
+    const d = await r.json();
+    const batch = d.users || d || [];
+    userId = batch.find(u => (u.email || '').toLowerCase() === email)?.id || null;
+    if (batch.length < 200) break;
+  }
+
+  const nowIso = new Date().toISOString();
+  const row = {
+    user_id: userId, user_email: email, code: ledgerCode,
+    // Deliberately now — see the comment above. This row records a use, it
+    // does not grant anything.
+    expires_at: nowIso,
+  };
+  const ins = await fetch(`${URL_}/rest/v1/promo_redemptions`, {
+    method: 'POST', headers: svc, body: JSON.stringify(row),
+  });
+  // 409 / 23505 = the UNIQUE (user_id, code) guard, i.e. this account already
+  // used this code. Stripe should have refused it, but a duplicate ledger row
+  // is not an error worth retrying a webhook over.
+  if (!ins.ok && ins.status !== 409) {
+    const detail = await ins.text().catch(() => '');
+    if (!detail.includes('23505')) throw new Error(`discount ledger ${ins.status} ${detail}`);
+  }
 }
 
 /**
@@ -552,7 +631,7 @@ export default async function handler(req, res) {
           // No booking/pass metadata → a Premium purchase via a Stripe payment
           // link. Link it to the buyer's ParkEasy account by email so Premium
           // follows them across devices (synced by fetchPromoStatus on login).
-          await grantPremiumFromPaymentLink(svc, URL_, s).catch(e => console.error('premium link', e));
+          await grantPremiumFromPaymentLink(svc, URL_, s, stripe).catch(e => console.error('premium link', e));
           break;
         }
         // A car wash. Not a booking and not a pass: 100% ParkEasy, no host
