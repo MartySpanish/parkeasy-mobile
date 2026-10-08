@@ -4938,7 +4938,17 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
 
   const SPOT_TYPES   = ['Street parking','Lay-by','Car park','Side road','Grass verge','Private (shared)'];
   const RESTRICTIONS = ['Free all day','Time limited','Evenings free','Weekends free','No restrictions'];
-  const set = (k,v) => setForm(p=>({...p,[k]:v}));
+  // submit_spot_start fires on the FIRST edit, not on mount. Mounting the tab
+  // is a tap on a nav item and says nothing; typing into the form is somebody
+  // deciding to list a space. Once per mount, via a ref rather than state, so
+  // counting an intention never causes a re-render.
+  const startedRef = useRef(false);
+  const noteStart = (k) => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    track('submit_spot_start', { first_field: String(k).slice(0, 20) });
+  };
+  const set = (k,v) => { noteStart(k); setForm(p=>({...p,[k]:v})); };
 
   // Restriction → map-pin/badge category for the live map.
   const RESTRICTION_TO_BADGE = {
@@ -5033,6 +5043,14 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
         });
       } catch { /* non-blocking */ }
     }
+    // The host funnel's other end. submit_spot_start fires when the form is
+    // first touched, so start/done is the drop-off rate — which is why 3 of 6
+    // listings sitting in draft was a floor and not a measurement.
+    track('submit_spot_done', {
+      type: form.type || 'unknown',
+      has_photo: String(!!photoUrl),
+      has_coords: String(!!coords),
+    });
     setDone(true);
     onSpotAdded(newSpot);
   };
@@ -5536,10 +5554,31 @@ const BookingSheet = ({ listing, onClose }) => {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [optIn, setOptIn] = useState(false);   // event-parking updates (GDPR: unchecked by default)
+  // booking_abandoned: the event that told us nothing because it had no
+  // emitter. The sheet unmounting without a redirect IS the abandonment —
+  // backdrop tap, the X, Escape, or moving to another tab — so the cleanup is
+  // the honest place to fire it, and `stage` says how far they actually got.
+  //
+  // A ref, not state: it is written during pay() and read in a cleanup that
+  // runs after the last render, so state would be a stale snapshot.
+  //
+  // NOT fired on a closed tab or a killed app. beforeunload is unreliable on
+  // mobile Safari and a wrong number is worse than a partial one, so this
+  // counts in-app abandonment only. Said out loud because the figure will read
+  // low and somebody will otherwise trust it as the whole truth.
+  const stageRef = useRef({ started: false, redirecting: false, failed: null });
   const [weeks, setWeeks] = useState(1);      // repeat the same slot weekly
   // Remembered between bookings — people drive the same car, and retyping a
   // plate every time is friction on the one screen we can least afford it.
   const [vehicleReg, setVehicleReg] = useState(() => ls.get('pe_vehicle_reg', '') || '');
+  useEffect(() => () => {
+    const st = stageRef.current;
+    if (st.redirecting) return;              // handed off to Stripe: not abandoned
+    track('booking_abandoned', {
+      stage: st.failed ? 'refused' : st.started ? 'submitted' : 'browsing',
+      ...(st.failed ? { reason: st.failed } : {}),
+    }, { listingId: listing.id });
+  }, [listing.id]);
   // Permissive on purpose: UK current (AB12 CDE), older UK, and Irish
   // (12-D-3456) plates all have to pass, and a driver blocked from paying by an
   // over-strict regex is a lost booking.
@@ -5612,12 +5651,20 @@ const BookingSheet = ({ listing, onClose }) => {
       track('booking_start',
         { unit: dayPriced ? 'day' : 'hour', hours: String(hours) },
         { listingId: listing.id });
+      stageRef.current.started = true;
       const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks, vehicleReg: regClean,
         unit: dayPriced ? 'day' : 'hour' });
+      // Set BEFORE the assignment: the navigation may begin synchronously and
+      // the cleanup would otherwise report a successful handoff as abandoned.
+      stageRef.current.redirecting = true;
       window.location.href = url;   // full-page redirect to Stripe Checkout
     } catch (e) {
       // The error OBJECT: it carries the server's refusal code, and passing
       // only the message is what made a payouts problem read as a card decline.
+      // The server's refusal CODE, not the copy. 'slot_taken', 'too_soon' or
+      // 'host_payouts_incomplete' in the funnel is the difference between a
+      // supply problem, a notice-period problem and a broken host.
+      stageRef.current.failed = String(e?.code || 'unknown').slice(0, 40);
       setErr(paymentError(e)); setBusy(false);
     }
   };

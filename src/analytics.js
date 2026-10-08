@@ -25,6 +25,7 @@
 // driver's search must not fail because a metric could not be recorded.
 import { supabase, isSupabaseEnabled } from './supabase.js';
 import { trackSearch, trackSpotOpen, trackSignup } from './funnel.js';
+import { currentSource } from './data/acquisitionSource.js';
 
 // The allowlist is enforced server-side in log_app_event(); this copy exists so
 // a typo shows up in development instead of being silently dropped in
@@ -84,6 +85,28 @@ export const sessionId = () => {
 const THROTTLE_MS = { map_move: 2000 };
 const lastSent = new Map();
 
+// True exactly once per session. The localStorage marker is what makes it
+// survive a reload inside the same visit; the module flag is the fallback for
+// private mode, where storage throws and once-per-page-load is the best we can
+// honestly do. Either way a failure here must not drop the event, so the
+// whole thing is wrapped and defaults to "not the first" on error.
+const ATTR_KEY = 'pe_attr_session';
+let attributed = false;
+const firstOfSession = () => {
+  if (attributed) return false;
+  attributed = true;
+  try {
+    const id = sessionId();
+    if (localStorage.getItem(ATTR_KEY) === id) return false;
+    localStorage.setItem(ATTR_KEY, id);
+    return true;
+  } catch {
+    // Private mode: no marker to check, so attribute this page load's first
+    // event. Better a duplicate than no acquisition data at all.
+    return true;
+  }
+};
+
 /**
  * Record one product event. Fire-and-forget: never awaited, never throws.
  *
@@ -105,13 +128,23 @@ export const track = (name, props = {}, opts = {}) => {
       lastSent.set(name, now);
     }
 
-    mirror(name, props);
+    // Attribution rides the FIRST event of a session and no others — see
+    // data/acquisitionSource.js for why, and for what it does and does not
+    // record. Merged UNDER the caller's props so a call site always wins.
+    //
+    // COMPUTED AFTER THE THROTTLE, DELIBERATELY. firstOfSession() is a
+    // one-shot: asking it above the throttle meant a dropped map_move could
+    // consume the only chance to record where the visit came from, and the
+    // attribution would be lost for that session entirely.
+    const props2 = firstOfSession() ? { ...currentSource(), ...(props || {}) } : props;
+
+    mirror(name, props2);
 
     if (!isSupabaseEnabled || !supabase) return;
     supabase.rpc('log_app_event', {
       p_event_name: name,
       p_session_id: sessionId(),
-      p_props: props || {},
+      p_props: props2 || {},
       p_path: opts.path ?? currentPath(),
       p_town: opts.town ?? null,
       p_listing_id: opts.listingId ?? null,
