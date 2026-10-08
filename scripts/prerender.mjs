@@ -10,6 +10,7 @@
 // which is the whole point of the file.
 import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { BOOKABLE_SPACES, headline } from '../src/data/bookableSpaces.js';
+import { CHECKOUT_PROMOS, discountedPence } from '../src/data/subscriptionPromos.js';
 
 // The headline now comes from bookableSpaces.js, which owns both the number
 // and the guard that stops it being lower than anything on sale. See the
@@ -51,7 +52,7 @@ if (HEAD?.warning) console.warn('prerender: ' + HEAD.warning);
 // build order changed, and quietly falling back to stale constants is exactly
 // the failure this is replacing.
 const places = JSON.parse(readFileSync('public/globe/places.json', 'utf8'));
-const NETWORK = { spots: places.stats.spaces, gems: places.stats.gems, ev: places.stats.ev };
+const NETWORK = { spots: places.stats.spaces, gems: places.stats.gems, ev: places.stats.ev, towns: places.stats.towns };
 for (const [k, v] of Object.entries(NETWORK)) {
   if (!Number.isInteger(v) || v <= 0) {
     throw new Error(`prerender: ${k} is ${v} — generate-globe-data.mjs must run first`);
@@ -60,6 +61,47 @@ for (const [k, v] of Object.entries(NETWORK)) {
 
 const distHtml = 'dist/index.html';
 let htmlDoc = readFileSync(distHtml, 'utf8');
+
+// ── PREMIUM, WHICH THIS PAGE DID NOT MENTION AT ALL ─────────────────────────
+// Zero mentions of Premium in index.html and zero across all 30 area pages,
+// while nine people pay for it and it is the only line in the business
+// producing recurring revenue. Worse than absent: the "hidden gems" bullet
+// below described them as "the free, legal kerbside spots locals use", which
+// is true of the SPOTS and false of the ACCESS — they are what the
+// subscription buys, so the page was both failing to sell the product and
+// implying it was already included.
+//
+// PRICES ARE READ OUT OF App.jsx, NOT TYPED. The comment on those constants
+// says they "MUST stay in step with the figures rendered in PricingModal —
+// advertising one price and charging another is the exact drip-pricing failure
+// s.230 exists to stop". A third typed copy here would be a third thing to
+// forget. Matched on the const declarations, not anywhere in the file, because
+// the comment above them also contains both figures.
+const appSrc = readFileSync('src/App.jsx', 'utf8');
+const priceConst = (name) => {
+  const m = appSrc.match(new RegExp(`const ${name}\\s*=\\s*'([^']+)'`));
+  if (!m) throw new Error(`prerender: ${name} not found in App.jsx — Premium pricing moved`);
+  return m[1];
+};
+const PREMIUM_ANNUAL = priceConst('PREMIUM_ANNUAL_GBP');
+const PREMIUM_MONTHLY = priceConst('PREMIUM_MONTHLY_GBP');
+
+// The launch offer, and it takes itself down. SPOTS20 has a real expiry in
+// src/data/subscriptionPromos.js; a static page that advertises a dead code
+// is worse than one that never mentioned it, and "remember to edit the page
+// on 1 November" is not a mechanism.
+const livePromo = CHECKOUT_PROMOS.find(pr => pr.plan === 'annual' && Date.parse(pr.expiresAt) > Date.now()) || null;
+// discountedPence returns {listPence, discountPence, payPence} — the whole
+// breakdown, not a single number — so what the page advertises is payPence,
+// the figure Stripe will actually charge.
+const annualPence = Math.round(parseFloat(PREMIUM_ANNUAL.replace(/[^0-9.]/g, '')) * 100);
+const promoSplit = livePromo ? discountedPence(livePromo.code, 'annual', annualPence) : null;
+const promoPrice = promoSplit && Number.isInteger(promoSplit.payPence) && promoSplit.payPence > 0
+  ? `£${(promoSplit.payPence / 100).toFixed(2)}`
+  : null;
+if (livePromo && !promoPrice) {
+  throw new Error(`prerender: ${livePromo.code} is live but its discounted price did not compute`);
+}
 
 // Cities we want surfaced first: the ones people actually search for.
 const POPULAR = ['belfast', 'derry', 'lisburn', 'newry', 'bangor', 'ballymena', 'coleraine', 'omagh'];
@@ -104,12 +146,15 @@ const seo = `<div id="seo-prerender" style="max-width:760px;margin:0 auto;paddin
 <ul style="color:rgba(234,241,248,.72);line-height:1.8;padding-left:20px">
 ${FROM_PRICE ? '<li><strong style="color:#EAF1F8">Book a space in advance</strong> and it is held for you &mdash; paid by card, no meter, no circling</li>' : ''}
 <li>Search any destination for the closest free, hidden-gem and official car parks</li>
-<li><strong style="color:#EAF1F8">${NETWORK.gems} hidden gems</strong> &mdash; the free, legal kerbside spots locals use near the places everyone drives to</li>
+<li><strong style="color:#EAF1F8">${NETWORK.gems} hidden gems</strong> &mdash; the free, legal kerbside spots locals use near the places everyone drives to. Seeing exactly where they are is what Premium buys</li>
 <li>Prices are all-in: what you see is what you pay</li>
 <li>Rent out your own driveway or car park and keep 85% of every booking</li>
 </ul>
 <h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">Parking by town</h2>
 ${townNav}
+<h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">ParkEasy Premium &mdash; know exactly where the locals park</h2>
+<p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:8px">Searching, free spots, on-street bays and official car parks are free and always will be. <strong style="color:#EAF1F8">Premium unlocks the ${NETWORK.gems} hidden gems</strong> &mdash; the exact locations, the access notes and the kerb-accurate pin for the free, legal spots locals use near the places everyone drives to. ${PREMIUM_ANNUAL} a year or ${PREMIUM_MONTHLY} a month, all-in, cancel any time.${promoPrice ? ` <strong style="color:#6BEFB9">Use ${livePromo.code} at checkout for ${livePromo.percentOff}% off your first year &mdash; ${promoPrice}.</strong>` : ''}</p>
+<p style="margin:14px 0 0"><a href="https://parkeasy.uk/?upgrade=1" style="display:inline-block;border:1px solid rgba(91,231,218,.5);color:#5BE7DA;font-weight:700;padding:11px 20px;border-radius:12px;text-decoration:none;font-size:15px">See what Premium unlocks &rarr;</a></p>
 <h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">Community-powered, not corporate</h2>
 <p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:8px">Listings cover official council and private car parks, on-street bays, free spots and local recommendations people have shared.</p>
 <p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:10px"><strong style="color:#6BEFB9">Spaces you book are held for you.</strong> Pay in advance and the bay is yours for the hours you booked &mdash; we never sell more spaces than a site has, and if a host closes the site we refund in full.</p>
@@ -146,14 +191,42 @@ const orgLd = `<script type="application/ld+json">${JSON.stringify({
 // started deriving, the description Google indexes still said 741 and 88.
 // index.html now holds {{SPOTS}}/{{GEMS}}/{{EV}} and they are filled here from
 // the same stats block, so there is exactly one place a count can come from.
-htmlDoc = htmlDoc
+const fillTokens = (s) => s
   .replaceAll('{{SPOTS}}', String(NETWORK.spots))
   .replaceAll('{{GEMS}}', String(NETWORK.gems))
-  .replaceAll('{{EV}}', String(NETWORK.ev));
-const leftover = htmlDoc.match(/\{\{[A-Z_]+\}\}/g);
-if (leftover) {
-  throw new Error(`prerender: unsubstituted token(s) ${[...new Set(leftover)].join(', ')} `
-    + '— add them to the replacement list above rather than shipping braces to Google');
+  .replaceAll('{{EV}}', String(NETWORK.ev))
+  .replaceAll('{{TOWNS}}', String(NETWORK.towns));
+
+const assertFilled = (s, where) => {
+  const left = s.match(/\{\{[A-Z_]+\}\}/g);
+  if (left) {
+    throw new Error(`prerender: unsubstituted token(s) ${[...new Set(left)].join(', ')} in ${where} `
+      + '— add them to fillTokens rather than shipping braces to Google');
+  }
+  return s;
+};
+
+htmlDoc = assertFilled(fillTokens(htmlDoc), 'index.html');
+
+// EVERY PUBLIC PAGE, NOT JUST THE HOMEPAGE.
+//
+// partners.html is a sales page shown to businesses being asked for £25 a
+// month, and it carried its own typed copies of the counts: "745 parking spots
+// mapped" and "741 spots across 31 towns" against a real 787 and 48. Both
+// understated the product to the exact audience being sold it, and both had
+// been wrong since whenever the numbers last moved.
+//
+// This is the same failure index.html had — "the <meta> descriptions carried
+// their own typed copies of these three numbers" — so it gets the same fix
+// rather than a second one. A page with no tokens passes through untouched, so
+// adding one to any public page is enough to make it derive.
+for (const page of ['partners.html', 'hosts.html']) {
+  const path = `dist/${page}`;
+  let doc;
+  try { doc = readFileSync(path, 'utf8'); } catch { continue; }
+  if (!/\{\{[A-Z_]+\}\}/.test(doc)) continue;
+  writeFileSync(path, assertFilled(fillTokens(doc), page));
+  console.log(`prerender: filled counts in ${page}`);
 }
 
 if (htmlDoc.includes('<div id="root"></div>')) {

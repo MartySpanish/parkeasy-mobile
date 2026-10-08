@@ -42,7 +42,35 @@ const STATIC = [
   { loc: '/area/craigavon.html', changefreq: 'weekly', priority: '0.8' },
   { loc: '/area/ballycastle.html', changefreq: 'weekly', priority: '0.8' },
   { loc: '/area/banbridge.html', changefreq: 'weekly', priority: '0.8' },
-  { loc: '/area/magherafelt.html', changefreq: 'weekly', priority: '0.8' },  // Added with the events routes. /events is a real landing page in its own
+  { loc: '/area/magherafelt.html', changefreq: 'weekly', priority: '0.8' },
+  // ── The six destination pages ───────────────────────────────────────────────
+  // These were REMOVED from the sitemap in PR #194 and noindexed, correctly:
+  // all six were ~130 words of boilerplate with the place name swapped, and
+  // six near-duplicates in the index under the best queries we own is worse
+  // than nothing.
+  //
+  // They are back because the pages changed, not because the decision did.
+  // scripts/inject-destination-pages.mjs now gives each one the real spots
+  // near that destination with restrictions, prices and walking times, three
+  // FAQs written against that data, and FAQPage + ParkingFacility schema —
+  // and it only strips the noindex on a page that got all of it, skipping any
+  // destination with fewer than three publishable spots nearby.
+  //
+  // THE TWO LISTS MUST AGREE. A URL here that is still noindexed is a
+  // contradiction Googlebot is entitled to hold against the whole sitemap, so
+  // tests/unit/destinationPages.test.mjs asserts every slug below is one the
+  // injector upgrades.
+  //
+  // Priority 0.9: higher than a town page, because "parking near Queen's
+  // University Belfast" is a higher-intent search than "parking in Belfast"
+  // and these are the pages with something specific to answer.
+  { loc: '/area/qub.html',               changefreq: 'monthly', priority: '0.9' },
+  { loc: '/area/city-hospital.html',     changefreq: 'monthly', priority: '0.9' },
+  { loc: '/area/sse-arena.html',         changefreq: 'monthly', priority: '0.9' },
+  { loc: '/area/titanic-quarter.html',   changefreq: 'monthly', priority: '0.9' },
+  { loc: '/area/botanic.html',           changefreq: 'monthly', priority: '0.9' },
+  { loc: '/area/cathedral-quarter.html', changefreq: 'monthly', priority: '0.9' },
+  // Added with the events routes. /events is a real landing page in its own
   // right — "what's on in Belfast" is the search it answers.
   { loc: '/events', changefreq: 'daily', priority: '0.9' },
   { loc: '/hosts',    changefreq: 'monthly', priority: '0.7' },

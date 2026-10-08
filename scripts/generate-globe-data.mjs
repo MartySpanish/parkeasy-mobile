@@ -19,39 +19,13 @@
 // Reads the literals out of App.jsx by brace matching rather than importing,
 // because App.jsx pulls in React and Leaflet and cannot be loaded in Node —
 // the same approach as scripts/generate-gem-seed.mjs.
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { EXTRA_SPOTS } from '../src/extraSpots.js';
-import { EV_SPOTS }    from '../src/evSpots.js';
-import { PILOT_SPOTS } from '../src/pilotSpots.js';
-import { APCOA_SPOTS } from '../src/apcoaSpots.js';
+import { writeFileSync, mkdirSync } from 'fs';
 import { inNorthernIreland } from '../src/regions.js';
+// The loader moved to scripts/lib so inject-destination-pages.mjs reads the
+// same list rather than brace-matching App.jsx a second time.
+import { loadAllSpots } from './lib/loadSpots.mjs';
 
-const APP = new URL('../src/App.jsx', import.meta.url);
-const src = readFileSync(APP, 'utf8');
-
-const literal = (name, open, close) => {
-  const at = src.indexOf(`const ${name}`);
-  if (at < 0) throw new Error(`${name} not found in App.jsx`);
-  let i = src.indexOf(open, src.indexOf('=', at)), depth = 0;
-  for (let j = i; j < src.length; j++) {
-    if (src[j] === open) depth++;
-    else if (src[j] === close) { depth--; if (depth === 0) return src.slice(i, j + 1); }
-  }
-  throw new Error(`unbalanced ${open} in ${name}`);
-};
-
-const CITY_SPOTS = {};
-for (const [, city, ident] of literal('CITY_SPOTS', '{', '}').matchAll(/^\s*([a-z]+):\s*([A-Z_]+),/gm)) {
-  CITY_SPOTS[city] = eval('(' + literal(ident, '[', ']') + ')');
-}
-
-const all = [];
-for (const map of [CITY_SPOTS, EXTRA_SPOTS, EV_SPOTS, PILOT_SPOTS, APCOA_SPOTS]) {
-  for (const [city, arr] of Object.entries(map)) {
-    if (!Array.isArray(arr)) continue;
-    for (const s of arr) all.push({ ...s, _city: city });
-  }
-}
+const all = loadAllSpots();
 
 // ── BADGE → GLOBE TYPE ───────────────────────────────────────────────────────
 // The globe's legend has five slots and the app has five badges, but they are

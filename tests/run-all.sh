@@ -182,6 +182,18 @@ if [ -x "${PGBIN:-/usr/lib/postgresql/16/bin}/initdb" ]; then
     && echo "  pass approval          $(grep -c 'PASS  ' /tmp/pe-t18.log) checks" \
     || { fail=1; echo "  pass approval          FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t18.log; }
 
+  tests/db/run.sh supabase/migrations/20260625_rental_listings.sql \
+                  supabase/migrations/20260704_listing_requirements.sql \
+                  supabase/migrations/20260724_stripe_connect.sql \
+                  supabase/migrations/20260725_bookings_functional.sql \
+                  supabase/migrations/20260729_listing_date_window.sql \
+                  supabase/migrations/20260817_apcoa_capacity_and_drafts.sql \
+                  supabase/migrations/20261007_listing_min_notice.sql \
+                  supabase/migrations/20261008_listing_performance.sql \
+                  tests/db/listing_performance.test.sql              > /tmp/pe-t26.log 2>&1 \
+    && echo "  listing performance    $(grep -c 'PASS  ' /tmp/pe-t26.log) checks" \
+    || { fail=1; echo "  listing performance    FAILED"; grep -m3 -E 'FAIL|ERROR' /tmp/pe-t26.log; }
+
   tests/db/run.sh tests/db/qr_landing_seed.sql \
                   supabase/migrations/20260907_qr_landing.sql \
                   tests/db/qr_landing.test.sql                     > /tmp/pe-t14.log 2>&1 \

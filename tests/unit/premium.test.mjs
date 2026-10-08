@@ -213,4 +213,69 @@ it('nothing but a GET is ever answered from a cache', () => {
     'the method is checked after the tile branch, which is the branch that caches');
 });
 
+//────────────────────────────────── the public page ─────────────────────────
+// Premium appeared NOWHERE on the pre-rendered homepage or across all 30 area
+// pages, while it was the only line in the business producing recurring
+// revenue. Worse than absent: the hidden-gems bullet called them "the free,
+// legal kerbside spots locals use", which is true of the spots and false of
+// the access — so the page both failed to sell the product and implied it was
+// already included.
+const prerender = readFileSync(new URL('../../scripts/prerender.mjs', import.meta.url), 'utf8');
+const prerenderCode = prerender.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+
+it('the pre-rendered homepage sells Premium and says what it unlocks', () => {
+  assert.match(prerenderCode, /ParkEasy Premium/, 'Premium is off the pre-rendered page again');
+  assert.match(prerenderCode, /Premium unlocks the \$\{NETWORK\.gems\} hidden gems/,
+    'the gem count on the Premium line is typed rather than derived');
+  assert.match(prerenderCode, /Seeing exactly where they are is what Premium buys/,
+    'the hidden-gems bullet no longer says the locations are what Premium buys — '
+    + 'it reads as though a free user already gets them');
+});
+
+it('the advertised prices are read out of App.jsx, not typed a third time', () => {
+  // App.jsx's own comment: these "MUST stay in step with the figures rendered
+  // in PricingModal — advertising one price and charging another is the exact
+  // drip-pricing failure s.230 exists to stop". A typed copy here would be a
+  // third place to forget.
+  assert.match(prerenderCode, /priceConst\('PREMIUM_ANNUAL_GBP'\)/, 'the annual price is not derived');
+  assert.match(prerenderCode, /priceConst\('PREMIUM_MONTHLY_GBP'\)/, 'the monthly price is not derived');
+  // Matched on the const DECLARATION, because the comment above those
+  // constants in App.jsx also contains both figures — the recurring trap of a
+  // regex matching a file's own prose instead of its code.
+  // Asserted by OUTCOME rather than by matching the regex's source text: what
+  // matters is that the extraction returns the real prices and cannot be
+  // satisfied by the comment above them, which contains both figures.
+  const app = readFileSync(new URL('../../src/App.jsx', import.meta.url), 'utf8');
+  const extract = (n) => app.match(new RegExp(`const ${n}\\s*=\\s*'([^']+)'`))?.[1];
+  assert.equal(extract('PREMIUM_ANNUAL_GBP'), '£29');
+  assert.equal(extract('PREMIUM_MONTHLY_GBP'), '£3.99');
+  // The trap this guards: App.jsx's comment above those constants says
+  // "monthly £3.99, annual £29", so a looser pattern would read the prose.
+  const commentOnly = app.slice(0, app.indexOf('const PREMIUM_MONTHLY_GBP'));
+  assert.ok(/£3\.99/.test(commentOnly), 'the comment no longer carries the figures');
+  assert.equal(commentOnly.match(new RegExp("const PREMIUM_MONTHLY_GBP\\s*=\\s*'([^']+)'")), null,
+    'the pattern matches something before the declaration');
+  assert.match(prerenderCode, /throw new Error\(`prerender: \$\{name\} not found in App\.jsx/,
+    'a missing price constant no longer fails the build, so the page can ship without a price');
+  // And no literal price anywhere in the generated copy.
+  const stray = prerenderCode.match(/£(?:29|3\.99|23\.20)\b/);
+  assert.equal(stray, null, `a price is typed into prerender again: ${stray?.[0]}`);
+});
+
+it('the launch offer takes itself down when it expires', () => {
+  // A static page advertising a dead code is worse than one that never
+  // mentioned it, and "remember to edit the page on 1 November" is not a
+  // mechanism. Mutation: drop the Date.parse comparison and SPOTS20 is
+  // advertised forever.
+  assert.match(prerenderCode, /Date\.parse\(pr\.expiresAt\) > Date\.now\(\)/,
+    'the promo is no longer filtered on its expiry');
+  assert.match(prerenderCode, /promoPrice \?/, 'the promo copy is not conditional on a live promo');
+  // The figure advertised must be what Stripe charges, not the discount.
+  assert.match(prerenderCode, /promoSplit\.payPence/,
+    'the advertised promo price is not payPence — discountedPence returns the whole '
+    + 'breakdown and advertising discountPence would promise £5.80 a year');
+  assert.match(prerenderCode, /throw new Error\(`prerender: \$\{livePromo\.code\} is live but its discounted price/,
+    'a live promo whose price will not compute no longer fails the build');
+});
+
 console.log(`\n  ${passed} checks passed\n`);

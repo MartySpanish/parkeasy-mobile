@@ -268,6 +268,53 @@ export default async function handler(req, res) {
       }
     }
 
+    // ── The marketplace, per space ──────────────────────────────────────
+    //
+    // partner_stats(), qr_scan_stats(), app_events_summary(),
+    // hotspot_conversion_stats() and demand_points() all existed. Nothing
+    // reported on the marketplace itself, so utilisation, bookings per space,
+    // revenue per space and host activation had to be hand-queried — which is
+    // how the audit found that Belfast Royal Academy is status 'active' with
+    // an availability window that closed on 18 August and therefore cannot
+    // take a booking, with nothing anywhere saying so.
+    //
+    // service_role only, same line partner_stats() draws: this returns every
+    // host's revenue and which sites are failing.
+    if (p?.action === 'listing-performance') {
+      if (!SERVICE) return res.status(200).json({ ok: false, error: 'SUPABASE_SERVICE_ROLE_KEY is not set in Vercel.' });
+      const days = Math.max(1, Math.min(Number(p.days) || 365, 3650));
+      try {
+        const r = await fetch(`${URL_}/rest/v1/rpc/listing_performance`, {
+          method: 'POST', headers: svcH, body: JSON.stringify({ p_days: days }),
+        });
+        const text = await r.text().catch(() => '');
+        if (!r.ok) return res.status(200).json({ ok: false, error: text.slice(0, 400) || `HTTP ${r.status}` });
+        const rows = JSON.parse(text);
+        // The totals the function deliberately does not compute: a SQL
+        // function that returns both rows and a summary row has to encode
+        // which is which, and every caller then has to remember to exclude it.
+        const sum = (k) => rows.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+        return res.status(200).json({
+          ok: true,
+          days,
+          listings: rows,
+          totals: {
+            listings: rows.length,
+            bookable_now: rows.filter(x => x.bookable_now).length,
+            blocked: rows.filter(x => !x.bookable_now).length,
+            spaces: sum('spaces'),
+            bookable_spaces: rows.filter(x => x.bookable_now).reduce((a, x) => a + (Number(x.spaces) || 0), 0),
+            paid_bookings: sum('paid_bookings'),
+            gross_pence: sum('gross_pence'),
+            host_pence: sum('host_pence'),
+            platform_pence: sum('platform_pence'),
+          },
+        });
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: e.message || 'listing performance failed' });
+      }
+    }
+
     // Move a partner between tiers by hand — a comp, a downgrade, or setting
     // the tier after taking payment some other way. The Stripe path writes the
     // same column from the webhook; this is the manual override beside it.
