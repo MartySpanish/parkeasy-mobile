@@ -17,7 +17,8 @@ import { APCOA_SPOTS } from './apcoaSpots';
 import { suggestPlaces, resolvePlace, geocodeText, lastGeoError } from './geo';
 import { notify, apiFetch, fetchBookable, redeemPromo, fetchPromoStatus, startPayoutOnboarding, claimListings, createBookingSession, cancelBooking, buyPass, redeemPass, fetchMessages, sendMessage, reportOccupancy, fetchOccupancy, reportCapacity } from './notify';
 import { findPartnerForListing, trackPartnerEvent, distanceMetres } from './partners';
-import { tileLayerProps, tileThemeClass, tilesCacheable } from './mapTiles';
+import { tileThemeClass, tilesCacheable } from './mapTiles';
+import BaseTileLayer from './components/map/BaseTileLayer';
 import { pushSupport, isPushEnabled, enablePush, disablePush } from './push';
 import { getParked, startParked, endParked, setTimer, cancelTimer, timeLeft, shareParked, directionsToCar, metresBetween, walkLabel, walkMinutes } from './parked';
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
@@ -2228,7 +2229,7 @@ const SpotDetail = ({ spot, saved, onSave, mySignal, onSignal, signalCounts, onC
             </>
           ) : (
             <MapContainer className={tileThemeClass()} key={spot.id} center={[spot.lat,spot.lng]} zoom={17} style={{width:'100%',height:'100%'}} zoomControl={false} dragging={false} scrollWheelZoom={false} doubleClickZoom={false} attributionControl={false}>
-              <TileLayer {...tileLayerProps()}/>
+              <BaseTileLayer/>
               <Marker position={[spot.lat,spot.lng]} icon={pricePin(spot,true)} interactive={false}/>
             </MapContainer>
           )}
@@ -2933,7 +2934,7 @@ const EventOverlay = ({ onClose, saved, onSave, isPremium, onUpgrade, onOpenSpot
         {/* zoomControl off: it renders top-left, exactly under the close button.
             Drag and pinch still work, which is what a phone uses anyway. */}
         <MapContainer className={tileThemeClass()} center={[54.6008,-5.9272]} zoom={14} style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-          <TileLayer {...tileLayerProps()}/>
+          <BaseTileLayer/>
           <Polygon positions={zonePositions} pathOptions={{color:'#FF5C5C',weight:3,fillColor:'#FF5C5C',fillOpacity:0.30}}/>
           {FLEADH.zoneStreets.filter(s=>s.label).map((s,i)=>(
             <Marker key={'st'+i} position={[s.lat,s.lng]} icon={streetPin(s.name)}/>
@@ -3113,7 +3114,7 @@ const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPr
   <div style={{height}} className={flat ? 'overflow-hidden border-y border-white/10' : 'rounded-2xl overflow-hidden border border-white/10 shadow-sm'}>
     <MapContainer className={tileThemeClass()} center={center || BELFAST_CENTER} zoom={zoom}
       style={{width:'100%',height:'100%'}} scrollWheelZoom={false} zoomControl={true}>
-      <TileLayer {...tileLayerProps()}/>
+      <BaseTileLayer/>
       {center && <RecenterMap center={center} zoom={zoom}/>}
       {pin && (
         <Marker position={[pin.lat, pin.lng]} icon={searchPin(pin.label)} zIndexOffset={1000}>
@@ -4961,7 +4962,17 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
 
   const SPOT_TYPES   = ['Street parking','Lay-by','Car park','Side road','Grass verge','Private (shared)'];
   const RESTRICTIONS = ['Free all day','Time limited','Evenings free','Weekends free','No restrictions'];
-  const set = (k,v) => setForm(p=>({...p,[k]:v}));
+  // submit_spot_start fires on the FIRST edit, not on mount. Mounting the tab
+  // is a tap on a nav item and says nothing; typing into the form is somebody
+  // deciding to list a space. Once per mount, via a ref rather than state, so
+  // counting an intention never causes a re-render.
+  const startedRef = useRef(false);
+  const noteStart = (k) => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    track('submit_spot_start', { first_field: String(k).slice(0, 20) });
+  };
+  const set = (k,v) => { noteStart(k); setForm(p=>({...p,[k]:v})); };
 
   // Restriction → map-pin/badge category for the live map.
   const RESTRICTION_TO_BADGE = {
@@ -5056,6 +5067,14 @@ const AddSpotTab = ({ user, onJoinPrompt, onSpotAdded }) => {
         });
       } catch { /* non-blocking */ }
     }
+    // The host funnel's other end. submit_spot_start fires when the form is
+    // first touched, so start/done is the drop-off rate — which is why 3 of 6
+    // listings sitting in draft was a floor and not a measurement.
+    track('submit_spot_done', {
+      type: form.type || 'unknown',
+      has_photo: String(!!photoUrl),
+      has_coords: String(!!coords),
+    });
     setDone(true);
     onSpotAdded(newSpot);
   };
@@ -5559,10 +5578,31 @@ const BookingSheet = ({ listing, onClose }) => {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [optIn, setOptIn] = useState(false);   // event-parking updates (GDPR: unchecked by default)
+  // booking_abandoned: the event that told us nothing because it had no
+  // emitter. The sheet unmounting without a redirect IS the abandonment —
+  // backdrop tap, the X, Escape, or moving to another tab — so the cleanup is
+  // the honest place to fire it, and `stage` says how far they actually got.
+  //
+  // A ref, not state: it is written during pay() and read in a cleanup that
+  // runs after the last render, so state would be a stale snapshot.
+  //
+  // NOT fired on a closed tab or a killed app. beforeunload is unreliable on
+  // mobile Safari and a wrong number is worse than a partial one, so this
+  // counts in-app abandonment only. Said out loud because the figure will read
+  // low and somebody will otherwise trust it as the whole truth.
+  const stageRef = useRef({ started: false, redirecting: false, failed: null });
   const [weeks, setWeeks] = useState(1);      // repeat the same slot weekly
   // Remembered between bookings — people drive the same car, and retyping a
   // plate every time is friction on the one screen we can least afford it.
   const [vehicleReg, setVehicleReg] = useState(() => ls.get('pe_vehicle_reg', '') || '');
+  useEffect(() => () => {
+    const st = stageRef.current;
+    if (st.redirecting) return;              // handed off to Stripe: not abandoned
+    track('booking_abandoned', {
+      stage: st.failed ? 'refused' : st.started ? 'submitted' : 'browsing',
+      ...(st.failed ? { reason: st.failed } : {}),
+    }, { listingId: listing.id });
+  }, [listing.id]);
   // Permissive on purpose: UK current (AB12 CDE), older UK, and Irish
   // (12-D-3456) plates all have to pass, and a driver blocked from paying by an
   // over-strict regex is a lost booking.
@@ -5635,12 +5675,20 @@ const BookingSheet = ({ listing, onClose }) => {
       track('booking_start',
         { unit: dayPriced ? 'day' : 'hour', hours: String(hours) },
         { listingId: listing.id });
+      stageRef.current.started = true;
       const url = await createBookingSession({ listingId: listing.id, durationHours: hours, startsAt, token, marketingOptIn: optIn, repeatWeeks: weeks, vehicleReg: regClean,
         unit: dayPriced ? 'day' : 'hour' });
+      // Set BEFORE the assignment: the navigation may begin synchronously and
+      // the cleanup would otherwise report a successful handoff as abandoned.
+      stageRef.current.redirecting = true;
       window.location.href = url;   // full-page redirect to Stripe Checkout
     } catch (e) {
       // The error OBJECT: it carries the server's refusal code, and passing
       // only the message is what made a payouts problem read as a card decline.
+      // The server's refusal CODE, not the copy. 'slot_taken', 'too_soon' or
+      // 'host_payouts_incomplete' in the funnel is the difference between a
+      // supply problem, a notice-period problem and a broken host.
+      stageRef.current.failed = String(e?.code || 'unknown').slice(0, 40);
       setErr(paymentError(e)); setBusy(false);
     }
   };
@@ -5821,7 +5869,26 @@ const BookingSheet = ({ listing, onClose }) => {
             : !regValid ? 'Enter your vehicle registration'
             : `Pay £${total.toFixed(2)} with card`}
         </button>
-        <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">Free cancellation until 24 hours before your booking. After that, no refund. Secure payment via Stripe — you park at your own risk, see our Terms.</p>
+        {/* THE REFUND SENTENCE, AND WHY IT IS WORDED LIKE THIS.
+            It read "Free cancellation until 24 hours before your booking",
+            which is not what happens. api/bookings/cancel.js refunds
+            booking_price_pence + surcharge_pence and KEEPS the driver
+            service fee, exactly as Terms §5.1 says: "the Driver Service Fee
+            is not refundable". So on a £23.00 booking a driver cancelling
+            two days ahead got £20.00 back, not £23.00 — and the sentence at
+            the moment of payment told them otherwise.
+            That is a price claim contradicted by our own terms at the point
+            of sale, which is the same class of problem as a drip-priced
+            headline. The FAQ and §5.1 both already state it correctly; only
+            this line was wrong, and this is the line people actually read.
+            Named amounts, not percentages: "the £3.00 service fee" is
+            checkable against the number directly above it. */}
+        <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">
+          Cancel 24+ hours before and we refund the £{bookingCost.toFixed(2)} parking —
+          the £{serviceFee.toFixed(2)} service fee isn&rsquo;t refundable. Under 24 hours, no refund.
+          If the host cancels, you get the full £{total.toFixed(2)} back.
+          Secure payment via Stripe — you park at your own risk, see our Terms.
+        </p>
       </div>
     </div>
   );
@@ -6065,7 +6132,7 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
                 boundsOptions={{ padding: [34, 34], maxZoom: 13 }}
                 style={{width:'100%',height:'100%'}}
                 scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-                <TileLayer {...tileLayerProps()}/>
+                <BaseTileLayer/>
                 {sites.map(s => (
                   <Marker key={s.id} position={[s.lat, s.lng]} icon={pricePin(s, false)}
                     eventHandlers={{ click: () => onOpenSpot?.(s) }}/>
@@ -6122,7 +6189,7 @@ const PartnerDetail = ({ partner, onClose, onOpenSpot }) => {
         <div className="rounded-2xl overflow-hidden border border-white/10" style={{height:230}}>
           <MapContainer className={tileThemeClass()} center={[partner.lat, partner.lng]} zoom={16} style={{width:'100%',height:'100%'}}
             scrollWheelZoom={false} zoomControl={false} attributionControl={false}>
-            <TileLayer {...tileLayerProps()}/>
+            <BaseTileLayer/>
             {/* Above the parking pins: the business is the anchor of this map,
                 and a spot pin sitting on top of its name is confusing. */}
             <Marker position={[partner.lat, partner.lng]} icon={bizPin(partner.name)} zIndexOffset={1000}/>

@@ -13,6 +13,8 @@
 // Enforcement lives HERE (server-side, service-role) plus a UNIQUE (user_id, code)
 // DB constraint — the client entitlement is applied from what this returns.
 
+import { checkoutPromo, checkoutPromoMessage, checkoutPromoExpired } from '../src/data/subscriptionPromos.js';
+
 const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
 function applyCors(req, res) {
   const origin = req.headers.origin || '';
@@ -83,6 +85,26 @@ export default async function handler(req, res) {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
   const entered = String(body?.code || '').trim().toUpperCase();   // case-insensitive
   if (!entered) return res.status(400).json({ error: 'Enter a promo code.' });
+
+  // A SUBSCRIPTION DISCOUNT CODE TYPED INTO THE FREE-DAYS BOX.
+  //
+  // SPOTS20 is 20% off the yearly plan — a Stripe promotion code, redeemed on
+  // Stripe's checkout page, because that is where the money is taken. This box
+  // grants free Premium days and has no concept of an amount.
+  //
+  // Without this branch the code falls through to "That promo code isn't
+  // valid", which is false: the code is real and they are holding it for the
+  // right reason, they are just in the wrong box. That is a support email and
+  // quite possibly a lost subscription.
+  if (checkoutPromo(entered)) {
+    return res.status(400).json({
+      error: checkoutPromoMessage(entered),
+      // So the client can offer the subscribe button rather than just the text.
+      checkoutOnly: true,
+      plan: checkoutPromo(entered).plan,
+      expired: checkoutPromoExpired(entered),
+    });
+  }
 
   // Codes are DATA first: look the entered code up in promo_codes (managed in
   // the Supabase dashboard, no deploy needed). Falls back to the legacy env

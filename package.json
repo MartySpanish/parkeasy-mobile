@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/generate-globe-data.mjs && vite build && node scripts/prerender.mjs && node scripts/inject-area-cta.mjs",
+    "build": "node scripts/generate-globe-data.mjs && vite build && node scripts/prerender.mjs && node scripts/inject-area-cta.mjs && node scripts/inject-destination-pages.mjs",
     "preview": "vite preview",
     "audit": "node scripts/audit-spots.mjs",
     "test": "tests/run-all.sh",

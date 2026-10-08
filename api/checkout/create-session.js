@@ -15,6 +15,7 @@
 import Stripe from 'stripe';
 import { payoutReadiness } from '../_payouts.js';
 import { MIN_BOOKING_PENCE, priceBreakdown } from '../_pricing.js';
+import { startTimeRefusal } from '../../src/data/bookingLeadTime.js';
 
 const ALLOWED_ORIGINS = /^https:\/\/(www\.)?parkeasy\.uk$|\.vercel\.app$/;
 function applyCors(req, res) {
@@ -190,6 +191,20 @@ export default async function handler(req, res) {
           return (mins > 0 ? mins : 9 * 60) * 60000;
         })()
       : durationHours * 3600000;
+
+    // ── The clock ────────────────────────────────────────────────────────────
+    // Asked before the day rules and the overlap queries because it is the
+    // cheapest refusal and the one that was missing entirely: a slot already
+    // over, an hourly start already gone, or too little notice for this host.
+    // See src/data/bookingLeadTime.js for what the absence of this cost.
+    {
+      const refusal = startTimeRefusal({
+        startMs, nowMs: now, spanMs, days, dayPriced, listing,
+      });
+      // Spelled out rather than spread, so that "every refusal is named" is
+      // visible at the call site — bookingRefusals.test.mjs reads these lines.
+      if (refusal) return res.status(400).json({ error: refusal.error, code: refusal.code });
+    }
 
     // ── Dates the site has actually agreed to ────────────────────────────────
     // Four rules, because a signed licence is not a weekly pattern. Belfast
