@@ -10,14 +10,15 @@
 // copy is served instantly while the next one is built behind it, so no visitor
 // ever waits on Postgres.
 //
-// ONE FUNCTION, TWO ROUTES. vercel.json rewrites both /events and
-// /events/:slug here; the slug is read from the query. Keeping them together is
-// what stops the listing and the detail page disagreeing about a tier colour or
-// a slug.
+// ONE FUNCTION, THREE ROUTES. vercel.json rewrites /events, /events/:slug and
+// /venue/:slug here; the slug is read from the query. Keeping them together is
+// what stops the three pages disagreeing about a tier colour, a slug, or how
+// far away a space is.
 import {
   SITE, HORIZON_DAYS, tierOf, esc, jsonLd,
-  timeLocal, fullLocal, groupByDate, fetchUpcoming, fetchBySlug,
-  HEAD_CSS, topBar, pageFoot, parkNear, listSpaceNear,
+  timeLocal, dayLocal, fullLocal, groupByDate, fetchUpcoming, fetchBySlug,
+  HEAD_CSS, topBar, pageFoot, parkNear, listSpaceNear, distanceLabel,
+  fetchVenue, fetchVenueEvents, venueFromEvents, venuePlace, parkAtVenue,
 } from './_eventsView.js';
 import { selectPublic } from './_supabase.js';
 
@@ -200,7 +201,9 @@ function renderEvent(ev, listings) {
   <div class="hero">
     <p class="kicker"><a href="/events" style="text-decoration:none">&larr; What&#39;s on</a></p>
     <h1>${esc(ev.name)}</h1>
-    <p class="lede">${esc(ev.venue_name)}<br>${esc(fullLocal(ev.starts_at))}</p>
+    <p class="lede">${ev.venue_slug
+      ? `<a href="/venue/${esc(ev.venue_slug)}">${esc(ev.venue_name)}</a>`
+      : esc(ev.venue_name)}<br>${esc(fullLocal(ev.starts_at))}</p>
     ${ev.status === 'cancelled' ? `<div class="panel" style="border-color:rgba(255,90,90,.4)">
       <h3 style="color:#FF8B8B">This event has been cancelled</h3>
       <p>Please check with the venue before travelling.</p></div>` : ''}
@@ -222,7 +225,7 @@ function renderEvent(ev, listings) {
     <div class="listing">
       <span class="info">
         <span class="nm">${esc(l.title || 'Private space')}</span>
-        <span class="dist" style="display:block">${Math.round(l.d)}m away &middot; ${esc(priceLabel(l))}</span>
+        <span class="dist" style="display:block">${esc(distanceLabel(l.d))} &middot; ${esc(priceLabel(l))}</span>
       </span>
       <a class="bk" href="${esc(parkNear(ev))}">Book</a>
     </div>`).join('')}
@@ -235,12 +238,184 @@ function renderEvent(ev, listings) {
   </div>`}
 
   ${ev.parking_notes ? `<div class="panel"><h3>Parking at ${esc(ev.venue_name)}</h3>
-    <p>${esc(ev.parking_notes)}</p></div>` : ''}
+    <p>${esc(ev.parking_notes)}</p>${ev.venue_slug
+      ? `<p style="margin-top:12px"><a href="/venue/${esc(ev.venue_slug)}">Everything on at ${esc(ev.venue_name)} &rarr;</a></p>`
+      : ''}</div>` : ''}
 </main>`;
 
   return shell({
     title, description, canonical: `${SITE}/events/${ev.slug}`,
     head: `<script type="application/ld+json">${jsonLd(schema)}</script>`,
+    body,
+  });
+}
+
+// ── /venue/{slug} ────────────────────────────────────────────────────────────
+// Everything on at one venue, and how parking there actually works.
+//
+// WHY THIS PAGE EXISTS. /events/{slug} answers "where do I park for this gig".
+// Nothing answered "where do I park at the Ulster Hall" — which is what
+// somebody types when they have tickets for something we never listed, and what
+// a venue's own box office searches for. There are 16 active venues and 313
+// upcoming fixtures between them, so this is the hub those 313 event pages link
+// up into instead of each being an orphan.
+//
+// THE PARKING NOTES LEAD, NOT THE BOOKABLE SPACES. nearbyListings() returns
+// only listings we can actually sell, and 13 of the 15 venues with fixtures
+// have none within 2km. A bookable-first page would therefore be empty on
+// almost every venue, while parking_notes is populated on all 17 rows and is
+// the thing the page's own title promises to answer.
+//
+// NO PRECISE DISTANCES, AND NO WALKING TIMES. venues.geo_verified is false on
+// 16 of 17 rows. Printing "340m, a 4 minute walk" from an unverified pin is a
+// claim about accuracy nobody measured — see distanceLabel() in _eventsView.js.
+//
+// A VENUE WITH NO FIXTURES IS NOT INDEXED. Its page is ~90 words of parking
+// notes, which is the same thin-content problem the six destination pages had
+// before PR #264 gave them real spots. So it renders for anyone with the link
+// and carries noindex,follow until the sweep gives it a fixture — at which
+// point the next render earns the index on its own, with no deploy. The sitemap
+// uses the same rule, so a URL it advertises is never one we told Googlebot to
+// ignore.
+function renderVenue(v, events, listings) {
+  const place = venuePlace(v);
+  const where = [v.town, v.postcode].filter(Boolean).join(', ');
+  const cap = Number(v.capacity) > 0 ? Number(v.capacity) : null;
+  const type = String(v.venue_type || '').trim();
+
+  // Written by whoever ran the sweep, so paragraph breaks are honoured and
+  // everything is escaped. A single blank line is the only structure allowed.
+  const notes = String(v.parking_notes || '').split(/\n\s*\n|\n/).map(s => s.trim()).filter(Boolean);
+
+  const soonest = events[0];
+  const title = `Parking at ${v.name}${v.town ? `, ${v.town}` : ''} | ParkEasy`;
+  const description = events.length
+    ? `Parking at ${v.name} — ${events.length} event${events.length !== 1 ? 's' : ''} `
+      + `in the next ${HORIZON_DAYS} days, starting with ${soonest.name} on `
+      + `${dayLocal(soonest.starts_at)}. Where to park and what to expect.`
+    : `Parking at ${v.name}${where ? `, ${where}` : ''}. Where to park, `
+      + `and how to book a space nearby before you travel.`;
+
+  const chips = [
+    type ? `<span class="chip" style="color:var(--muted);background:rgba(255,255,255,.05);border:1px solid var(--hairline)">${esc(type[0].toUpperCase() + type.slice(1))}</span>` : '',
+    cap ? `<span class="chip" style="color:var(--muted);background:rgba(255,255,255,.05);border:1px solid var(--hairline)">Holds ${cap.toLocaleString('en-GB')}</span>` : '',
+    events.length ? `<span class="chip" style="color:var(--teal-lt);background:rgba(46,211,198,.12);border:1px solid rgba(46,211,198,.3)">${events.length} coming up</span>` : '',
+  ].filter(Boolean).join('');
+
+  // Place carries an @id so each event in the ItemList can point at it rather
+  // than repeating the address 72 times.
+  const placeId = `${SITE}/venue/${v.slug}#place`;
+  const schema = [
+    {
+      '@context': 'https://schema.org', '@type': 'Place', '@id': placeId,
+      name: v.name,
+      url: `${SITE}/venue/${v.slug}`,
+      ...(v.website_url ? { sameAs: v.website_url } : {}),
+      ...(cap ? { maximumAttendeeCapacity: cap } : {}),
+      ...(v.postcode || v.town ? {
+        address: {
+          '@type': 'PostalAddress',
+          ...(v.address ? { streetAddress: v.address } : {}),
+          ...(v.town ? { addressLocality: v.town } : {}),
+          ...(v.postcode ? { postalCode: v.postcode } : {}),
+          addressCountry: 'GB',
+        },
+      } : {}),
+      ...(v.lat != null ? { geo: { '@type': 'GeoCoordinates', latitude: v.lat, longitude: v.lng } } : {}),
+      // publicAccess is the only parking claim made here, and it is about the
+      // VENUE being open to the public — not about it having a car park. A
+      // ParkingFacility type would say Ulster Hall is a car park, which it is
+      // not, and the private driveways nearby are not published as facilities
+      // because their addresses are not ours to put in a search index.
+      publicAccess: true,
+    },
+    // Built from the same array the page renders, so the schema can never
+    // advertise an event the visitor cannot see on the page.
+    ...(events.length ? [{
+      '@context': 'https://schema.org', '@type': 'ItemList',
+      name: `Events at ${v.name}`,
+      numberOfItems: events.length,
+      itemListElement: events.map((e, i) => ({
+        '@type': 'ListItem', position: i + 1,
+        item: {
+          '@type': 'Event', name: e.name,
+          startDate: e.starts_at,
+          url: `${SITE}/events/${e.slug}`,
+          eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+          eventStatus: 'https://schema.org/EventScheduled',
+          location: { '@id': placeId },
+        },
+      })),
+    }] : []),
+  ];
+
+  const body = `<main class="wrap">
+  <div class="hero">
+    <p class="kicker"><a href="/events" style="text-decoration:none">&larr; What&#39;s on</a></p>
+    <h1>Parking at ${esc(v.name)}</h1>
+    ${where ? `<p class="lede">${esc(where)}</p>` : ''}
+    ${chips ? `<div class="meta">${chips}</div>` : ''}
+    ${v.lat != null ? `<a class="cta block" href="${esc(parkAtVenue(v))}">Find parking near ${esc(v.name)}</a>` : ''}
+  </div>
+
+  ${notes.length ? `<div class="panel">
+    <h3>What to know before you drive</h3>
+    ${notes.map(n => `<p>${esc(n)}</p>`).join('')}
+  </div>` : ''}
+
+  ${v.lat != null ? staticMap(place) : ''}
+
+  ${listings.length ? `
+  <div class="panel">
+    <h3>Bookable spaces within 2km</h3>
+    ${listings.map(l => `
+    <div class="listing">
+      <span class="info">
+        <span class="nm">${esc(l.title || 'Private space')}</span>
+        <span class="dist" style="display:block">${esc(distanceLabel(l.d))} &middot; ${esc(priceLabel(l))}</span>
+      </span>
+      <a class="bk" href="${esc(parkAtVenue(v))}">Book</a>
+    </div>`).join('')}
+  </div>` : `
+  <div class="panel">
+    <h3>We&#39;re recruiting hosts near ${esc(v.name)}</h3>
+    <p>There is nothing bookable within 2km of ${esc(v.name)} yet. If you have a
+       driveway, yard or car park near here, it is free to list and you set the hours
+       &mdash; including closing it on the nights you want your own space.</p>
+    <a class="cta block" href="${esc(listSpaceNear(place))}">List your space</a>
+  </div>`}
+
+  ${events.length ? `
+  <section class="daygroup" style="margin-top:34px">
+    <h2>What&#39;s on at ${esc(v.name)}</h2>
+    <p class="empty" style="margin-bottom:4px">Next ${HORIZON_DAYS} days. Times are Belfast local.</p>
+    ${events.map(e => `
+    <a class="card" href="/events/${esc(e.slug)}">
+      <div class="row1">
+        <span class="when">${esc(timeLocal(e.starts_at))}</span>
+        <span style="flex:1;min-width:0">
+          <h3>${esc(e.name)}</h3>
+          <p class="venue">${esc(dayLocal(e.starts_at))}${e.subtitle ? ` &middot; ${esc(e.subtitle)}` : ''}</p>
+        </span>
+      </div>
+      <div class="meta">${chip(e.demand_tier)}${e.expected_attendance
+        ? `<span class="chip" style="color:var(--muted);background:rgba(255,255,255,.05);border:1px solid var(--hairline)">~${Number(e.expected_attendance).toLocaleString('en-GB')} expected</span>`
+        : ''}${e.status === 'provisional'
+        ? `<span class="chip" style="color:var(--amber);background:rgba(255,194,75,.13);border:1px solid rgba(255,194,75,.32)">Date provisional</span>`
+        : ''}</div>
+    </a>`).join('')}
+  </section>` : `
+  <div class="panel">
+    <h3>Nothing listed here yet</h3>
+    <p>We have no fixtures on the books for ${esc(v.name)} in the next ${HORIZON_DAYS} days.
+       <a href="/events">See what else is on in Belfast</a>.</p>
+  </div>`}
+</main>`;
+
+  return shell({
+    title, description, canonical: `${SITE}/venue/${v.slug}`,
+    head: (events.length ? '' : `<meta name="robots" content="noindex,follow">\n`)
+      + schema.map(s => `<script type="application/ld+json">${jsonLd(s)}</script>`).join('\n'),
     body,
   });
 }
@@ -256,7 +431,36 @@ const errorPage = (code, heading, note) => shell({
 
 export default async function handler(req, res) {
   const slug = String(req.query?.slug || '').trim();
+  const venue = String(req.query?.venue || '').trim();
   try {
+    if (venue) {
+      // A FAILED read and an EMPTY read mean different things here. Empty is a
+      // correct 404 (no such venue, or active = false). A failure means we
+      // cannot see the venues table at all — most likely because anon has no
+      // grant on it, which would 404 all sixteen pages while looking healthy —
+      // so the venue is rebuilt from one of its own events instead. See
+      // venueFromEvents().
+      let v = null, readable = true;
+      try { v = await fetchVenue(venue); } catch { readable = false; }
+      if (!v && !readable) v = await venueFromEvents(venue).catch(() => null);
+      if (!v) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(404).send(errorPage('404', "We don't have that venue",
+          'We could not find that venue. It may have been renamed, or closed.'));
+      }
+      // Both are optional content: a venue page is still worth serving with
+      // just its parking notes if the events query or the listings query
+      // fails, and a half page beats a 503 to somebody standing in a car park.
+      const place = venuePlace(v);
+      const [events, listings] = await Promise.all([
+        fetchVenueEvents(v.slug).catch(() => []),
+        v.lat != null ? nearbyListings(place).catch(() => []) : Promise.resolve([]),
+      ]);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', CACHE);
+      return res.status(200).send(renderVenue(v, events, listings));
+    }
     if (slug) {
       const ev = await fetchBySlug(slug);
       if (!ev) {
@@ -287,4 +491,4 @@ export default async function handler(req, res) {
   }
 }
 
-export { renderList, renderEvent, nearbyListings, metres };
+export { renderList, renderEvent, renderVenue, nearbyListings, metres };
