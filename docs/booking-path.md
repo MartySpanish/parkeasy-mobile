@@ -100,8 +100,78 @@ inference.** The rules worth knowing:
 
 Knowing nothing renders nothing, rather than an empty box.
 
+## Getting found: the Recommended order
+
+The front of the same funnel. The default sort is `popular`, labelled
+**Recommended** in the UI, and it ranked by `spot.votes` — seed weights, as the
+sort's own comment admits:
+
+> *"`votes` is a weight in the seed data — a couple of thousand of them across
+> 297 spots, none given by a driver — so calling this 'Most Popular' claimed a
+> popularity nobody measured."*
+
+The label was walked back from "Most Popular" for that reason. **What nobody
+noticed is that every bookable listing is built with `votes: 0`**, so the one
+kind of space ParkEasy can guarantee sorted below all ~740 seed spots — at the
+bottom of a list telling the driver these were our recommendations.
+
+`src/data/spotRanking.js` gives Recommended three tiers:
+
+| tier | what |
+|---|---|
+| 0 | a **featured** bookable space (`rental_listings.featured`, a decision already in the data) |
+| 1 | any other space a driver can reserve and pay for right now |
+| 2 | everything else, in exactly the old `votes` order |
+
+### This also favours ParkEasy, and the page says so
+
+The honest argument is that a space you can reserve before leaving the house
+answers the question this app exists to answer — *will I get a space* — and a
+street with a hand-assigned weight does not. A listing with no weight is not
+one that scored zero on a measured scale; it is one the scale was never about.
+
+But it does put the revenue line on top, so:
+
+- the free spots are **not** hidden, removed, or demoted below anything new —
+  tier 2's internal order is byte-for-byte the old comparator, and the test
+  asserts that;
+- community finds already carried `votes: 0` and sit exactly where they sat;
+- a `RankNote` on the page says *"Spaces you can reserve are shown first"* and
+  points at **Free First**, one tap away. It renders on **both** results
+  surfaces — the list and the map sheet share `sortBy`, so both are reordered,
+  and a note on one but not the other would imply the other was not.
+- The note is omitted when nothing in the results is bookable, which on most
+  searches is the case.
+
+### Bookability is an explicit flag, never the badge
+
+A live listing outside its availability window is mapped to badge `paid` when
+sellable and `free` when not. Ranking on the badge would put a space whose
+Reserve button never appears at the top of the list — Belfast Royal Academy,
+whose window closed in August, is exactly that row. `App.jsx` sets
+`bookable: sellableNow(l)`, the same test checkout uses.
+
+### There is no "Official" tier
+
+Item 9 of the comparables audit asked for one, ready for the ICC Belfast
+conversation. **It is not built, deliberately.**
+
+`official` already means something factual and load-bearing — a real car park
+with a named operator, as against a street somebody guessed at — and it is on
+roughly sixty NCP, Q-Park, Belfast City Council and Translink car parks that
+have **no relationship with ParkEasy whatsoever**. Reusing it as a commercial
+tier would sell a venue a label those sixty already carry for free, and would
+destroy the one piece of information the badge conveys. A separate "partner"
+badge would have had zero members, since the APCOA listings are still blocked.
+
+What a venue actually wants is to be the answer when somebody searches their
+venue. That is `/venue/{slug}` — which exists, with their own fixture list on
+it — plus being bookable, which this ordering now rewards.
+
 ## Tests
 
-`tests/unit/bookingColumns.test.mjs` — 19 checks, 28 mutations, 0 survivors.
+`tests/unit/bookingColumns.test.mjs` — 20 checks, 28 mutations, 0 survivors.
+`tests/unit/spotRanking.test.mjs` — the Recommended order, including that the
+free spots keep their old order and that `official` is not repurposed.
 Also `tests/unit/bookingLeadTime.test.mjs` for the refusal rules themselves and
 `tests/unit/bookingRefusals.test.mjs` for the endpoint's side.

@@ -39,6 +39,7 @@ import { eventsOn, whenWord, venueOf } from './data/events';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
 import { BOOKING_SELECT, operatorFacts } from './data/listingFields';
+import { compareRecommended, bookableCount } from './data/spotRanking';
 import { startTimeRefusal, noticeFloorDay } from './data/bookingLeadTime';
 import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
 import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
@@ -3169,6 +3170,28 @@ const applyChip = (arr, chip) => {
   return arr;
 };
 
+/**
+ * Why the Recommended order is what it is, said on the page.
+ *
+ * ONE COMPONENT, TWO RENDER SITES. The list and the map sheet share `sortBy`
+ * and `filtered`, so both are reordered — and a disclosure present on one and
+ * missing on the other would be worse than none, because it would imply the
+ * other surface was not reordered.
+ *
+ * Omitted when nothing in the results is bookable, which on most searches is
+ * the case: thirteen of the fifteen venues with fixtures have no bookable
+ * space within 2km, and explaining a promotion that did not happen is noise.
+ */
+const RankNote = ({ sortBy, spots }) => {
+  if (sortBy !== 'popular' || bookableCount(spots) === 0) return null;
+  return (
+    <p className="px-1 pb-1.5 text-[11px] text-[rgba(234,241,248,0.42)] leading-snug">
+      Spaces you can reserve are shown first. Tap{' '}
+      <strong className="text-[rgba(234,241,248,0.6)]">Free First</strong> for free spots first.
+    </p>
+  );
+};
+
 const SORT_OPTIONS_FREE    = [
   { id:'popular', label:'Recommended' },
   { id:'cheap',   label:'Cheapest' },
@@ -3710,7 +3733,12 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
       // whole list by them on the day this ships would put every spot in id
       // order. The weight stays as the ranking, and the label no longer
       // attributes it to drivers.
-      if (sortBy === 'popular') return b.votes - a.votes;
+      //
+      // AND EVERY BOOKABLE LISTING HAS votes: 0, so this put the one kind of
+      // space ParkEasy can guarantee at the very bottom of a list labelled
+      // "Recommended". src/data/spotRanking.js is the fix, and says what it
+      // costs as well as what it buys.
+      if (sortBy === 'popular') return compareRecommended(a, b);
       if (sortBy === 'free') {
         const fa = ['free','hidden_gem'].includes(a.badge) ? 0 : 1;
         const fb = ['free','hidden_gem'].includes(b.badge) ? 0 : 1;
@@ -4443,6 +4471,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
             )}
           </div>
         </div>
+        <div className="px-4"><RankNote sortBy={sortBy} spots={filtered}/></div>
         <div className="px-4 pt-2 space-y-3">
           {filtered.length === 0 ? emptyState : (
             <>
@@ -4596,6 +4625,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
           <h2 className="font-display font-bold text-[17px] text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label}` : 'Nearby parking'}</h2>
           <span className="text-[12.5px] font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0 pl-2">{filtered.length} spot{filtered.length!==1?'s':''}{geo?'':` · ${cityName} first`}{hiddenCount>0?` · ${hiddenCount} ✨`:''}</span>
         </div>
+        <RankNote sortBy={sortBy} spots={filtered}/>
         {filtered.length === 0 ? emptyState : (
           <>
             {/* The Nearby tab rendered no partner cards at all — a business
@@ -10135,6 +10165,11 @@ export default function App() {
         // Reserve button will actually do, and what checkout will actually
         // accept, or a driver reads "book in advance" and finds nothing to press.
         badge: sellableNow(l) ? 'paid' : 'free',
+        // EXPLICIT, not inferred from the badge above. A live listing outside
+        // its availability window is badged 'paid' when sellable and 'free'
+        // when not, so ranking on the badge would promote a space whose
+        // Reserve button never appears. Same test checkout uses.
+        bookable: sellableNow(l),
         dist: 0, walk: sellableNow(l) ? 'Bookable' : 'Not booking',
         restriction: sellableNow(l)
           ? 'Private space — book in advance'
