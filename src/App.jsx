@@ -5845,7 +5845,26 @@ const BookingSheet = ({ listing, onClose }) => {
             : !regValid ? 'Enter your vehicle registration'
             : `Pay £${total.toFixed(2)} with card`}
         </button>
-        <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">Free cancellation until 24 hours before your booking. After that, no refund. Secure payment via Stripe — you park at your own risk, see our Terms.</p>
+        {/* THE REFUND SENTENCE, AND WHY IT IS WORDED LIKE THIS.
+            It read "Free cancellation until 24 hours before your booking",
+            which is not what happens. api/bookings/cancel.js refunds
+            booking_price_pence + surcharge_pence and KEEPS the driver
+            service fee, exactly as Terms §5.1 says: "the Driver Service Fee
+            is not refundable". So on a £23.00 booking a driver cancelling
+            two days ahead got £20.00 back, not £23.00 — and the sentence at
+            the moment of payment told them otherwise.
+            That is a price claim contradicted by our own terms at the point
+            of sale, which is the same class of problem as a drip-priced
+            headline. The FAQ and §5.1 both already state it correctly; only
+            this line was wrong, and this is the line people actually read.
+            Named amounts, not percentages: "the £3.00 service fee" is
+            checkable against the number directly above it. */}
+        <p className="text-[11px] text-[#8da2bd] mt-2 text-center leading-snug">
+          Cancel 24+ hours before and we refund the £{bookingCost.toFixed(2)} parking —
+          the £{serviceFee.toFixed(2)} service fee isn&rsquo;t refundable. Under 24 hours, no refund.
+          If the host cancels, you get the full £{total.toFixed(2)} back.
+          Secure payment via Stripe — you park at your own risk, see our Terms.
+        </p>
       </div>
     </div>
   );
