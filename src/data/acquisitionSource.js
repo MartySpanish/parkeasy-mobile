@@ -68,6 +68,16 @@ const matches = (host, list) => list.some(h => host === h.replace(/\.$/, '') || 
  */
 export function classify(referrer = '', search = '', selfHost = '') {
   const q = new URLSearchParams(String(search || ''));
+  // ParkEasy's own printed-source parameter, which predates any utm here.
+  //
+  // All 26 QR codes in qr_codes land on `?src=<code>` and api/q.js redirects
+  // them there. The stickers are ON A WALL IN A BARBER'S and cannot be edited
+  // — api/q.js makes that point about never dead-ending a physical code — so
+  // reading `src` is the only fix that reaches the print runs already out
+  // there. A scan is therefore 'offline' with the sticker's code as its
+  // source, which is what links "the Falls Road sticker" to what that session
+  // then did.
+  const srcParam = (q.get('src') || '').trim().toLowerCase().slice(0, 40);
   const utmSource = (q.get('utm_source') || '').trim().toLowerCase().slice(0, 40);
   const utmMedium = (q.get('utm_medium') || '').trim().toLowerCase().slice(0, 40);
   const utmCampaign = (q.get('utm_campaign') || '').trim().toLowerCase().slice(0, 40);
@@ -83,10 +93,16 @@ export function classify(referrer = '', search = '', selfHost = '') {
   }
 
   // 2. A QR code or a printed flyer. These have no referrer at all, so without
-  //    a utm they are indistinguishable from somebody typing the address —
+  //    a marker they are indistinguishable from somebody typing the address —
   //    which is exactly why every flyer needs one.
-  if (utmMedium === 'qr' || utmSource === 'qr' || utmMedium === 'print' || utmMedium === 'flyer') {
-    return { ch: 'offline', src: utmSource || utmMedium, ...out };
+  //
+  //    `src` is checked alongside the utm forms and BEFORE the referrer, because
+  //    api/q.js issues a 302 and some browsers set the referrer to the /q/ URL
+  //    on the hop; classifying by host first would file a sticker scan as an
+  //    internal navigation and lose it.
+  if (srcParam || utmMedium === 'qr' || utmSource === 'qr'
+      || utmMedium === 'print' || utmMedium === 'flyer') {
+    return { ch: 'offline', src: srcParam || utmSource || utmMedium, ...out };
   }
 
   // 3. An explicit utm_source with no referrer we recognise: trust the link.

@@ -51,7 +51,7 @@ if (HEAD?.warning) console.warn('prerender: ' + HEAD.warning);
 // build order changed, and quietly falling back to stale constants is exactly
 // the failure this is replacing.
 const places = JSON.parse(readFileSync('public/globe/places.json', 'utf8'));
-const NETWORK = { spots: places.stats.spaces, gems: places.stats.gems, ev: places.stats.ev };
+const NETWORK = { spots: places.stats.spaces, gems: places.stats.gems, ev: places.stats.ev, towns: places.stats.towns };
 for (const [k, v] of Object.entries(NETWORK)) {
   if (!Number.isInteger(v) || v <= 0) {
     throw new Error(`prerender: ${k} is ${v} — generate-globe-data.mjs must run first`);
@@ -146,14 +146,42 @@ const orgLd = `<script type="application/ld+json">${JSON.stringify({
 // started deriving, the description Google indexes still said 741 and 88.
 // index.html now holds {{SPOTS}}/{{GEMS}}/{{EV}} and they are filled here from
 // the same stats block, so there is exactly one place a count can come from.
-htmlDoc = htmlDoc
+const fillTokens = (s) => s
   .replaceAll('{{SPOTS}}', String(NETWORK.spots))
   .replaceAll('{{GEMS}}', String(NETWORK.gems))
-  .replaceAll('{{EV}}', String(NETWORK.ev));
-const leftover = htmlDoc.match(/\{\{[A-Z_]+\}\}/g);
-if (leftover) {
-  throw new Error(`prerender: unsubstituted token(s) ${[...new Set(leftover)].join(', ')} `
-    + '— add them to the replacement list above rather than shipping braces to Google');
+  .replaceAll('{{EV}}', String(NETWORK.ev))
+  .replaceAll('{{TOWNS}}', String(NETWORK.towns));
+
+const assertFilled = (s, where) => {
+  const left = s.match(/\{\{[A-Z_]+\}\}/g);
+  if (left) {
+    throw new Error(`prerender: unsubstituted token(s) ${[...new Set(left)].join(', ')} in ${where} `
+      + '— add them to fillTokens rather than shipping braces to Google');
+  }
+  return s;
+};
+
+htmlDoc = assertFilled(fillTokens(htmlDoc), 'index.html');
+
+// EVERY PUBLIC PAGE, NOT JUST THE HOMEPAGE.
+//
+// partners.html is a sales page shown to businesses being asked for £25 a
+// month, and it carried its own typed copies of the counts: "745 parking spots
+// mapped" and "741 spots across 31 towns" against a real 787 and 48. Both
+// understated the product to the exact audience being sold it, and both had
+// been wrong since whenever the numbers last moved.
+//
+// This is the same failure index.html had — "the <meta> descriptions carried
+// their own typed copies of these three numbers" — so it gets the same fix
+// rather than a second one. A page with no tokens passes through untouched, so
+// adding one to any public page is enough to make it derive.
+for (const page of ['partners.html', 'hosts.html']) {
+  const path = `dist/${page}`;
+  let doc;
+  try { doc = readFileSync(path, 'utf8'); } catch { continue; }
+  if (!/\{\{[A-Z_]+\}\}/.test(doc)) continue;
+  writeFileSync(path, assertFilled(fillTokens(doc), page));
+  console.log(`prerender: filled counts in ${page}`);
 }
 
 if (htmlDoc.includes('<div id="root"></div>')) {

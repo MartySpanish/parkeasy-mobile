@@ -70,6 +70,22 @@ it('a paid click beats its own referrer', () => {
   }
 });
 
+it("a printed sticker's own src parameter is read, even via the /q/ hop", () => {
+  // All 26 rows in qr_codes land on `?src=<code>`, and those stickers are on
+  // walls and cannot be reprinted. Mutation: drop srcParam and every scan
+  // since the first sticker went up reads as 'direct' — which is what it did
+  // before this line existed.
+  assert.deepEqual(classify('', '?src=fl', ME), { ch: 'offline', src: 'fl' });
+  assert.deepEqual(classify('', '?src=gaa', ME), { ch: 'offline', src: 'gaa' });
+  // api/q.js answers with a 302, and some browsers carry the /q/ URL as the
+  // referrer across that hop. Checking the host first would file the scan as
+  // an internal navigation. Mutation: move the offline branch below the host
+  // checks and this becomes 'internal'.
+  assert.equal(classify('https://parkeasy.uk/q/fl', '?src=fl', ME).ch, 'offline');
+  // A paid click still outranks it: the ad is what was paid for.
+  assert.equal(classify('https://l.facebook.com/', '?src=x&utm_medium=cpc&utm_source=fb', ME).ch, 'paid');
+});
+
 it('a QR code and a flyer are offline, not direct', () => {
   // A printed code has no referrer, so without this it is indistinguishable
   // from somebody typing the address — which is the whole reason every flyer

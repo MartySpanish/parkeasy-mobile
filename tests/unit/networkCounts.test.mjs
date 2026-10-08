@@ -75,6 +75,36 @@ it('the meta descriptions hold tokens, not numbers', () => {
   }
 });
 
+it('the sales pages derive their counts too, not just the homepage', () => {
+  // partners.html is shown to businesses being asked for GBP25 a month and it
+  // carried its own typed copies: "745 parking spots mapped", "31 towns across
+  // NI" and "741 spots across 31 towns" against a real 787 and 48. Every one
+  // UNDERSTATED the product to the exact audience being sold it.
+  //
+  // Mutation: type a number back into either page and this fails.
+  const partners = read('../../public/partners.html');
+  for (const token of ['{{SPOTS}}', '{{TOWNS}}']) {
+    assert.ok(partners.includes(token), `partners.html no longer contains ${token}`);
+  }
+  // The stats row is where the typed numbers were. Nothing in it may be a
+  // count that the build could have derived.
+  const row = partners.match(/<div class="stats">([\s\S]*?)<\/div>\s*<\/div>/);
+  assert.ok(row, 'the stats row moved — check it still derives');
+  const typed = [...row[1].matchAll(/<b>([^<]+)<\/b>\s*<span>([^<]*)<\/span>/g)]
+    .filter(([, value, label]) => /spot|town|gem|ev/i.test(label) && /^[0-9,]+$/.test(value.trim()));
+  assert.deepEqual(typed.map(t => `${t[1]} ${t[2]}`), [],
+    'a derivable count is typed into the partners stats row again');
+
+  // And prerender has to actually process the page, or the tokens ship as
+  // literal braces to a business considering a subscription.
+  const pre = read('../../scripts/prerender.mjs');
+  assert.match(pre, /for \(const page of \['partners\.html', 'hosts\.html'\]\)/,
+    'prerender no longer fills the sales pages');
+  assert.match(pre, /assertFilled\(fillTokens\(doc\), page\)/,
+    'the sales pages are filled without the leftover-token guard');
+  assert.match(pre, /\{\{TOWNS\}\}/, 'TOWNS is not in fillTokens');
+});
+
 it('prerender fills every token and shouts about any it misses', () => {
   for (const token of ['{{SPOTS}}', '{{GEMS}}', '{{EV}}']) {
     assert.ok(prerender.includes(`replaceAll('${token}'`),
