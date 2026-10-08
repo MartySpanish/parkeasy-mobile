@@ -115,3 +115,34 @@ export function startTimeRefusal({
 
   return null;
 }
+
+/**
+ * The earliest London calendar day on which a notice period allows anything.
+ *
+ * A FLOOR, NOT THE ANSWER. A 24-hour requirement at 18:00 on the 8th makes the
+ * 9th bookable from 18:00 onwards, not from midnight: the hours inside that day
+ * are startTimeRefusal()'s business. This exists so a date picker cannot offer
+ * a day on which nothing whatsoever could be sold — which is what it did
+ * before, opening the sheet on today's date against a 24-hour requirement and
+ * contradicting itself on the next line.
+ *
+ * Returns null where there is no requirement, so a caller can skip it entirely
+ * rather than comparing against today.
+ *
+ * THE ZONE IS PINNED. Computed with the server's own clock, "tomorrow" flips at
+ * midnight UTC, which is 1am Belfast for most of the year — so for that hour
+ * every notice period would be a day out.
+ *
+ * @param {object|null} listing   read for min_notice_hours
+ * @param {number} nowMs          injected so this is testable without the clock
+ * @returns {string|null} yyyy-mm-dd
+ */
+export function noticeFloorDay(listing, nowMs = Date.now(), timeZone = 'Europe/London') {
+  const need = noticeMs(listing);
+  if (need <= 0) return null;
+  // en-CA formats as yyyy-mm-dd, which is the shape every date column and the
+  // <input type="date"> value both use.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(nowMs + need));
+}

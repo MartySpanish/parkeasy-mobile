@@ -38,6 +38,8 @@ import { holdCopy } from './data/spaceHold';
 import { eventsOn, whenWord, venueOf } from './data/events';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
+import { BOOKING_SELECT, operatorFacts } from './data/listingFields';
+import { startTimeRefusal, noticeFloorDay } from './data/bookingLeadTime';
 import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
 import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
 import { fetchReferrals, ensureCode, referralLine, referralLink, rememberCode, claimPendingCode, claimMessage } from './data/referrals';
@@ -5485,6 +5487,9 @@ const firstOpenDate = (l, from) => {
   for (let i = 0; i < 366; i++) { const d = addDays(from, i); if (dateIsOpen(l, d)) return d; }
   return from;
 };
+/** The day the sheet should open on: open for business AND far enough out. */
+const openingDate = (l, today) =>
+  firstOpenDate(l, [today, noticeFloorDay(l)].filter(Boolean).sort().pop());
 
 const BookingSheet = ({ listing, onClose }) => {
   // Day-priced sites (a school car park at £15 for 8am-5pm) have no hourly
@@ -5506,7 +5511,9 @@ const BookingSheet = ({ listing, onClose }) => {
   const dayPriced = hasDay && (!hasHour || unit === 'day');
   const baseRate = dayPriced ? Number(listing.price_per_day) : (Number(listing.price_per_hour) || 0);
   const today = new Date().toISOString().split('T')[0];
-  const [date, setDate] = useState(() => firstOpenDate(listing, today));
+  // openingDate, not firstOpenDate: a site needing 24 hours' notice used to
+  // open the sheet on today's date and immediately contradict itself.
+  const [date, setDate] = useState(() => openingDate(listing, today));
   const [override, setOverride] = useState(null);   // event price for the picked date
   const [credit, setCredit] = useState(null);       // {purchaseId, remaining, passName} if the driver holds credits
   useEffect(() => {
@@ -5630,6 +5637,33 @@ const BookingSheet = ({ listing, onClose }) => {
     return '';
   })();
   const closedDay = !!(closedReason || spanReason);
+  // THE THIRD MIRROR, and the one that was missing. The lead-time guards went
+  // into api/checkout/create-session.js and nothing client-side ever mentioned
+  // them, so the single listing that needs 24 hours' notice let a driver pick a
+  // date, type a registration and tap Pay before the server said no — exactly
+  // the sequence the two mirrors above exist to prevent.
+  //
+  // The SAME MODULE the endpoint calls, not a second copy of the rules:
+  // src/data/bookingLeadTime.js is dependency-free precisely so both sides can
+  // import it, and a divergence here would be a refusal the driver cannot
+  // predict from anything on the screen.
+  const leadReason = (() => {
+    if (!date || closedDay) return '';
+    const startTime = dayPriced ? String(listing.gate_opens_at || '08:00').slice(0, 5) : time;
+    if (!startTime) return '';
+    const startMs = new Date(`${date}T${startTime}`).getTime();
+    if (!Number.isFinite(startMs)) return '';
+    const gateOpen = String(listing.gate_opens_at || '08:00').slice(0, 5);
+    const gateClose = String(listing.gate_closes_at || '17:00').slice(0, 5);
+    const spanMs = dayPriced
+      ? Math.max(0, new Date(`${date}T${gateClose}`).getTime() - new Date(`${date}T${gateOpen}`).getTime())
+      : hours * 3600000;
+    const refusal = startTimeRefusal({
+      startMs, nowMs: Date.now(), spanMs, days: hours, dayPriced, listing,
+    });
+    return refusal ? refusal.error : '';
+  })();
+  const noticeFloor = noticeFloorDay(listing);
   // What the date field advertises: the weekly pattern, plus any one-off dates
   // the host has added on top of it.
   const openDaysLabel = [
@@ -5684,16 +5718,46 @@ const BookingSheet = ({ listing, onClose }) => {
           <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center flex-shrink-0"><X size={15} className="text-[#aebfd4]"/></button>
         </div>
 
+        {/* WHO RUNS THIS CAR PARK, instead of reviews we do not have.
+            TrustRow renders nothing at all on every live listing — no ratings,
+            no completed bookings — which is honest and useless. These are the
+            facts a site has that a driveway does not: a named club or school,
+            a known number of spaces, published gate hours, a notice period.
+            Every line is a column; see operatorFacts() for why none of them
+            says "marshalled". */}
+        {(() => {
+          const facts = operatorFacts(listing);
+          if (!facts.length) return null;
+          return (
+            <ul className="mb-3 space-y-1">
+              {facts.map(f => (
+                <li key={f.k} className="flex items-start gap-1.5 text-[11.5px] text-[#9fb3cb] leading-snug">
+                  <Check size={12} className="text-[#6BEFB9] flex-shrink-0 mt-[3px]"/>
+                  <span>{f.text}</span>
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
+
         <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5">
           Date{openDaysLabel && <span className="ml-1.5 font-semibold normal-case tracking-normal text-[#8da2bd]">· open {openDaysLabel}</span>}
         </label>
         <input type="date"
-          min={listing.available_from && listing.available_from > today ? listing.available_from : today}
+          min={[today, listing.available_from, noticeFloor].filter(Boolean).sort().pop()}
           max={listing.available_until || undefined}
           value={date} onChange={e=>setDate(e.target.value)} className={field}/>
         {closedDay && (
           <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
             {closedReason || spanReason}
+          </p>
+        )}
+        {/* Not under the time field: on a day-priced site there IS no time
+            field — the gate window is the slot — and the refusal would have
+            nowhere to appear. */}
+        {!closedDay && leadReason && (
+          <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
+            {leadReason}
           </p>
         )}
         {/* Said once, at the top, before any of the fields below are filled
@@ -10049,7 +10113,12 @@ export default function App() {
     (async () => {
       if (!isSupabaseEnabled) return;
       const { data } = await supabase.from('rental_listings')
-        .select('id,title,address,lat,lng,price_per_hour,price_per_day,available_from,available_until,gate_opens_at,gate_closes_at,featured,spaces,space_type,photos,instructions,is_verified,verified_org_type,average_rating,ratings_count,completed_bookings_count')
+        // src/data/listingFields.js, not a list typed out here. The list that
+        // used to be here was missing available_days, extra_dates and
+        // blocked_dates — the three columns BookingSheet's date mirror reads —
+        // so on the map path every day looked open and the driver was refused
+        // at the card form instead of at the date picker.
+        .select(BOOKING_SELECT)
         .eq('status', 'active').limit(200);
       if (!live || !data) return;
       setRentalSpots(data.filter(l => l.lat != null && l.lng != null).map(l => ({
