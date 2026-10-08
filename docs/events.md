@@ -1,13 +1,15 @@
 # The events pages
 
-Two public pages that turn the events calendar into parking demand:
+Three public pages that turn the events calendar into parking demand:
 
 | route | what it is |
 |---|---|
 | `/events` | everything on in the next 90 days, grouped by date |
 | `/events/{slug}` | one event, a map of the venue, and what is bookable near it |
+| `/venue/{slug}` | one venue: how parking works there, and every fixture on the books |
 
-Both are rendered by `api/events.js` and cached at the edge for **10 minutes**.
+All three are rendered by `api/events.js` and cached at the edge for
+**10 minutes**.
 
 ## Why they are functions and not files
 
@@ -28,9 +30,9 @@ Ten minutes is the freshness; `stale-while-revalidate` means a visitor is never
 the one waiting for Postgres — they get the slightly old copy instantly while
 the next one is built behind them.
 
-`vercel.json` rewrites `/events` and `/events/:slug` to the one function; the
-slug arrives as a query parameter. Both rules sit **before** the SPA catch-all,
-or the React app would answer instead.
+`vercel.json` rewrites `/events`, `/events/:slug` and `/venue/:slug` to the one
+function; the slug arrives as a query parameter (`slug` or `venue`). All three
+rules sit **before** the SPA catch-all, or the React app would answer instead.
 
 ## Demand tiers
 
@@ -88,12 +90,94 @@ When nothing is bookable within 2km, the page swaps the listings panel for a
 host-recruitment panel pointing at `/hosts?venue={venue_slug}` — those venues
 are exactly where a host is worth signing.
 
+## `/venue/{slug}`
+
+`/events/{slug}` answers *"where do I park for this gig"*. Nothing answered
+*"where do I park at the Ulster Hall"* — which is what somebody types when they
+have tickets for something we never listed, and what a venue's own box office
+searches for. There are **16 active venues** (Casement Park is a building site
+and is `active = false`) and **313 upcoming fixtures** between them, so this is
+the hub those event pages link up into rather than each being an orphan.
+
+**The parking notes lead, not the bookable spaces.** `nearbyListings()` returns
+only listings we can actually sell, and 13 of the 15 venues with fixtures have
+none within 2km — a bookable-first page would be empty on nearly every venue.
+`parking_notes` is populated on all 17 rows and is what the page's own title
+promises to answer, so it goes first.
+
+### A venue with no fixtures is not indexed
+
+Its page is about ninety words of parking notes, which is the same thin-content
+problem the six destination pages had before PR #264 gave them real spots. So:
+
+- the page renders for anyone with the link,
+- it carries `<meta name="robots" content="noindex,follow">` until the venue has
+  an upcoming event,
+- and it earns the index on the next render once the sweep adds one — no deploy.
+
+`api/sitemap.js` uses the **identical** condition, derived from the rows it has
+already fetched, so a URL the sitemap advertises is never one the page tells
+Googlebot to ignore. That contradiction cost the destination pages a release.
+
+### The one read that is not through a view
+
+`fetchVenue()` reads `public.venues` **directly**. Everything else on these
+pages goes through `upcoming_events`, which is a view — so a view-owner grant
+is enough for it, and nothing in this codebase has ever proved that `anon` can
+`SELECT` the venues *table*. If it cannot, PostgREST answers 401 and all
+sixteen venue pages would quietly 404 while looking entirely healthy: no error,
+no empty state, just sixteen URLs that are not there.
+
+So the indexable content comes from a source we know `anon` can read:
+
+- the table read **fails** → the venue is rebuilt from one of its own events
+  (`venueFromEvents()`), and the sitemap takes its slugs from the same place;
+- the table read comes back **empty** → that is a correct 404. The venue does
+  not exist, or it is `active = false` (Casement Park, a building site). Falling
+  back here would publish a page for a venue we deliberately switched off.
+
+The fallback carries no `town`, street address, `venue_type` or `website_url` —
+the view does not have them — and `renderVenue()` omits each rather than
+printing a blank. The table is still preferred whenever it is readable, because
+it is the authoritative answer to *"is this venue still active"*.
+
+### No precise distances, and no walking times
+
+`venues.geo_verified` is **false on 16 of the 17 rows**. The event page used to
+print `${Math.round(d)}m away` — one-metre precision derived from two pins,
+neither of them surveyed, on the line where somebody decides whether they can
+walk it. `distanceLabel()` now bands it on both pages:
+
+| distance | rendered |
+|---|---|
+| missing or nonsense | `nearby` |
+| under 100m | `under 100m away` |
+| under 1km | `about 350m away` (nearest 50m) |
+| 1km or more | `about 1.6km away` |
+
+There is no walking time at all. Minutes would need a route; what we have is a
+straight line.
+
+### Schema
+
+`Place` for the venue, plus an `ItemList` of its events built from **the same
+array the page renders**, so the schema can never advertise a fixture the
+visitor cannot see. Each event points at the `Place` by `@id` rather than
+repeating the address.
+
+`ParkingFacility` is deliberately **not** used: it would say the Ulster Hall is
+a car park, which it is not. The private driveways nearby are not published as
+facilities either — their addresses are not ours to put in a search index.
+
 ## The sitemap
 
 `public/sitemap.xml` was hand-written and is now `api/sitemap.js`, for the same
 reason the pages are functions: it has to include every event slug in the next
 90 days. It serves the full static list (all 24 area pages, `/`, `/hosts`,
-`/partners`, `/globe`, `/events`) plus one URL per event.
+`/partners`, `/globe`, `/events`) plus one URL per event, plus one URL per
+venue **that has a fixture** — see the noindex rule above. Venues are read from
+the database rather than listed here, because the sweep can add one without a
+deploy.
 
 If Supabase is unreachable it drops the events and still returns the static
 pages with a 200, cached for one minute rather than ten. A sitemap missing its
