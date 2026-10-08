@@ -10,6 +10,7 @@
 // which is the whole point of the file.
 import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { BOOKABLE_SPACES, headline } from '../src/data/bookableSpaces.js';
+import { CHECKOUT_PROMOS, discountedPence } from '../src/data/subscriptionPromos.js';
 
 // The headline now comes from bookableSpaces.js, which owns both the number
 // and the guard that stops it being lower than anything on sale. See the
@@ -61,6 +62,47 @@ for (const [k, v] of Object.entries(NETWORK)) {
 const distHtml = 'dist/index.html';
 let htmlDoc = readFileSync(distHtml, 'utf8');
 
+// ── PREMIUM, WHICH THIS PAGE DID NOT MENTION AT ALL ─────────────────────────
+// Zero mentions of Premium in index.html and zero across all 30 area pages,
+// while nine people pay for it and it is the only line in the business
+// producing recurring revenue. Worse than absent: the "hidden gems" bullet
+// below described them as "the free, legal kerbside spots locals use", which
+// is true of the SPOTS and false of the ACCESS — they are what the
+// subscription buys, so the page was both failing to sell the product and
+// implying it was already included.
+//
+// PRICES ARE READ OUT OF App.jsx, NOT TYPED. The comment on those constants
+// says they "MUST stay in step with the figures rendered in PricingModal —
+// advertising one price and charging another is the exact drip-pricing failure
+// s.230 exists to stop". A third typed copy here would be a third thing to
+// forget. Matched on the const declarations, not anywhere in the file, because
+// the comment above them also contains both figures.
+const appSrc = readFileSync('src/App.jsx', 'utf8');
+const priceConst = (name) => {
+  const m = appSrc.match(new RegExp(`const ${name}\\s*=\\s*'([^']+)'`));
+  if (!m) throw new Error(`prerender: ${name} not found in App.jsx — Premium pricing moved`);
+  return m[1];
+};
+const PREMIUM_ANNUAL = priceConst('PREMIUM_ANNUAL_GBP');
+const PREMIUM_MONTHLY = priceConst('PREMIUM_MONTHLY_GBP');
+
+// The launch offer, and it takes itself down. SPOTS20 has a real expiry in
+// src/data/subscriptionPromos.js; a static page that advertises a dead code
+// is worse than one that never mentioned it, and "remember to edit the page
+// on 1 November" is not a mechanism.
+const livePromo = CHECKOUT_PROMOS.find(pr => pr.plan === 'annual' && Date.parse(pr.expiresAt) > Date.now()) || null;
+// discountedPence returns {listPence, discountPence, payPence} — the whole
+// breakdown, not a single number — so what the page advertises is payPence,
+// the figure Stripe will actually charge.
+const annualPence = Math.round(parseFloat(PREMIUM_ANNUAL.replace(/[^0-9.]/g, '')) * 100);
+const promoSplit = livePromo ? discountedPence(livePromo.code, 'annual', annualPence) : null;
+const promoPrice = promoSplit && Number.isInteger(promoSplit.payPence) && promoSplit.payPence > 0
+  ? `£${(promoSplit.payPence / 100).toFixed(2)}`
+  : null;
+if (livePromo && !promoPrice) {
+  throw new Error(`prerender: ${livePromo.code} is live but its discounted price did not compute`);
+}
+
 // Cities we want surfaced first: the ones people actually search for.
 const POPULAR = ['belfast', 'derry', 'lisburn', 'newry', 'bangor', 'ballymena', 'coleraine', 'omagh'];
 // Belfast neighbourhoods and venues, as opposed to separate towns.
@@ -104,12 +146,15 @@ const seo = `<div id="seo-prerender" style="max-width:760px;margin:0 auto;paddin
 <ul style="color:rgba(234,241,248,.72);line-height:1.8;padding-left:20px">
 ${FROM_PRICE ? '<li><strong style="color:#EAF1F8">Book a space in advance</strong> and it is held for you &mdash; paid by card, no meter, no circling</li>' : ''}
 <li>Search any destination for the closest free, hidden-gem and official car parks</li>
-<li><strong style="color:#EAF1F8">${NETWORK.gems} hidden gems</strong> &mdash; the free, legal kerbside spots locals use near the places everyone drives to</li>
+<li><strong style="color:#EAF1F8">${NETWORK.gems} hidden gems</strong> &mdash; the free, legal kerbside spots locals use near the places everyone drives to. Seeing exactly where they are is what Premium buys</li>
 <li>Prices are all-in: what you see is what you pay</li>
 <li>Rent out your own driveway or car park and keep 85% of every booking</li>
 </ul>
 <h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">Parking by town</h2>
 ${townNav}
+<h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">ParkEasy Premium &mdash; know exactly where the locals park</h2>
+<p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:8px">Searching, free spots, on-street bays and official car parks are free and always will be. <strong style="color:#EAF1F8">Premium unlocks the ${NETWORK.gems} hidden gems</strong> &mdash; the exact locations, the access notes and the kerb-accurate pin for the free, legal spots locals use near the places everyone drives to. ${PREMIUM_ANNUAL} a year or ${PREMIUM_MONTHLY} a month, all-in, cancel any time.${promoPrice ? ` <strong style="color:#6BEFB9">Use ${livePromo.code} at checkout for ${livePromo.percentOff}% off your first year &mdash; ${promoPrice}.</strong>` : ''}</p>
+<p style="margin:14px 0 0"><a href="https://parkeasy.uk/?upgrade=1" style="display:inline-block;border:1px solid rgba(91,231,218,.5);color:#5BE7DA;font-weight:700;padding:11px 20px;border-radius:12px;text-decoration:none;font-size:15px">See what Premium unlocks &rarr;</a></p>
 <h2 style="font-family:Sora,sans-serif;font-size:20px;margin-top:28px">Community-powered, not corporate</h2>
 <p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:8px">Listings cover official council and private car parks, on-street bays, free spots and local recommendations people have shared.</p>
 <p style="color:rgba(234,241,248,.72);font-size:15px;line-height:1.6;margin-top:10px"><strong style="color:#6BEFB9">Spaces you book are held for you.</strong> Pay in advance and the bay is yours for the hours you booked &mdash; we never sell more spaces than a site has, and if a host closes the site we refund in full.</p>
