@@ -33,7 +33,7 @@ import { currentSource } from './data/acquisitionSource.js';
 // that decides.
 const KNOWN = new Set([
   'search', 'search_no_results', 'map_move',
-  'gem_view', 'gem_locked_view',
+  'gem_view', 'gem_locked_view', 'gem_locked_rendered',
   'listing_view', 'booking_start', 'booking_paid', 'booking_abandoned',
   'heading_tap', 'parked_tap', 'spot_taken_tap',
   'partner_impression', 'partner_click',
@@ -151,6 +151,40 @@ export const track = (name, props = {}, opts = {}) => {
       p_partner_id: opts.partnerId ?? null,
       p_value_pence: opts.valuePence ?? null,
     }).then(() => {}, () => {});
+  } catch { /* a metric never breaks a session */ }
+};
+
+/**
+ * Record one event at most once per session.
+ *
+ * WHY THIS EXISTS. 'gem_locked_rendered' is fired from a render effect that
+ * re-runs on every filter, sort and search — eighty-nine locked cards across a
+ * dozen re-renders would spend the server's 60-a-minute budget and starve the
+ * events that decide anything. An impression metric only has to answer "did
+ * this session ever see one", so it is asked once.
+ *
+ * SEPARATE MARKER PER KEY, so two different once-per-session events do not
+ * consume each other's chance — the attribution one-shot above was written
+ * once and had exactly that bug when it sat above the throttle.
+ *
+ * Same storage fallback as firstOfSession(): private mode throws, so the
+ * module-level Set keeps it to once per page load, which is the most that can
+ * honestly be managed there.
+ *
+ * @param key a short stable name, so the marker survives a reload
+ */
+const onceFired = new Set();
+export const trackOnce = (key, name, props = {}, opts = {}) => {
+  try {
+    if (onceFired.has(key)) return;
+    onceFired.add(key);
+    const marker = `pe_once_${key}`;
+    try {
+      const id = sessionId();
+      if (localStorage.getItem(marker) === id) return;
+      localStorage.setItem(marker, id);
+    } catch { /* private mode: once per page load is the honest best */ }
+    track(name, props, opts);
   } catch { /* a metric never breaks a session */ }
 };
 
