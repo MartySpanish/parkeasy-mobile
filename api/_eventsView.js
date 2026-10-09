@@ -207,3 +207,135 @@ export const parkNear = (ev) =>
   + `&event=${encodeURIComponent(ev.slug)}`;
 
 export const listSpaceNear = (ev) => `/hosts?venue=${encodeURIComponent(ev.venue_slug || '')}`;
+
+// ── Venues ───────────────────────────────────────────────────────────────────
+// /venue/{slug} exists because the events pages answer "where do I park for
+// this gig" and nothing answered "where do I park at the Ulster Hall" — which
+// is the query somebody types when they have tickets for something we have not
+// listed, and the one a venue's own staff search for. There are 16 active
+// venues and 313 upcoming fixtures between them, so the venue page is the hub
+// that the event pages link up into.
+
+/**
+ * Columns read for a venue page.
+ *
+ * geo_verified is read but NEVER printed. It is false on 16 of the 17 rows,
+ * which is exactly why distanceLabel() below bands the distance instead of
+ * naming metres: both ends of that measurement are unverified pins.
+ */
+export const VENUE_COLS = 'slug,name,venue_type,address,town,postcode,lat,lng,'
+                        + 'capacity,parking_notes,website_url,geo_verified';
+
+/**
+ * One active venue by slug, or null.
+ *
+ * `active=is.true` is belt as well as braces: the anon-key RLS policy on
+ * venues is already `active`, so an inactive row (Casement Park, which is a
+ * building site) cannot come back either way. Saying it in the query too means
+ * the filter is visible to whoever reads this file rather than only to whoever
+ * reads the policy.
+ */
+export async function fetchVenue(slug) {
+  const rows = await selectPublic(
+    `venues?select=${VENUE_COLS}&active=is.true`
+    + `&slug=eq.${encodeURIComponent(slug)}&limit=1`);
+  return rows?.[0] || null;
+}
+
+/** Every active venue, for the sitemap. */
+export function fetchVenues(limit = 200) {
+  return selectPublic(
+    `venues?select=slug,name&active=is.true&order=name.asc&limit=${limit}`);
+}
+
+/**
+ * Upcoming events at one venue, soonest first.
+ *
+ * THE SAME 90-DAY WINDOW as /events and the sitemap, deliberately. Ulster Hall
+ * has 72 fixtures on the books; showing all of them here and only the next 90
+ * days on /events would make the two pages disagree about what is on, and the
+ * sitemap would carry event URLs this page does not list.
+ */
+export function fetchVenueEvents(slug, limit = 200) {
+  const from = new Date().toISOString();
+  const to   = new Date(Date.now() + HORIZON_DAYS * 86400000).toISOString();
+  return selectPublic(
+    `upcoming_events?select=${COLS}`
+    + `&venue_slug=eq.${encodeURIComponent(slug)}`
+    + `&starts_at=gte.${from}&starts_at=lt.${to}`
+    + `&status=neq.cancelled&order=starts_at.asc&limit=${limit}`);
+}
+
+/**
+ * A venue row in the shape every helper in this module already expects.
+ *
+ * The events view calls them venue_name/venue_slug; the venues table calls
+ * them name/slug. One spread rather than a second set of renderers.
+ */
+export const venuePlace = (v) => ({ ...v, venue_name: v.name, venue_slug: v.slug });
+
+/** The parking CTA for a venue page. Carries no `event`, because there isn't one. */
+export const parkAtVenue = (v) =>
+  `/?near=${v.lat},${v.lng}&place=${encodeURIComponent(v.name || '')}`
+  + `&venue=${encodeURIComponent(v.slug || '')}`;
+
+/**
+ * A distance we can actually stand over.
+ *
+ * The event page used to print `${Math.round(d)}m away`. That is a number with
+ * one-metre precision derived from two pins, neither of which is surveyed:
+ * venues.geo_verified is false on 16 of 17 rows, and a listing's lat/lng is
+ * wherever the host dropped the marker. "412m away" is a claim about accuracy
+ * nobody measured, on the page where somebody decides whether they can walk it.
+ *
+ * So it is banded. The band is wide enough to be true and narrow enough to be
+ * useful, and there is no walking time at all — minutes would need a route, and
+ * what we have is a straight line.
+ */
+export function distanceLabel(m) {
+  // `m == null` first, because Number(null) is 0 — which is finite, is not
+  // negative, and would be reported as "under 100m away". A distance we do not
+  // have must never render as the most flattering one we could have had.
+  if (m == null || m === '') return 'nearby';
+  const d = Number(m);
+  if (!Number.isFinite(d) || d < 0) return 'nearby';
+  if (d < 100) return 'under 100m away';
+  if (d < 1000) return `about ${Math.round(d / 50) * 50}m away`;
+  return `about ${(Math.round(d / 100) / 10).toFixed(1)}km away`;
+}
+
+/**
+ * The venue, reconstructed from one of its own events.
+ *
+ * WHY THIS EXISTS. fetchVenue() reads public.venues directly with the anon
+ * key. Every other read on these pages goes through upcoming_events, which is
+ * a view — so a view-owner grant is enough for it, and nothing in this codebase
+ * has ever proved that anon can SELECT the venues TABLE. If it cannot, PostgREST
+ * answers 401 and every single venue page would quietly 404 while looking
+ * entirely healthy: no error, no empty state, just sixteen URLs that are not
+ * there.
+ *
+ * So the indexable content comes from a source we know anon can read. The
+ * venues table is an enhancement — it is what supplies the town, the street
+ * address, the website and the five venues with no fixtures at all.
+ *
+ * ONLY USED WHEN THE TABLE READ *FAILED*, never when it came back empty. Zero
+ * rows is a correct answer: the venue does not exist, or it is `active = false`
+ * (Casement Park, which is a building site). Falling back on an empty result
+ * would publish a page for a venue we have deliberately switched off.
+ */
+export async function venueFromEvents(slug) {
+  const rows = await selectPublic(
+    `upcoming_events?select=${COLS}&venue_slug=eq.${encodeURIComponent(slug)}`
+    + `&status=neq.cancelled&limit=1`);
+  const r = rows?.[0];
+  if (!r) return null;
+  return {
+    slug: r.venue_slug, name: r.venue_name,
+    postcode: r.postcode, lat: r.lat, lng: r.lng,
+    capacity: r.venue_capacity, parking_notes: r.parking_notes,
+    // Not carried by the view, and therefore not claimed. renderVenue() omits
+    // every one of these rather than printing a blank.
+    venue_type: null, address: null, town: null, website_url: null, geo_verified: false,
+  };
+}

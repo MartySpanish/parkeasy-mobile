@@ -15,7 +15,14 @@
 // Priorities: an event within a week outranks the area pages, because it is the
 // page most likely to be searched right now and the one that goes stale
 // soonest. Beyond that it decays to 0.5.
-import { fetchUpcoming, SITE } from './_eventsView.js';
+//
+// THE VENUE PAGES ARE NOT A STATIC LIST EITHER, for the same reason. The sweep
+// can add a venue without a deploy, and /venue/{slug} carries noindex until
+// that venue has a fixture — so hardcoding 16 slugs here would eventually
+// advertise a URL the page itself tells Googlebot to ignore. A venue is listed
+// below only when it has an upcoming event, which is exactly the condition
+// renderVenue() uses to drop the noindex. The two rules are the same rule.
+import { fetchUpcoming, fetchVenues, SITE } from './_eventsView.js';
 
 const STATIC = [
   { loc: '/', changefreq: 'weekly', priority: '1.0' },
@@ -98,6 +105,10 @@ export default async function handler(req, res) {
   let degraded = false;
   try {
     const rows = await fetchUpcoming();
+    // Which venues have something on. Taken from the rows already fetched
+    // rather than a second query, and from the SAME 90-day window, so this can
+    // never disagree with what /venue/{slug} decides about its own noindex.
+    const withFixtures = new Set(rows.map(e => e.venue_slug).filter(Boolean));
     for (const e of rows) {
       if (!e.slug) continue;
       const days = Number(e.days_away);
@@ -106,6 +117,34 @@ export default async function handler(req, res) {
         changefreq: days <= 7 ? 'daily' : 'weekly',
         priority: days <= 7 ? '0.9' : days <= 30 ? '0.7' : '0.5',
         lastmod: today,
+      });
+    }
+    // A venue page outranks a town page (0.8) and sits with the destination
+    // pages at 0.9: "parking at the SSE Arena" is a higher-intent search than
+    // "parking in Belfast", and unlike a town page it has a fixture list that
+    // answers it. Venues are read separately because an active venue is worth
+    // listing on its own row even though the fixture test comes from the
+    // events query — and because a venue's name, not its events, is the thing
+    // being searched for.
+    //
+    // THE SAME FALLBACK THE PAGE USES. fetchVenues() reads the venues TABLE,
+    // and nothing here has ever proved that anon can SELECT it — every other
+    // read goes through a view. If it cannot, this would silently drop all
+    // sixteen venue URLs from the sitemap while api/events.js happily renders
+    // them from the event view. So on a failure the slugs come from the events
+    // query instead, exactly as renderVenue()'s own fallback does, and the two
+    // stay in step. The table is preferred when readable because it is the
+    // authoritative answer to "is this venue still active".
+    let slugs;
+    try {
+      slugs = (await fetchVenues()).map(v => v.slug).filter(Boolean);
+    } catch {
+      slugs = [...withFixtures];
+    }
+    for (const slug of slugs) {
+      if (!withFixtures.has(slug)) continue;
+      entries.push({
+        loc: `/venue/${slug}`, changefreq: 'weekly', priority: '0.9', lastmod: today,
       });
     }
   } catch {

@@ -41,6 +41,10 @@
       "destination": "/api/events?slug=:slug"
     },
     {
+      "source": "/venue/:slug",
+      "destination": "/api/events?venue=:slug"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
     },

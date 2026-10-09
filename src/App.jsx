@@ -24,7 +24,7 @@ import { getParked, startParked, endParked, setTimer, cancelTimer, timeLeft, sha
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
 // app_events. track() mirrors the overlapping names into funnel.js itself,
 // so a call site never wires up both instruments by hand. See src/analytics.js.
-import { track } from './analytics';
+import { track, trackOnce } from './analytics';
 // The headline counts, from public/globe/places.json — see the file for why
 // six surfaces were all quoting the bundled fallback instead.
 import { useNetworkStats } from './useNetworkStats';
@@ -38,6 +38,9 @@ import { holdCopy } from './data/spaceHold';
 import { eventsOn, whenWord, venueOf } from './data/events';
 import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
+import { BOOKING_SELECT, operatorFacts } from './data/listingFields';
+import { compareRecommended, bookableCount } from './data/spotRanking';
+import { startTimeRefusal, noticeFloorDay } from './data/bookingLeadTime';
 import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
 import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
 import { fetchReferrals, ensureCode, referralLine, referralLink, rememberCode, claimPendingCode, claimMessage } from './data/referrals';
@@ -1783,9 +1786,9 @@ const amenitiesOf = (spot) => {
 const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) {
     return (
-      <button onClick={() => { track('gem_locked_view', { surface: 'card' }); onUpgrade(); }} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
+      <button onClick={onGemLock('card', onUpgrade)} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
         <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
-        <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p></div>
+        <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p><GemPrice/></div>
         <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal flex-shrink-0">Unlock &#9733;</span>
       </button>
     );
@@ -3127,7 +3130,8 @@ const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPr
             <div style={{minWidth:160}}>
               <p className="font-bold text-sm mb-1">{gatedLabel(s)}</p>
               <p className="text-xs text-[#8da2bd] leading-relaxed">Around {s.near}. Approximate area — the exact free spot is revealed with Premium.</p>
-              <button onClick={() => { track('gem_locked_view', { surface: 'map' }); onUpgrade(); }}
+              <GemPrice className="text-[11px] text-[#0b8d84] font-semibold mt-1"/>
+              <button onClick={onGemLock('map', onUpgrade)}
                 className="mt-2 block w-full text-center text-xs bg-[#5BE7DA] text-[#06231f] px-3 py-1.5 rounded-lg font-semibold">
                 Unlock Premium ★
               </button>
@@ -3189,6 +3193,28 @@ const applyChip = (arr, chip) => {
   if (chip === 'covered') return arr.filter(isCovered);
   if (chip === 'ev')      return arr.filter(s => s.ev?.available);
   return arr;
+};
+
+/**
+ * Why the Recommended order is what it is, said on the page.
+ *
+ * ONE COMPONENT, TWO RENDER SITES. The list and the map sheet share `sortBy`
+ * and `filtered`, so both are reordered — and a disclosure present on one and
+ * missing on the other would be worse than none, because it would imply the
+ * other surface was not reordered.
+ *
+ * Omitted when nothing in the results is bookable, which on most searches is
+ * the case: thirteen of the fifteen venues with fixtures have no bookable
+ * space within 2km, and explaining a promotion that did not happen is noise.
+ */
+const RankNote = ({ sortBy, spots }) => {
+  if (sortBy !== 'popular' || bookableCount(spots) === 0) return null;
+  return (
+    <p className="px-1 pb-1.5 text-[11px] text-[rgba(234,241,248,0.42)] leading-snug">
+      Spaces you can reserve are shown first. Tap{' '}
+      <strong className="text-[rgba(234,241,248,0.6)]">Free First</strong> for free spots first.
+    </p>
+  );
 };
 
 const SORT_OPTIONS_FREE    = [
@@ -3313,6 +3339,39 @@ const isGated = (spot) => {
 
 // Locked-card labelling for a gated spot: what it is + roughly where, nothing more.
 const gatedLabel = (spot) => spot.ev?.available ? '⚡ EV charger · Premium' : '✨ Hidden gem · Premium';
+
+// ── The locked gem, in the three parts every surface has to get right ────────
+//
+// THERE ARE FOUR LOCKED SURFACES: SpotCard, ListCard, RowItem and the map
+// popup. They were four near-identical hand-written blocks, and the
+// duplication had already cost two things:
+//
+//   · ListCard's locked state fired NO event at all (`onClick={onUpgrade}`),
+//     so even the tap count was short by a whole surface;
+//   · three of the four quoted no price, so the card carrying the entire
+//     argument for a £29 subscription never said what it cost.
+//
+// So the parts that must be identical are shared, and tests/unit/
+// gemImpressions.test.mjs counts the call sites: four surfaces, four prices,
+// four distinct tap handlers.
+
+/** The tap: record which surface, then open the paywall. Never one without the other. */
+const onGemLock = (surface, onUpgrade) => () => {
+  track('gem_locked_view', { surface });
+  onUpgrade?.();
+};
+
+/**
+ * The price, on every locked surface.
+ *
+ * "Unlock ★" with no figure is a tease, not an offer — nobody can decide about
+ * something they have not been quoted. Read from PREMIUM_ANNUAL_GBP, the same
+ * constant the paywall and the upgrade banner use, so four surfaces cannot
+ * quote four prices.
+ */
+const GemPrice = ({ className = 'text-[11px] text-[#5BE7DA] font-semibold mt-0.5' }) => (
+  <p className={className}>Premium from {PREMIUM_ANNUAL_GBP}/yr</p>
+);
 // Approximate coordinate for teaser map pins (~±250 m) so free users see the
 // area a gem is in without getting its kerb-accurate position.
 const approxCoord = (v) => Math.round(v * 200) / 200;
@@ -3320,9 +3379,9 @@ const approxCoord = (v) => Math.round(v * 200) / 200;
 // ── Sheet row (map screen): price chip | name + caption | availability dot ──
 const RowItem = ({ spot, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) return (
-    <button onClick={() => { track('gem_locked_view', { surface: 'row' }); onUpgrade(); }} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
+    <button onClick={onGemLock('row', onUpgrade)} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
       <div className="min-w-[56px] h-[46px] rounded-[13px] flex items-center justify-center bg-[#2ED3C6]/12 border border-[#2ED3C6]/25 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
-      <div className="flex-1 min-w-0"><p className="text-[14.5px] font-bold text-[#EAF1F8]">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — unlock the exact spot</p></div>
+      <div className="flex-1 min-w-0"><p className="text-[14.5px] font-bold text-[#EAF1F8]">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p><GemPrice/></div>
       <span className="text-[#5BE7DA] text-xs font-bold flex-shrink-0">Unlock ★</span>
     </button>
   );
@@ -3345,9 +3404,9 @@ const RowItem = ({ spot, isPremium, onUpgrade, onOpen }) => {
 // ── List card (search screen): name/price top row, badges, availability bar ──
 const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) return (
-    <button onClick={onUpgrade} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
+    <button onClick={onGemLock('list', onUpgrade)} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
       <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
-      <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p></div>
+      <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p><GemPrice/></div>
       <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal flex-shrink-0">Unlock ★</span>
     </button>
   );
@@ -3732,7 +3791,12 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
       // whole list by them on the day this ships would put every spot in id
       // order. The weight stays as the ranking, and the label no longer
       // attributes it to drivers.
-      if (sortBy === 'popular') return b.votes - a.votes;
+      //
+      // AND EVERY BOOKABLE LISTING HAS votes: 0, so this put the one kind of
+      // space ParkEasy can guarantee at the very bottom of a list labelled
+      // "Recommended". src/data/spotRanking.js is the fix, and says what it
+      // costs as well as what it buys.
+      if (sortBy === 'popular') return compareRecommended(a, b);
       if (sortBy === 'free') {
         const fa = ['free','hidden_gem'].includes(a.badge) ? 0 : 1;
         const fb = ['free','hidden_gem'].includes(b.badge) ? 0 : 1;
@@ -3769,6 +3833,25 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
   const gatedGems    = gatedSpots.filter(s => !s.ev?.available).length;
   const gatedEv      = gatedSpots.filter(s => s.ev?.available).length;
   const hiddenCount  = gatedSpots.length;
+  // THE IMPRESSION STEP THE PREMIUM FUNNEL NEVER HAD.
+  //
+  // gem_locked_view is fired by the locked card's onClick, which also calls
+  // onUpgrade() and therefore fires premium_paywall_view. So the funnel's first
+  // two steps were the same tap, and it could never show a drop between them —
+  // which makes it useless for the question actually on the table: 3 paywall
+  // opens in three weeks, and is that a price problem or is nobody reaching
+  // the locked gems at all?
+  //
+  // NAMED FOR WHAT IT MEASURES. "rendered", not "seen": a locked card below
+  // the fold is painted and unread. "On the page" is enough to answer the
+  // question — 3 means nobody gets to the list, 400 means the offer is the
+  // problem — and a name claiming more would be the same error as the one this
+  // fixes. Once per session, because an impression only has to answer "ever".
+  useEffect(() => {
+    if (hiddenCount <= 0) return;
+    trackOnce('gem_locked', 'gem_locked_rendered',
+      { surface: mode === 'map' ? 'map' : 'list', n: String(hiddenCount) });
+  }, [hiddenCount, mode]);
 
   const isSearching = !!geo || query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
 
@@ -4465,6 +4548,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
             )}
           </div>
         </div>
+        <div className="px-4"><RankNote sortBy={sortBy} spots={filtered}/></div>
         <div className="px-4 pt-2 space-y-3">
           {filtered.length === 0 ? emptyState : (
             <>
@@ -4618,6 +4702,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
           <h2 className="font-display font-bold text-[17px] text-[#EAF1F8] truncate min-w-0">{geo ? `Parking near ${geo.label}` : 'Nearby parking'}</h2>
           <span className="text-[12.5px] font-semibold text-[rgba(234,241,248,0.5)] flex-shrink-0 pl-2">{filtered.length} spot{filtered.length!==1?'s':''}{geo?'':` · ${cityName} first`}{hiddenCount>0?` · ${hiddenCount} ✨`:''}</span>
         </div>
+        <RankNote sortBy={sortBy} spots={filtered}/>
         {filtered.length === 0 ? emptyState : (
           <>
             {/* The Nearby tab rendered no partner cards at all — a business
@@ -5509,6 +5594,9 @@ const firstOpenDate = (l, from) => {
   for (let i = 0; i < 366; i++) { const d = addDays(from, i); if (dateIsOpen(l, d)) return d; }
   return from;
 };
+/** The day the sheet should open on: open for business AND far enough out. */
+const openingDate = (l, today) =>
+  firstOpenDate(l, [today, noticeFloorDay(l)].filter(Boolean).sort().pop());
 
 const BookingSheet = ({ listing, onClose }) => {
   // Day-priced sites (a school car park at £15 for 8am-5pm) have no hourly
@@ -5530,7 +5618,9 @@ const BookingSheet = ({ listing, onClose }) => {
   const dayPriced = hasDay && (!hasHour || unit === 'day');
   const baseRate = dayPriced ? Number(listing.price_per_day) : (Number(listing.price_per_hour) || 0);
   const today = new Date().toISOString().split('T')[0];
-  const [date, setDate] = useState(() => firstOpenDate(listing, today));
+  // openingDate, not firstOpenDate: a site needing 24 hours' notice used to
+  // open the sheet on today's date and immediately contradict itself.
+  const [date, setDate] = useState(() => openingDate(listing, today));
   const [override, setOverride] = useState(null);   // event price for the picked date
   const [credit, setCredit] = useState(null);       // {purchaseId, remaining, passName} if the driver holds credits
   useEffect(() => {
@@ -5654,6 +5744,33 @@ const BookingSheet = ({ listing, onClose }) => {
     return '';
   })();
   const closedDay = !!(closedReason || spanReason);
+  // THE THIRD MIRROR, and the one that was missing. The lead-time guards went
+  // into api/checkout/create-session.js and nothing client-side ever mentioned
+  // them, so the single listing that needs 24 hours' notice let a driver pick a
+  // date, type a registration and tap Pay before the server said no — exactly
+  // the sequence the two mirrors above exist to prevent.
+  //
+  // The SAME MODULE the endpoint calls, not a second copy of the rules:
+  // src/data/bookingLeadTime.js is dependency-free precisely so both sides can
+  // import it, and a divergence here would be a refusal the driver cannot
+  // predict from anything on the screen.
+  const leadReason = (() => {
+    if (!date || closedDay) return '';
+    const startTime = dayPriced ? String(listing.gate_opens_at || '08:00').slice(0, 5) : time;
+    if (!startTime) return '';
+    const startMs = new Date(`${date}T${startTime}`).getTime();
+    if (!Number.isFinite(startMs)) return '';
+    const gateOpen = String(listing.gate_opens_at || '08:00').slice(0, 5);
+    const gateClose = String(listing.gate_closes_at || '17:00').slice(0, 5);
+    const spanMs = dayPriced
+      ? Math.max(0, new Date(`${date}T${gateClose}`).getTime() - new Date(`${date}T${gateOpen}`).getTime())
+      : hours * 3600000;
+    const refusal = startTimeRefusal({
+      startMs, nowMs: Date.now(), spanMs, days: hours, dayPriced, listing,
+    });
+    return refusal ? refusal.error : '';
+  })();
+  const noticeFloor = noticeFloorDay(listing);
   // What the date field advertises: the weekly pattern, plus any one-off dates
   // the host has added on top of it.
   const openDaysLabel = [
@@ -5708,16 +5825,46 @@ const BookingSheet = ({ listing, onClose }) => {
           <button aria-label="Close" onClick={onClose} className="w-8 h-8 bg-white/8 rounded-full flex items-center justify-center flex-shrink-0"><X size={15} className="text-[#aebfd4]"/></button>
         </div>
 
+        {/* WHO RUNS THIS CAR PARK, instead of reviews we do not have.
+            TrustRow renders nothing at all on every live listing — no ratings,
+            no completed bookings — which is honest and useless. These are the
+            facts a site has that a driveway does not: a named club or school,
+            a known number of spaces, published gate hours, a notice period.
+            Every line is a column; see operatorFacts() for why none of them
+            says "marshalled". */}
+        {(() => {
+          const facts = operatorFacts(listing);
+          if (!facts.length) return null;
+          return (
+            <ul className="mb-3 space-y-1">
+              {facts.map(f => (
+                <li key={f.k} className="flex items-start gap-1.5 text-[11.5px] text-[#9fb3cb] leading-snug">
+                  <Check size={12} className="text-[#6BEFB9] flex-shrink-0 mt-[3px]"/>
+                  <span>{f.text}</span>
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
+
         <label className="block text-[11px] font-bold text-[#EAF1F8] uppercase tracking-wide mb-1.5">
           Date{openDaysLabel && <span className="ml-1.5 font-semibold normal-case tracking-normal text-[#8da2bd]">· open {openDaysLabel}</span>}
         </label>
         <input type="date"
-          min={listing.available_from && listing.available_from > today ? listing.available_from : today}
+          min={[today, listing.available_from, noticeFloor].filter(Boolean).sort().pop()}
           max={listing.available_until || undefined}
           value={date} onChange={e=>setDate(e.target.value)} className={field}/>
         {closedDay && (
           <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
             {closedReason || spanReason}
+          </p>
+        )}
+        {/* Not under the time field: on a day-priced site there IS no time
+            field — the gate window is the slot — and the refusal would have
+            nowhere to appear. */}
+        {!closedDay && leadReason && (
+          <p className="text-[11.5px] text-[#FFD27A] mt-2 bg-[#FFC24B]/10 border border-[#FFC24B]/25 rounded-xl px-3 py-2">
+            {leadReason}
           </p>
         )}
         {/* Said once, at the top, before any of the fields below are filled
@@ -8634,8 +8781,15 @@ const AdminOverlay = ({ onClose }) => {
                       No events yet. They start arriving as soon as this build is live and somebody searches.
                     </p>
                   )}
+                  {/* "Saw a locked gem" was gem_locked_view, which is the TAP
+                      on the locked card — the same tap that opens the paywall
+                      and fires the step below it. Two identical steps, a 100%
+                      conversion by construction, and the number anybody would
+                      actually want was never collected. gem_locked_rendered is
+                      that number; see 20261008_gem_impressions.sql. */}
                   <Funnel title="Locked gem → Premium" steps={[
-                    ['Saw a locked gem', pf.gem_locked_view || 0],
+                    ['Locked gem on the page', pf.gem_locked_rendered || 0],
+                    ['Tapped a locked gem', pf.gem_locked_view || 0],
                     ['Opened the paywall', pf.premium_paywall_view || 0],
                     ['Paid', pf.premium_paid || 0]]}/>
                   <Funnel title="Listing → booking" steps={[
@@ -10075,7 +10229,12 @@ export default function App() {
     (async () => {
       if (!isSupabaseEnabled) return;
       const { data } = await supabase.from('rental_listings')
-        .select('id,title,address,lat,lng,price_per_hour,price_per_day,available_from,available_until,gate_opens_at,gate_closes_at,featured,spaces,space_type,photos,instructions,is_verified,verified_org_type,average_rating,ratings_count,completed_bookings_count')
+        // src/data/listingFields.js, not a list typed out here. The list that
+        // used to be here was missing available_days, extra_dates and
+        // blocked_dates — the three columns BookingSheet's date mirror reads —
+        // so on the map path every day looked open and the driver was refused
+        // at the card form instead of at the date picker.
+        .select(BOOKING_SELECT)
         .eq('status', 'active').limit(200);
       if (!live || !data) return;
       setRentalSpots(data.filter(l => l.lat != null && l.lng != null).map(l => ({
@@ -10092,6 +10251,11 @@ export default function App() {
         // Reserve button will actually do, and what checkout will actually
         // accept, or a driver reads "book in advance" and finds nothing to press.
         badge: sellableNow(l) ? 'paid' : 'free',
+        // EXPLICIT, not inferred from the badge above. A live listing outside
+        // its availability window is badged 'paid' when sellable and 'free'
+        // when not, so ranking on the badge would promote a space whose
+        // Reserve button never appears. Same test checkout uses.
+        bookable: sellableNow(l),
         dist: 0, walk: sellableNow(l) ? 'Bookable' : 'Not booking',
         restriction: sellableNow(l)
           ? 'Private space — book in advance'
