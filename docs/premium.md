@@ -76,6 +76,87 @@ subscriber can clear it themselves from the account menu, because a feature
 somebody paid for that they cannot see is a feature they will not believe they
 got.
 
+## The locked-gem funnel could not show a drop
+
+The admin dashboard read:
+
+| step | event |
+|---|---|
+| Saw a locked gem | `gem_locked_view` |
+| Opened the paywall | `premium_paywall_view` |
+| Paid | `premium_paid` |
+
+In the code, all three locked surfaces were one button:
+
+```jsx
+onClick={() => { track('gem_locked_view', { surface: 'card' }); onUpgrade(); }}
+```
+
+`onUpgrade()` opens the pricing modal, **which fires `premium_paywall_view`**.
+So the top two steps fired on the *same tap*, one after the other. The first
+step was never an impression — it was the click that produced the second.
+
+### Why that mattered
+
+The paywall was opened **3 times in three weeks**, and the question was whether
+that is a *price* problem or an *exposure* problem — whether anybody is
+reaching the locked gems at all. The one funnel that should answer it showed
+3 → 3 → 0: a 100% step-one conversion by construction, and the number anybody
+would want (how many saw a locked gem and did **not** tap) was collected
+nowhere.
+
+### `gem_locked_rendered`, named for what it measures
+
+Not `_seen`, not `_impression`. The client fires it once per session when locked
+gems are painted into the results list, and **a card below the fold is painted
+and unread**. "On the page" is enough to answer the question in front of us —
+3 means nobody reaches the list, 400 means the offer is the problem — and a
+name claiming more would be the same class of error as the one being fixed.
+
+It carries `surface` (`list` or `map`) and `n`, the number of locked gems on the
+page, so *how much* exposure is answerable and not just *whether*.
+
+`trackOnce(key, …)` is the once-per-session primitive. The storage marker is
+**per key**, so two once-per-session events cannot consume each other's only
+chance — which is exactly the bug the acquisition one-shot had when it sat above
+the throttle.
+
+> ⚠️ **`supabase/migrations/20261008_gem_impressions.sql` must be applied.**
+> `log_app_event()` returns `false` for an unknown name, so until the migration
+> lands the event is fired, refused, and recorded nowhere. Nothing else breaks.
+> The migration reproduces both functions entire, because the allowlist is a
+> local constant inside the function body — and the test compares the old and
+> new allowlists as sets, both ways, so it cannot quietly drop an existing event
+> while adding one.
+
+## Four locked surfaces, not one
+
+Found by the mutation harness: a mutation aimed at the locked card's copy
+reported its anchor matching **twice**. There are four locked surfaces —
+`SpotCard`, `ListCard`, `RowItem` and the map popup — and they were four
+near-identical hand-written blocks. The duplication had already cost two things:
+
+- **`ListCard` fired no event at all** (`onClick={onUpgrade}`), so even the tap
+  count was short by a whole surface;
+- **three of the four quoted no price.** "Unlock ★" with no figure is a tease,
+  not an offer — nobody can decide about something they have not been quoted,
+  and these cards carry the entire argument for a £29 subscription.
+
+So the parts that must be identical are shared:
+
+| piece | what it guarantees |
+|---|---|
+| `onGemLock(surface, onUpgrade)` | records the tap **and** opens the paywall — never one without the other |
+| `<GemPrice/>` | the price, from `PREMIUM_ANNUAL_GBP`, so four surfaces cannot quote four prices |
+
+`tests/unit/gemImpressions.test.mjs` counts the call sites: four `gatedLabel()`
+titles, four `<GemPrice/>`, four `onGemLock()` handlers with four distinct
+surface names. **A fifth locked surface added without a price fails the suite.**
+
+Putting the price on the card is a judgement call rather than a measured one —
+there is no data yet on whether it helps. The defensible part is that it is
+strictly more information: an offer with no price cannot be evaluated.
+
 ## Tests
 
 ```

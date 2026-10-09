@@ -8,12 +8,34 @@
 // would catch that, which is why the first check here compares the two lists
 // character by character.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 const read = p => readFileSync(new URL(p, import.meta.url), 'utf8');
 const client = read('../../src/analytics.js');
-const migration = read('../../supabase/migrations/20260902_app_events_ingest.sql');
 const app = read('../../src/App.jsx');
+
+/**
+ * The allowlist the DATABASE actually has, not the one file that first defined it.
+ *
+ * THIS USED TO READ 20260902_app_events_ingest.sql BY NAME, and that broke the
+ * moment a second migration changed the list: 20261008_gem_impressions.sql adds
+ * an event by replacing log_app_event() entire (the allowlist is a local
+ * constant inside the function body, so there is nothing smaller to replace),
+ * and this check failed on a client that was correct. Migrations apply in
+ * filename order and the last definition wins, so that is what "the database"
+ * means here.
+ */
+const MIG_DIR = new URL('../../supabase/migrations/', import.meta.url);
+const ALLOWLIST_MARKER = 'allowed constant text[] := array[';
+const effectiveMigration = (() => {
+  const defining = readdirSync(MIG_DIR)
+    .filter(f => f.endsWith('.sql'))
+    .sort()
+    .filter(f => readFileSync(new URL(f, MIG_DIR), 'utf8').includes(ALLOWLIST_MARKER));
+  assert.ok(defining.length, 'no migration defines the log_app_event allowlist');
+  return { name: defining[defining.length - 1], all: defining };
+})();
+const migration = readFileSync(new URL(effectiveMigration.name, MIG_DIR), 'utf8');
 
 let passed = 0;
 const it = (what, fn) => { fn(); passed++; console.log(`  PASS  ${what}`); };
@@ -27,11 +49,27 @@ console.log('\nanalytics — the client and the database agree');
 
 it('the allowlists match exactly', () => {
   const clientNames = names(client, 'const KNOWN = new Set([', ']);');
-  const dbNames = names(migration, 'allowed constant text[] := array[', '];');
+  const dbNames = names(migration, ALLOWLIST_MARKER, '];');
   assert.ok(clientNames.length >= 20, `only ${clientNames.length} names in the client list`);
   assert.deepEqual(clientNames, dbNames,
-    'the client and the database disagree about which events exist — an event in '
-    + 'only one of them is dropped on arrival with no error anywhere');
+    `the client and ${effectiveMigration.name} disagree about which events exist — an event `
+    + 'in only one of them is dropped on arrival with no error anywhere');
+});
+
+it('no migration that redefines the allowlist ever drops an event', () => {
+  // Replacing the whole function to add one name is how an existing event gets
+  // deleted by accident, and the symptom is a dashboard row going flat for a
+  // feature that still works. Checked across every migration that touches the
+  // list, in order.
+  let prev = null;
+  for (const f of effectiveMigration.all) {
+    const cur = new Set(names(readFileSync(new URL(f, MIG_DIR), 'utf8'), ALLOWLIST_MARKER, '];'));
+    if (prev) {
+      const lost = [...prev].filter(n => !cur.has(n));
+      assert.deepEqual(lost, [], `${f} drops event(s) an earlier migration allowed: ${lost.join(', ')}`);
+    }
+    prev = cur;
+  }
 });
 
 it('every event the app fires is on the list', () => {
@@ -39,6 +77,10 @@ it('every event the app fires is on the list', () => {
   const fired = new Set();
   for (const src of [app, read('../../src/partners.js')]) {
     for (const m of src.matchAll(/\btrack\(\s*'([a-z_]+)'/g)) fired.add(m[1]);
+    // trackOnce('<key>', '<event>', …) — the once-per-session wrapper. Without
+    // this, an event fired ONLY through it escaped this check entirely, which
+    // is how gem_locked_rendered would have gone unverified.
+    for (const m of src.matchAll(/\btrackOnce\(\s*'[a-z_]+'\s*,\s*'([a-z_]+)'/g)) fired.add(m[1]);
   }
   assert.ok(fired.size >= 8, `only ${fired.size} track() call sites found — the wiring may have been removed`);
   for (const name of fired) {

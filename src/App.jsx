@@ -24,7 +24,7 @@ import { getParked, startParked, endParked, setTimer, cancelTimer, timeLeft, sha
 import { trackSearch, trackSpotOpen, trackDirections, trackSignup, trackHotspotViewed, trackBookingFromHotspot, cameFromHotspot, clearHotspotOrigin } from './funnel';
 // app_events. track() mirrors the overlapping names into funnel.js itself,
 // so a call site never wires up both instruments by hand. See src/analytics.js.
-import { track } from './analytics';
+import { track, trackOnce } from './analytics';
 // The headline counts, from public/globe/places.json — see the file for why
 // six surfaces were all quoting the bundled fallback instead.
 import { useNetworkStats } from './useNetworkStats';
@@ -1762,9 +1762,9 @@ const amenitiesOf = (spot) => {
 const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) {
     return (
-      <button onClick={() => { track('gem_locked_view', { surface: 'card' }); onUpgrade(); }} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
+      <button onClick={onGemLock('card', onUpgrade)} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
         <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
-        <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p></div>
+        <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p><GemPrice/></div>
         <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal flex-shrink-0">Unlock &#9733;</span>
       </button>
     );
@@ -3106,7 +3106,8 @@ const ParkingMap = ({ spots, center, zoom=13, height=220, selectedId, flat, isPr
             <div style={{minWidth:160}}>
               <p className="font-bold text-sm mb-1">{gatedLabel(s)}</p>
               <p className="text-xs text-[#8da2bd] leading-relaxed">Around {s.near}. Approximate area — the exact free spot is revealed with Premium.</p>
-              <button onClick={() => { track('gem_locked_view', { surface: 'map' }); onUpgrade(); }}
+              <GemPrice className="text-[11px] text-[#0b8d84] font-semibold mt-1"/>
+              <button onClick={onGemLock('map', onUpgrade)}
                 className="mt-2 block w-full text-center text-xs bg-[#5BE7DA] text-[#06231f] px-3 py-1.5 rounded-lg font-semibold">
                 Unlock Premium ★
               </button>
@@ -3314,6 +3315,39 @@ const isGated = (spot) => {
 
 // Locked-card labelling for a gated spot: what it is + roughly where, nothing more.
 const gatedLabel = (spot) => spot.ev?.available ? '⚡ EV charger · Premium' : '✨ Hidden gem · Premium';
+
+// ── The locked gem, in the three parts every surface has to get right ────────
+//
+// THERE ARE FOUR LOCKED SURFACES: SpotCard, ListCard, RowItem and the map
+// popup. They were four near-identical hand-written blocks, and the
+// duplication had already cost two things:
+//
+//   · ListCard's locked state fired NO event at all (`onClick={onUpgrade}`),
+//     so even the tap count was short by a whole surface;
+//   · three of the four quoted no price, so the card carrying the entire
+//     argument for a £29 subscription never said what it cost.
+//
+// So the parts that must be identical are shared, and tests/unit/
+// gemImpressions.test.mjs counts the call sites: four surfaces, four prices,
+// four distinct tap handlers.
+
+/** The tap: record which surface, then open the paywall. Never one without the other. */
+const onGemLock = (surface, onUpgrade) => () => {
+  track('gem_locked_view', { surface });
+  onUpgrade?.();
+};
+
+/**
+ * The price, on every locked surface.
+ *
+ * "Unlock ★" with no figure is a tease, not an offer — nobody can decide about
+ * something they have not been quoted. Read from PREMIUM_ANNUAL_GBP, the same
+ * constant the paywall and the upgrade banner use, so four surfaces cannot
+ * quote four prices.
+ */
+const GemPrice = ({ className = 'text-[11px] text-[#5BE7DA] font-semibold mt-0.5' }) => (
+  <p className={className}>Premium from {PREMIUM_ANNUAL_GBP}/yr</p>
+);
 // Approximate coordinate for teaser map pins (~±250 m) so free users see the
 // area a gem is in without getting its kerb-accurate position.
 const approxCoord = (v) => Math.round(v * 200) / 200;
@@ -3321,9 +3355,9 @@ const approxCoord = (v) => Math.round(v * 200) / 200;
 // ── Sheet row (map screen): price chip | name + caption | availability dot ──
 const RowItem = ({ spot, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) return (
-    <button onClick={() => { track('gem_locked_view', { surface: 'row' }); onUpgrade(); }} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
+    <button onClick={onGemLock('row', onUpgrade)} className="w-full flex items-center gap-3 px-2 py-3 rounded-2xl text-left active:bg-white/5 transition">
       <div className="min-w-[56px] h-[46px] rounded-[13px] flex items-center justify-center bg-[#2ED3C6]/12 border border-[#2ED3C6]/25 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
-      <div className="flex-1 min-w-0"><p className="text-[14.5px] font-bold text-[#EAF1F8]">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — unlock the exact spot</p></div>
+      <div className="flex-1 min-w-0"><p className="text-[14.5px] font-bold text-[#EAF1F8]">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p><GemPrice/></div>
       <span className="text-[#5BE7DA] text-xs font-bold flex-shrink-0">Unlock ★</span>
     </button>
   );
@@ -3346,9 +3380,9 @@ const RowItem = ({ spot, isPremium, onUpgrade, onOpen }) => {
 // ── List card (search screen): name/price top row, badges, availability bar ──
 const ListCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   if (!isPremium && isGated(spot)) return (
-    <button onClick={onUpgrade} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
+    <button onClick={onGemLock('list', onUpgrade)} className="glass rounded-[22px] w-full text-left p-4 flex items-center gap-3" style={{borderLeft:'4px solid #2ED3C6'}}>
       <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-[#2ED3C6]/15 border border-[#2ED3C6]/30 text-lg">{spot.ev?.available ? '⚡' : '✨'}</div>
-      <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p></div>
+      <div className="flex-1 min-w-0"><p className="font-bold text-[#EAF1F8] text-sm">{gatedLabel(spot)}</p><p className="text-xs text-[rgba(234,241,248,0.5)] truncate">{spot.near} — free to park, exact spot with Premium</p><GemPrice/></div>
       <span className="text-[#06231f] text-xs font-bold px-3 py-2 rounded-xl btn-teal flex-shrink-0">Unlock ★</span>
     </button>
   );
@@ -3775,6 +3809,25 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
   const gatedGems    = gatedSpots.filter(s => !s.ev?.available).length;
   const gatedEv      = gatedSpots.filter(s => s.ev?.available).length;
   const hiddenCount  = gatedSpots.length;
+  // THE IMPRESSION STEP THE PREMIUM FUNNEL NEVER HAD.
+  //
+  // gem_locked_view is fired by the locked card's onClick, which also calls
+  // onUpgrade() and therefore fires premium_paywall_view. So the funnel's first
+  // two steps were the same tap, and it could never show a drop between them —
+  // which makes it useless for the question actually on the table: 3 paywall
+  // opens in three weeks, and is that a price problem or is nobody reaching
+  // the locked gems at all?
+  //
+  // NAMED FOR WHAT IT MEASURES. "rendered", not "seen": a locked card below
+  // the fold is painted and unread. "On the page" is enough to answer the
+  // question — 3 means nobody gets to the list, 400 means the offer is the
+  // problem — and a name claiming more would be the same error as the one this
+  // fixes. Once per session, because an impression only has to answer "ever".
+  useEffect(() => {
+    if (hiddenCount <= 0) return;
+    trackOnce('gem_locked', 'gem_locked_rendered',
+      { surface: mode === 'map' ? 'map' : 'list', n: String(hiddenCount) });
+  }, [hiddenCount, mode]);
 
   const isSearching = !!geo || query.trim().length > 0 || badgeFilter !== 'all' || evOnly;
 
@@ -8704,8 +8757,15 @@ const AdminOverlay = ({ onClose }) => {
                       No events yet. They start arriving as soon as this build is live and somebody searches.
                     </p>
                   )}
+                  {/* "Saw a locked gem" was gem_locked_view, which is the TAP
+                      on the locked card — the same tap that opens the paywall
+                      and fires the step below it. Two identical steps, a 100%
+                      conversion by construction, and the number anybody would
+                      actually want was never collected. gem_locked_rendered is
+                      that number; see 20261008_gem_impressions.sql. */}
                   <Funnel title="Locked gem → Premium" steps={[
-                    ['Saw a locked gem', pf.gem_locked_view || 0],
+                    ['Locked gem on the page', pf.gem_locked_rendered || 0],
+                    ['Tapped a locked gem', pf.gem_locked_view || 0],
                     ['Opened the paywall', pf.premium_paywall_view || 0],
                     ['Paid', pf.premium_paid || 0]]}/>
                   <Funnel title="Listing → booking" steps={[
