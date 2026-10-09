@@ -40,6 +40,7 @@ import { paidAlternativeFor } from './data/hotspotFunnel';
 import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } from './data/spotReports';
 import { BOOKING_SELECT, operatorFacts } from './data/listingFields';
 import { compareRecommended, bookableCount } from './data/spotRanking';
+import { spotImageNow, checkPanorama, knownPanorama, hasCoords } from './data/streetView';
 import { startTimeRefusal, noticeFloorDay } from './data/bookingLeadTime';
 import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
 import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
@@ -1773,7 +1774,12 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   const free = ['free','hidden_gem'].includes(spot.badge);
   const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
   const [imgErr,setImgErr] = useState(false);
-  const img = spot.photo || (GOOGLE_MAPS_KEY ? spotImageUrl(spot.lat, spot.lng) : null);
+  // No `GOOGLE_MAPS_KEY ? … : null` gate any more. That gate is what made
+  // spotImageUrl's own documented OpenStreetMap fallback unreachable: with no
+  // key the caller passed null, so a deployment without a Maps key showed no
+  // picture on any card at all. The hook needs no key to return a map.
+  const spotImg = useSpotImage(spot.lat, spot.lng);
+  const img = spot.photo || spotImg;
   const showImg = img && !imgErr;
   // Availability label as a themable class (light mode re-targets these hexes)
   const occCls = occ.color==='#FFD27A' ? 'text-[#FFD27A]' : occ.color==='#5BE7DA' ? 'text-[#5BE7DA]' : 'text-[#6BEFB9]';
@@ -3211,13 +3217,38 @@ const SORT_OPTIONS_PREMIUM = [
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 
-// Returns a street-level image URL for a parking spot.
-// Prefers Google Street View when an API key is configured.
-// Falls back to a free OpenStreetMap static map tile — no key needed.
-const spotImageUrl = (lat, lng) =>
-  GOOGLE_MAPS_KEY
-    ? `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=0&key=${GOOGLE_MAPS_KEY}`
-    : `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=17&size=600x300&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
+/**
+ * The picture on a spot card: the free map now, Street View once it is CONFIRMED.
+ *
+ * WHAT THIS REPLACED, and why it is a hook rather than a string builder. The
+ * old version went straight to Street View's image endpoint, which answers
+ * HTTP 200 with a grey "we have no imagery here" rectangle when there is no
+ * panorama — so onError never fired, the card showed grey, and the request was
+ * billed anyway. Half of ParkEasy's inventory is a club car park up a lane,
+ * which is exactly where Street View has no coverage. src/data/streetView.js
+ * asks Google's FREE metadata endpoint first and only then buys an image.
+ *
+ * Asking is asynchronous, so this follows mapTiles.js's rule for the basemap:
+ * paint the free provider immediately and upgrade when the better one is
+ * confirmed. The card is never blank and never grey.
+ */
+const useSpotImage = (lat, lng) => {
+  const [url, setUrl] = useState(() => spotImageNow(lat, lng, GOOGLE_MAPS_KEY));
+  useEffect(() => {
+    let live = true;
+    // Re-seeded on every coordinate change, so a recycled card never shows the
+    // previous spot's Street View while the new one is still being checked.
+    setUrl(spotImageNow(lat, lng, GOOGLE_MAPS_KEY));
+    if (!GOOGLE_MAPS_KEY || !hasCoords(lat, lng)) return undefined;
+    // Already settled this session — the seed above is final, ask nobody.
+    if (knownPanorama(lat, lng) !== undefined) return undefined;
+    checkPanorama(lat, lng, GOOGLE_MAPS_KEY).then(() => {
+      if (live) setUrl(spotImageNow(lat, lng, GOOGLE_MAPS_KEY));
+    });
+    return () => { live = false; };
+  }, [lat, lng]);
+  return url;
+};
 
 // Every spot across every city — used for "search any location" so a searched
 // address returns the nearest spots regardless of which city is selected.
