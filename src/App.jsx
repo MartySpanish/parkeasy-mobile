@@ -41,6 +41,7 @@ import { reportSpot, fetchReportCounts, reportFlag, REASONS as REPORT_REASONS } 
 import { BOOKING_SELECT, operatorFacts } from './data/listingFields';
 import { compareRecommended, bookableCount } from './data/spotRanking';
 import { spotImageNow, checkPanorama, knownPanorama, hasCoords } from './data/streetView';
+import { classifyCampervan, isCampervanCandidate } from './data/campervan';
 import { startTimeRefusal, noticeFloorDay } from './data/bookingLeadTime';
 import { setSignal, clearSignal, fetchSignalCounts, signalSummary, mergeLegacySignals, nextSignal } from './data/spotSignals';
 import { fetchPoints, redeemPoints, pointsSummary, EARN_WAYS } from './data/points';
@@ -2272,6 +2273,35 @@ const SpotDetail = ({ spot, saved, onSave, mySignal, onSignal, signalCounts, onC
               {amen.map(a=>(<span key={a} className="text-xs font-semibold text-[#cdd9e8] bg-white/6 border border-white/10 px-3 py-1.5 rounded-full">{a}</span>))}
             </div>
           )}
+          {/* WHAT A CAMPERVAN NEEDS TO KNOW, in the spot's own words.
+              Eighteen car parks in this dataset have a 1.9–2.2m height barrier
+              and the app showed them to a motorhome driver with nothing said at
+              all — the cost of that is a van at a height bar with a queue
+              behind it. Only rendered when the data actually says something;
+              766 of 787 spots say nothing and get no line, because "we don't
+              know" is not a warning. See src/data/campervan.js. */}
+          {(() => {
+            const cv = classifyCampervan(spot);
+            if (cv.fits === 'unknown' && cv.overnight !== 'no') return null;
+            const bad = cv.fits === 'no';
+            return (
+              <div className={`mt-3 rounded-xl px-3 py-2.5 border ${bad
+                ? 'bg-[#FF5A5A]/10 border-[#FF5A5A]/30'
+                : 'bg-[#2ED3C6]/8 border-[#2ED3C6]/22'}`}>
+                <p className={`text-[11px] font-bold uppercase tracking-wider ${bad ? 'text-[#FF8B8B]' : 'text-[#5BE7DA]'}`}>
+                  🚐 Campervans
+                </p>
+                <p className="text-[12.5px] text-[#cdd9e8] leading-snug mt-1">
+                  {cv.fits === 'no' && <>Not suitable — {cv.note}.</>}
+                  {cv.fits === 'tight' && <>{cv.note} — fine for a low-profile van, not for a coachbuilt. Check your own height.</>}
+                  {cv.fits === 'yes' && <>Listed as a motorhome facility.</>}
+                  {cv.overnight === 'no' && <> No overnight parking here.</>}
+                  {cv.fits === 'yes' && cv.overnight !== 'no'
+                    && <> We can&rsquo;t confirm overnight stays are permitted — check the signs on arrival.</>}
+                </p>
+              </div>
+            );
+          })()}
           {/* The photo now leads in the header with its credit, so it is not
               repeated here — only the notes. If the header fell back to the map
               (broken image) the photo is simply absent, which is correct: we
@@ -3154,6 +3184,13 @@ const BADGE_FILTERS = [
   { id:'gems',     label:'✨ Hotspots', premium: true },
   { id:'covered',  label:'Covered' },
   { id:'ev',       label:'EV' },
+  // Two spots nationally, and that is the honest number — see
+  // src/data/campervan.js. They are two REAL motorhome facilities that were
+  // already in the dataset and could not be found by anybody: Sandhill Drive
+  // (Portrush) and the Harbour Aire (Carrickfergus). The same file is what
+  // makes the ~18 car parks with a 1.9–2.2m barrier say so instead of sending
+  // a motorhome to a height bar.
+  { id:'campervan', label:'🚐 Campervan' },
 ];
 
 // Numeric price for "Cheapest" sorting (free = 0).
@@ -3174,6 +3211,7 @@ const applyChip = (arr, chip) => {
   if (chip === 'gems')    return arr.filter(s => s.badge === 'hidden_gem');
   if (chip === 'covered') return arr.filter(isCovered);
   if (chip === 'ev')      return arr.filter(s => s.ev?.available);
+  if (chip === 'campervan') return arr.filter(isCampervanCandidate);
   return arr;
 };
 
