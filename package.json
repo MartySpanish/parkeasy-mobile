@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/generate-globe-data.mjs && vite build && node scripts/prerender.mjs && node scripts/inject-area-cta.mjs && node scripts/inject-destination-pages.mjs",
+    "build": "node scripts/generate-globe-data.mjs && vite build && node scripts/prerender.mjs && node scripts/inject-area-cta.mjs && node scripts/inject-area-spots.mjs && node scripts/inject-destination-pages.mjs",
     "build:cap": "VITE_APP_CAPACITOR=true vite build",
     "preview": "vite preview",
     "audit": "node scripts/audit-spots.mjs",
