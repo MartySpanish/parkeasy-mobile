@@ -10039,8 +10039,19 @@ export default function App() {
   const [searchedOnce,  setSearchedOnce]  = useState(false);
   const [nudgeDone,     setNudgeDone]     = useState(false);
   // Every route into the spot sheet goes through here — list tap, map pin,
-  // event overlay, partner card, deep link — so the open is counted once and
-  // in one place. Closing passes null and is deliberately not an open.
+  // event overlay, saved tab, partner card, deep link — so the open is counted
+  // once and in one place. Closing passes null and is deliberately not an open.
+  //
+  // THAT SENTENCE WAS NOT TRUE FOR TWO OF THOSE ROUTES. The events overlay and
+  // the Saved tab were handed `setDetailSpot` directly, so opening a spot from
+  // either set the sheet and fired no listing_view and no gem_view at all. The
+  // Saved tab is where a returning driver goes and the events overlay is the
+  // matchday path, so the two least-visible routes were the two that counted
+  // nothing — and the funnel reading "nobody opens a listing" was partly this.
+  //
+  // tests/unit/funnelEvents.test.mjs now classifies every setDetailSpot
+  // reference in this file: a close may use it, an open may not. A comment
+  // cannot enforce itself.
   const openSpot = useCallback((sp) => {
     if (sp) {
       // track() mirrors this to funnel.js's trackSpotOpen, so the Vercel
@@ -10902,7 +10913,7 @@ export default function App() {
         onAddSpot={()=>{ setShowEvents(false); setTab('add'); }}
         renderSpot={(sp)=>(
           <SpotCard spot={sp} saved={saved.has(sp.id)} onSave={toggleSave} isPremium={isPremium}
-            onUpgrade={()=>{setShowEvents(false);setShowPricing(true);}} onOpen={setDetailSpot}/>
+            onUpgrade={()=>{setShowEvents(false);setShowPricing(true);}} onOpen={openSpot}/>
         )}/>}
       {/* Enriched HERE rather than trusting the caller. A spot opened from a
           list arrives carrying the live inUse / onWay counts, but one opened
@@ -11074,7 +11085,7 @@ export default function App() {
         {tab==='search'     && <SearchTab mode="list" saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onAdvertise={()=>setInfoPage('advertise')} onHowItWorks={()=>setInfoPage('howitworks')} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)} initialGeo={deepGeo}/>}
         {tab==='nearby'     && <SearchTab mode="map" saved={saved} onSave={toggleSave} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} citySpots={citySpots} networkSpots={networkSpots} cityCenter={currentCity.center} cityName={currentCity.name} onOpenSpot={openSpot} onOpenPartner={setDetailPartner} onCityDetected={changeCity} onEvent={()=>setShowEvent(true)} onEvents={()=>setShowEvents(true)} onAddSpot={()=>setTab('add')} onSearched={()=>setSearchedOnce(true)}/>}
         {tab==='spaces'     && <SpacesTab user={user} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)}/>}
-        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={setDetailSpot}/>}
+        {tab==='saved'      && <SavedTab saved={saved} onSave={toggleSave} allSpots={allSpots} isPremium={isPremium} onUpgrade={()=>setShowPricing(true)} onOpenSpot={openSpot}/>}
         {tab==='add'        && <AddSpotTab user={user} onJoinPrompt={()=>setShowWelcome(true)} onSpotAdded={handleSpotAdded}/>}
         {tab==='partner'    && <PartnerTab onOpenPartner={setDetailPartner}/>}
         {/* Not on Search, which carries its own copy near the top of the
