@@ -1775,10 +1775,9 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   const free = ['free','hidden_gem'].includes(spot.badge);
   const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
   const [imgErr,setImgErr] = useState(false);
-  // No `GOOGLE_MAPS_KEY ? … : null` gate any more. That gate is what made
-  // spotImageUrl's own documented OpenStreetMap fallback unreachable: with no
-  // key the caller passed null, so a deployment without a Maps key showed no
-  // picture on any card at all. The hook needs no key to return a map.
+  // The hook returns a URL only for a CONFIRMED Street View panorama, so a
+  // spot we have no picture of renders the themed tile below rather than a
+  // broken image from a provider that no longer exists.
   const spotImg = useSpotImage(spot.lat, spot.lng);
   const img = spot.photo || spotImg;
   const showImg = img && !imgErr;
@@ -3256,7 +3255,7 @@ const SORT_OPTIONS_PREMIUM = [
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 
 /**
- * The picture on a spot card: the free map now, Street View once it is CONFIRMED.
+ * The picture on a spot card: nothing, then Street View once it is CONFIRMED.
  *
  * WHAT THIS REPLACED, and why it is a hook rather than a string builder. The
  * old version went straight to Street View's image endpoint, which answers
@@ -3266,9 +3265,13 @@ const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
  * which is exactly where Street View has no coverage. src/data/streetView.js
  * asks Google's FREE metadata endpoint first and only then buys an image.
  *
- * Asking is asynchronous, so this follows mapTiles.js's rule for the basemap:
- * paint the free provider immediately and upgrade when the better one is
- * confirmed. The card is never blank and never grey.
+ * WHY IT NO LONGER PAINTS A FREE MAP FIRST. It used to, following mapTiles.js's
+ * rule for the basemap — start on the free provider, upgrade when the better
+ * one is confirmed. The free provider was staticmap.openstreetmap.de, and that
+ * hosted service has been discontinued (see the header of
+ * src/data/streetView.js). So the first paint was a request to a dead host and
+ * a broken image that fell through to the card's icon. The icon is now what
+ * the card shows directly, until and unless Street View confirms a panorama.
  */
 const useSpotImage = (lat, lng) => {
   const [url, setUrl] = useState(() => spotImageNow(lat, lng, GOOGLE_MAPS_KEY));
