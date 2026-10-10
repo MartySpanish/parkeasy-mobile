@@ -15,28 +15,49 @@
 //
 // So asking first costs nothing and stops us buying pictures nobody can use.
 //
-// DEFECT 2 — THE FALLBACK WAS DEAD CODE. spotImageUrl() documented and
-// implemented a keyless OpenStreetMap fallback, and its only caller read
-// `GOOGLE_MAPS_KEY ? spotImageUrl(...) : null` — so with no key the caller
-// passed null and the keyless branch was unreachable. A deployment without
-// VITE_GOOGLE_MAPS_KEY showed no picture on any card.
+// DEFECT 2 — THE REPLACEMENT PROVIDER DID NOT EXIST. The fix for defect 1
+// painted a free map first and upgraded to Street View only once metadata said
+// OK, so no card was ever blank or grey. That free map was
+// staticmap.openstreetmap.de, and the OpenStreetMap wiki marks that hosted
+// service DISCONTINUED — past tense, self-host instead — while the OSM help
+// answer that recommended it said it is not a production service for
+// commercial applications. Only 8 of ~790 spots carry a real photo, so nearly
+// every card fired a request at a dead host, the `<img>` failed, and the card
+// fell through to its icon. "Always show a free map" delivered no map and one
+// doomed request per card.
 //
-// THE THREE THINGS THAT GO WRONG SILENTLY HERE, all of them cost-shaped:
+// DEFECT 3 — A DISABLED API COST A REQUEST PER SPOT. Every non-OK status was
+// treated as "no imagery HERE" and cached per location. But REQUEST_DENIED is
+// a fact about the KEY, not about a location, and it is the answer for all
+// ~790 of them. A key Google is refusing produced a metadata request per spot
+// per session, every one guaranteed to be refused. See KEY_REFUSALS.
+//
+// THE FOUR THINGS THAT GO WRONG SILENTLY HERE, all of them cost-shaped:
 //   1. Buying an image before metadata has said OK.
 //   2. Not caching a NO. Most spots will never have imagery; re-asking about
 //      them on every render is a request storm against a free endpoint and a
 //      guaranteed one against a billed one if the order is ever reversed.
-//   3. Not de-duplicating concurrent cards: ~740 spots, one list, one mount.
+//   3. Not de-duplicating concurrent cards: ~790 spots, one list, one mount.
+//   4. Treating a key-level refusal as a per-location answer.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  IMAGE_SIZE, osmStaticUrl, metadataUrl, streetViewUrl, hasCoords, hasPanorama,
+  IMAGE_SIZE, metadataUrl, streetViewUrl, hasCoords, hasPanorama,
   coordKey, checkPanorama, knownPanorama, resetPanoramaCache, spotImageNow,
+  KEY_REFUSALS, KEY_REFUSAL_HTTP, isKeyRefusal, keyRefused,
 } from '../../src/data/streetView.js';
 
 const read = p => readFileSync(new URL(p, import.meta.url), 'utf8');
 const app = read('../../src/App.jsx');
-const appCode = app.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/^\s*\/\/.*$/gm, '');
+// COMMENTS OUT, INCLUDING BLOCK ONES. This stripper used to drop JSX comments
+// and `//` lines only, which left every /** */ doc block in place — so an
+// assertion that "App.jsx must not mention the retired host" was satisfied by
+// the doc comment explaining that the host was retired. Same class of bug as
+// the area-page sweep that matched a file's own comment instead of its code.
+const appCode = app
+  .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
 
 /**
  * The hook's own body, brace-matched out of App.jsx.
@@ -65,28 +86,36 @@ let passed = 0;
 const it = (what, fn) => { fn(); passed++; console.log(`  PASS  ${what}`); };
 const ita = async (what, fn) => { resetPanoramaCache(); await fn(); passed++; console.log(`  PASS  ${what}`); };
 
-console.log('\nstreetView — we stopped paying for grey rectangles');
+console.log('\nstreetView — grey rectangles, then a provider that had closed');
 
 const LAT = 54.5934, LNG = -5.9317, KEY = 'test-key';
 const resp = (status) => async () => ({ ok: true, json: async () => ({ status }) });
 const counting = (status) => { const f = resp(status); const g = async (u) => { g.calls++; g.urls.push(u); return f(u); }; g.calls = 0; g.urls = []; return g; };
 
 // ── 1. Never buy before asking ───────────────────────────────────────────────
-it('the first paint is the free map, never a billed image', () => {
+it('the first paint buys nothing — there is no confirmed panorama yet', () => {
   // THE DEFECT. Mutation: return streetViewUrl() here and every card buys an
   // image sight-unseen again.
+  resetPanoramaCache();
   const u = spotImageNow(LAT, LNG, KEY);
-  assert.ok(u.startsWith('https://staticmap.openstreetmap.de/'),
-    `the first paint is not the free map: ${u}`);
-  assert.ok(!u.includes('maps.googleapis.com'), 'a billed URL was built before metadata was asked');
+  assert.equal(u, null, `the first paint built a URL before metadata was asked: ${u}`);
 });
 
-await ita('ZERO_RESULTS keeps the card on the free map, permanently', async () => {
+it('no surface anywhere still points at the discontinued static map host', () => {
+  // DEFECT 2. The whole point: this string must not come back. It is checked
+  // against the module source as well as the built URL, because a helper that
+  // is exported but unused is a helper somebody re-wires in six months.
+  assert.ok(!/staticmap\.openstreetmap\.de/.test(mod),
+    'the retired OpenStreetMap static map service is referenced again');
+  assert.ok(!/osmStaticUrl/.test(mod), 'the dead provider\'s URL builder is back');
+  assert.ok(!/staticmap/.test(appCode), 'App.jsx references the retired static map service');
+});
+
+await ita('ZERO_RESULTS leaves the card with no picture, permanently', async () => {
   const f = counting('ZERO_RESULTS');
   assert.equal(await checkPanorama(LAT, LNG, KEY, f), false);
   const u = spotImageNow(LAT, LNG, KEY);
-  assert.ok(u.startsWith('https://staticmap.openstreetmap.de/'),
-    `no panorama but the card still points at Street View: ${u}`);
+  assert.equal(u, null, `no panorama but the card still points at Street View: ${u}`);
   // And the NO is remembered, so this location is never asked about again.
   assert.equal(knownPanorama(LAT, LNG), false);
   await checkPanorama(LAT, LNG, KEY, f);
@@ -100,7 +129,7 @@ await ita('only status OK upgrades to Street View', async () => {
   const u = spotImageNow(LAT, LNG, KEY);
   assert.ok(u.startsWith('https://maps.googleapis.com/maps/api/streetview?'),
     `metadata said OK but the card did not upgrade: ${u}`);
-  assert.ok(u.includes(`location=${LAT},${LNG}`) && u.includes(`size=${IMAGE_SIZE}`));
+  assert.ok(u.includes(`location=${LAT},${LNG}`), 'the image is not for this location');
   assert.ok(f.urls[0].includes('/streetview/metadata?'), 'the free endpoint was not the one asked');
 });
 
@@ -118,7 +147,7 @@ it('every non-OK status is treated as no imagery', () => {
 });
 
 // ── 2. The failures must all land on a working map ───────────────────────────
-await ita('a failing, blocked or non-JSON metadata call keeps the map', async () => {
+await ita('a failing, blocked or non-JSON metadata call buys nothing', async () => {
   for (const [name, f] of [
     ['throws',     async () => { throw new Error('offline'); }],
     ['not ok',     async () => ({ ok: false, status: 403, json: async () => ({}) })],
@@ -129,8 +158,8 @@ await ita('a failing, blocked or non-JSON metadata call keeps the map', async ()
     // RESOLVES, never rejects: an unhandled rejection in a render effect is a
     // console full of noise and, with no catch anywhere, a wedged entry.
     assert.equal(await checkPanorama(LAT, LNG, KEY, f), false, `${name} did not resolve false`);
-    assert.ok(spotImageNow(LAT, LNG, KEY).startsWith('https://staticmap.'),
-      `${name} left the card off the free map`);
+    assert.equal(spotImageNow(LAT, LNG, KEY), null,
+      `${name} still authorised a billed image`);
     // The NO is recorded, so the failure is not retried on every re-render.
     assert.equal(knownPanorama(LAT, LNG), false, `${name} did not cache its failure`);
     // And asking again does not re-request: proof the in-flight entry was
@@ -154,24 +183,25 @@ await ita('a non-2xx response is not trusted, whatever its body says', async () 
     const f = async () => ({ ok: false, status, json: async () => ({ status: 'OK' }) });
     assert.equal(await checkPanorama(LAT, LNG, KEY, f), false,
       `HTTP ${status} with an OK body was trusted`);
-    assert.ok(spotImageNow(LAT, LNG, KEY).startsWith('https://staticmap.'),
+    assert.equal(spotImageNow(LAT, LNG, KEY), null,
       `HTTP ${status} upgraded the card to a billed image`);
   }
 });
 
-await ita('no key means the free map, not a null', async () => {
-  // DEFECT 2. The old caller gate made this unreachable; a keyless deployment
-  // showed no picture at all.
+await ita('no key means no picture and no request', async () => {
+  // With the free map gone there is nothing a keyless deployment can draw, so
+  // the honest answer is the card's own icon — and above all, no request.
   for (const k of ['', null, undefined]) {
-    const u = spotImageNow(LAT, LNG, k);
-    assert.ok(u && u.startsWith('https://staticmap.openstreetmap.de/'),
-      `no key produced ${JSON.stringify(u)} instead of the free map`);
-    assert.equal(await checkPanorama(LAT, LNG, k, counting('OK')), false,
+    assert.equal(spotImageNow(LAT, LNG, k), null,
+      `no key still produced an image URL`);
+    const f = counting('OK');
+    assert.equal(await checkPanorama(LAT, LNG, k, f), false,
       'metadata was requested without a key');
+    assert.equal(f.calls, 0, 'a keyless deployment still called Google');
   }
 });
 
-it('a spot with no usable position shows no picture at all', () => {
+await ita('a spot with no usable position shows no picture at all', async () => {
   // Number(null) is 0 and 0,0 is the Gulf of Guinea — a card must show its icon
   // rather than the Atlantic. Same Number(null) trap as distanceLabel() and
   // median(); third time in this codebase.
@@ -179,6 +209,12 @@ it('a spot with no usable position shows no picture at all', () => {
     assert.equal(hasCoords(a, b), false, `hasCoords(${a},${b}) is true`);
     assert.equal(spotImageNow(a, b, KEY), null, `spotImageNow(${a},${b}) built a URL`);
   }
+  // hasCoords is now the guard that stops a request rather than the one that
+  // picks a provider, so it is pinned where it still bites: checkPanorama.
+  const f = counting('OK');
+  await checkPanorama(0, 0, KEY, f);
+  await checkPanorama(null, null, KEY, f);
+  assert.equal(f.calls, 0, 'Google was asked about a spot with no position');
   assert.equal(hasCoords(LAT, LNG), true);
   assert.equal(hasCoords(0, -5.9), true, 'a real zero latitude was rejected');
 });
@@ -199,7 +235,7 @@ it('the cache key is per location, about a metre', () => {
 });
 
 // ── The URLs themselves ──────────────────────────────────────────────────────
-it('the key is URL-encoded and both providers are asked for the same size', () => {
+it('the key is URL-encoded and the image is sized for the box it is drawn in', () => {
   assert.ok(metadataUrl(LAT, LNG, 'a b&c=d').includes('key=a%20b%26c%3Dd'),
     'the key is not encoded on the metadata call');
   assert.ok(streetViewUrl(LAT, LNG, 'a b&c=d').includes('key=a%20b%26c%3Dd'),
@@ -208,13 +244,18 @@ it('the key is URL-encoded and both providers are asked for the same size', () =
   // this asserted `includes(\`size=${IMAGE_SIZE}\`)`, which is the constant
   // compared against itself — changing IMAGE_SIZE moved both sides and the
   // assertion passed. A mutation to '300x150' survived it.
-  assert.equal(IMAGE_SIZE, '600x300', 'the card image size changed — check the layout still fits');
-  assert.ok(osmStaticUrl(LAT, LNG).includes('size=600x300'), 'the free map size changed');
-  assert.ok(streetViewUrl(LAT, LNG, KEY).includes('size=600x300'), 'the Street View size changed');
-  // And they must agree, or the upgrade is a visible resize mid-scroll.
-  const sizeOf = (u) => (u.match(/size=(\d+x\d+)/) || [])[1];
-  assert.equal(sizeOf(osmStaticUrl(LAT, LNG)), sizeOf(streetViewUrl(LAT, LNG, KEY)),
-    'the two providers are asked for different sizes');
+  //
+  // 120x120 IS THE THUMBNAIL AT 2x. The card draws it in a 60x60 box, so this
+  // is the retina-sharp size; the previous 600x300 was twenty-five times the
+  // area of the box, which on a list of hundreds of cards is mobile data spent
+  // on pixels nobody sees. Street View Static bills per request and not per
+  // pixel, so this is bandwidth rather than money.
+  assert.equal(IMAGE_SIZE, '120x120', 'the card image size changed — check the 60x60 box still fits');
+  assert.ok(streetViewUrl(LAT, LNG, KEY).includes('size=120x120'), 'the Street View size changed');
+  assert.ok(streetViewUrl(LAT, LNG, KEY, '300x300').includes('size=300x300'),
+    'a caller can no longer ask for its own size');
+  assert.match(app, /w-\[60px\] h-\[60px\]/,
+    'the card thumbnail is no longer 60x60 — IMAGE_SIZE should follow it');
 });
 
 it('the metadata endpoint is the free one, and the image one is never it', () => {
@@ -235,9 +276,8 @@ it('the card uses the hook, and the dead gate is gone', () => {
   assert.match(appCode, /const spotImg = useSpotImage\(spot\.lat, spot\.lng\);/,
     'the card no longer uses the hook');
   assert.match(appCode, /const img = spot\.photo \|\| spotImg;/, 'the card does not fall back to the hook');
-  // THE GATE THAT MADE THE FALLBACK UNREACHABLE.
   assert.ok(!/GOOGLE_MAPS_KEY \? spotImageUrl/.test(appCode),
-    'the GOOGLE_MAPS_KEY gate is back — the keyless fallback is unreachable again');
+    'the old GOOGLE_MAPS_KEY gate is back');
   // And no surface builds a Street View URL by hand any more.
   assert.ok(!/maps\/api\/streetview/.test(appCode),
     'App.jsx builds a Street View URL directly, bypassing the metadata check');
@@ -260,13 +300,107 @@ it('the hook re-seeds on a coordinate change and cannot set state after unmount'
     'a settled location is asked about again on every mount');
 });
 
-it('the OSM static host is in the site CSP', () => {
-  // The free map is only free if it renders. staticmap.openstreetmap.de has to
-  // be in img-src or every card draws a broken image instead.
-  const vercel = read('../../vercel.json');
-  assert.match(vercel, /https:\/\/staticmap\.openstreetmap\.de/,
-    'the OpenStreetMap static host is not in img-src — the fallback cannot draw');
-  assert.match(vercel, /https:\/\/maps\.googleapis\.com/, 'maps.googleapis.com is not in img-src');
+it('the retired host is out of the CSP and Street View is still in', () => {
+  // A dead origin left in img-src is not dangerous, it is a lie about what the
+  // page loads. Both copies have to agree: the meta tag serves GitHub Pages,
+  // the header serves Vercel.
+  for (const f of ['../../vercel.json', '../../index.html']) {
+    const src = read(f);
+    assert.ok(!/staticmap\.openstreetmap\.de/.test(src),
+      `${f} still allows the discontinued static map host`);
+    assert.match(src, /img-src[^;]*https:\/\/maps\.googleapis\.com/,
+      `${f} dropped maps.googleapis.com from img-src — Street View cannot draw`);
+  }
+});
+
+// ── 4. A refused key is refused once, not 790 times ──────────────────────────
+await ita('REQUEST_DENIED stops the asking for the whole session', async () => {
+  // DEFECT 3. This is the one that costs real requests: the Street View Static
+  // API not being enabled is the CURRENT state of this project, so without
+  // this every spot in the list asks and is refused.
+  const f = counting('REQUEST_DENIED');
+  assert.equal(keyRefused(), false, 'the breaker was already tripped before anything was asked');
+  assert.equal(await checkPanorama(LAT, LNG, KEY, f), false);
+  assert.equal(keyRefused(), true, 'a REQUEST_DENIED did not trip the breaker');
+  // Every OTHER spot must now resolve false without a request.
+  for (const [a, b] of [[54.6, -5.93], [54.61, -5.94], [54.62, -5.95], [55.0, -7.3]]) {
+    assert.equal(await checkPanorama(a, b, KEY, f), false, 'a refused key kept answering true');
+  }
+  assert.equal(f.calls, 1, `a refused key was re-asked ${f.calls} times`);
+});
+
+await ita('OVER_QUERY_LIMIT trips it too, and ZERO_RESULTS never does', async () => {
+  // The cap does not lift mid-session, so it is key-level. ZERO_RESULTS is the
+  // opposite: it is the answer for THIS layby and says nothing about the next.
+  assert.deepEqual([...KEY_REFUSALS].sort(), ['OVER_QUERY_LIMIT', 'REQUEST_DENIED']);
+  for (const s of ['REQUEST_DENIED', 'OVER_QUERY_LIMIT']) {
+    assert.equal(isKeyRefusal({ status: s }), true, `${s} is not treated as key-level`);
+  }
+  for (const s of ['ZERO_RESULTS', 'OK', 'INVALID_REQUEST', 'UNKNOWN_ERROR', '']) {
+    assert.equal(isKeyRefusal({ status: s }), false, `${s} was treated as key-level`);
+  }
+  assert.equal(isKeyRefusal(null), false);
+
+  resetPanoramaCache();
+  const f = counting('ZERO_RESULTS');
+  for (const [a, b] of [[54.6, -5.93], [54.61, -5.94], [54.62, -5.95]]) {
+    await checkPanorama(a, b, KEY, f);
+  }
+  assert.equal(keyRefused(), false, 'ZERO_RESULTS tripped the breaker — every other spot goes unasked');
+  assert.equal(f.calls, 3, 'a per-location "no" stopped the other locations being asked');
+});
+
+await ita('an HTTP 403 or 429 trips it before a body is ever parsed', async () => {
+  // A referrer restriction that excludes this domain is a 403 at the HTTP
+  // level with no Google status in the body at all, so the body check alone
+  // would never see it and every spot would be asked.
+  assert.deepEqual([...KEY_REFUSAL_HTTP].sort((x, y) => x - y), [403, 429]);
+  for (const status of [403, 429]) {
+    resetPanoramaCache();
+    const f = async () => ({ ok: false, status, json: async () => { throw new Error('html'); } });
+    assert.equal(await checkPanorama(LAT, LNG, KEY, f), false);
+    assert.equal(keyRefused(), true, `HTTP ${status} did not trip the breaker`);
+  }
+  // A transient server error must NOT trip it — that would silently disable
+  // pictures for the rest of the session over one bad response.
+  for (const status of [500, 502, 503]) {
+    resetPanoramaCache();
+    const f = async () => ({ ok: false, status, json: async () => ({}) });
+    await checkPanorama(LAT, LNG, KEY, f);
+    assert.equal(keyRefused(), false, `HTTP ${status} tripped the breaker`);
+  }
+});
+
+await ita('a confirmed panorama still builds no URL without a key', async () => {
+  // A HOLE A MUTATION FOUND, and the reason the `!key` guard in spotImageNow()
+  // is load-bearing rather than belt-and-braces. `answers` is keyed by
+  // LOCATION, not by location-plus-key, so once a panorama is confirmed the
+  // cache says "yes" to any caller at all. Remove that guard and a keyless
+  // call then builds ...&key= — a request that cannot succeed, aimed at the
+  // billed endpoint.
+  //
+  // Every other test here either passes a key or has no confirmed panorama, so
+  // the guard was unreachable from the suite and a mutation deleting it
+  // survived. This is the one order that reaches it.
+  assert.equal(await checkPanorama(LAT, LNG, KEY, counting('OK')), true);
+  assert.equal(knownPanorama(LAT, LNG), true, 'the panorama was not confirmed — the test proves nothing');
+  for (const k of ['', null, undefined]) {
+    assert.equal(spotImageNow(LAT, LNG, k), null,
+      `a confirmed panorama built an image URL with key=${JSON.stringify(k)}`);
+  }
+  assert.ok(spotImageNow(LAT, LNG, KEY), 'the keyed call lost its picture too — the guard is too wide');
+});
+
+await ita('a panorama already confirmed survives a later refusal', async () => {
+  // Ordering matters: `answers` is read before the breaker, so a spot that was
+  // confirmed keeps its picture when the quota runs out afterwards. The other
+  // order would blank a picture that is already on screen.
+  assert.equal(await checkPanorama(LAT, LNG, KEY, counting('OK')), true);
+  assert.equal(await checkPanorama(54.7, -6.0, KEY, counting('REQUEST_DENIED')), false);
+  assert.equal(keyRefused(), true);
+  assert.equal(await checkPanorama(LAT, LNG, KEY, counting('REQUEST_DENIED')), true,
+    'a confirmed panorama was dropped when the key was later refused');
+  assert.ok(spotImageNow(LAT, LNG, KEY), 'the confirmed card lost its picture');
 });
 
 console.log(`\n  ${passed} checks passed\n`);

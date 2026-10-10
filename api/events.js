@@ -20,6 +20,7 @@ import {
   HEAD_CSS, topBar, pageFoot, parkNear, listSpaceNear, distanceLabel,
   fetchVenue, fetchVenueEvents, venueFromEvents, venuePlace, parkAtVenue,
 } from './_eventsView.js';
+import { venueMap, offsetM, bearingWord } from './_venueMap.js';
 import { selectPublic } from './_supabase.js';
 
 const CACHE = 'public, s-maxage=600, stale-while-revalidate=3600';
@@ -139,32 +140,40 @@ const priceLabel = (l) => {
 };
 
 /**
- * A static map with a 500m ring.
+ * The bookable-spaces panel, written once for both page types.
  *
- * staticmap.openstreetmap.de is already in the site's img-src CSP, so no new
- * origin is introduced and no map library ships to a page that only needs a
- * picture. The ring is a CSS circle sized from the projection rather than baked
- * into the image: at zoom z a pixel is 156543.03 * cos(lat) / 2^z metres, so
- * 500m is that many pixels across whatever the tile server returns.
+ * WHY IT IS SHARED. This file's own header says the three routes live together
+ * so they cannot disagree about "how far away a space is" — and until now the
+ * two panels were a copy of each other, differing only in the Book href. The
+ * numbering added here has to match the numbering in the diagram above it on
+ * both pages, which is one more thing a copy would eventually get wrong.
+ *
+ * THE NUMBER IS THE POINT. Each row carries the same index as its dot in
+ * venueMap(), so "2" on the diagram and "2" in the list are the same space.
+ * Without that the diagram is a pattern of dots.
  */
-function staticMap(ev) {
-  const ZOOM = 14, W = 620, H = 320;
-  const mPerPx = 156543.03392 * Math.cos(ev.lat * Math.PI / 180) / Math.pow(2, ZOOM);
-  const r = Math.round(500 / mPerPx);
-  const src = `https://staticmap.openstreetmap.de/staticmap.php`
-    + `?center=${ev.lat},${ev.lng}&zoom=${ZOOM}&size=${W}x${H}&maptype=mapnik`
-    + `&markers=${ev.lat},${ev.lng},lightblue1`;
-  return `<div class="mapwrap" style="position:relative;aspect-ratio:${W}/${H}">
-    <img src="${esc(src)}" width="${W}" height="${H}" loading="lazy"
-         alt="Map showing ${esc(ev.venue_name)} and the area within 500 metres"
-         style="display:block;width:100%;height:100%;object-fit:cover">
-    <span aria-hidden="true" style="position:absolute;left:50%;top:50%;
-      width:${r * 2}px;height:${r * 2}px;margin:-${r}px 0 0 -${r}px;border-radius:50%;
-      border:2px solid rgba(46,211,198,.85);background:rgba(46,211,198,.12);
-      max-width:96%;max-height:96%"></span>
-  </div>
-  <p style="color:var(--faint);font-size:12px;margin:8px 0 0">
-    Ring is roughly 500m around ${esc(ev.venue_name)}. Map &copy; OpenStreetMap contributors.</p>`;
+function listingPanel(place, listings, href) {
+  const rows = listings.map((l, i) => {
+    const o = offsetM(place.lat, place.lng, l.lat, l.lng);
+    const dir = o ? bearingWord(o.e, o.n, l.d) : null;
+    return `
+    <div class="listing">
+      <span class="info">
+        <span class="nm"><span aria-hidden="true" style="display:inline-block;min-width:18px;
+          height:18px;line-height:18px;text-align:center;border-radius:6px;
+          background:rgba(46,211,198,.18);color:#5BE7DA;font-size:11px;font-weight:700;
+          margin-right:7px">${i + 1}</span>${esc(l.title || 'Private space')}</span>
+        <span class="dist" style="display:block">${esc(distanceLabel(l.d))}${
+          dir ? ` &middot; ${esc(dir)} of ${esc(place.venue_name || place.name || 'the venue')}` : ''
+        } &middot; ${esc(priceLabel(l))}</span>
+      </span>
+      <a class="bk" href="${esc(href)}">Book</a>
+    </div>`;
+  }).join('');
+  return `<div class="panel">
+    <h3>Bookable spaces within 2km</h3>
+    ${rows}
+  </div>`;
 }
 
 function renderEvent(ev, listings) {
@@ -216,20 +225,9 @@ function renderEvent(ev, listings) {
       `<a class="cta block" href="${esc(parkNear(ev))}">Book parking near ${esc(ev.venue_name)}</a>`}
   </div>
 
-  ${ev.lat != null ? staticMap(ev) : ''}
+  ${ev.lat != null ? venueMap(ev, listings) : ''}
 
-  ${listings.length ? `
-  <div class="panel">
-    <h3>Bookable spaces within 2km</h3>
-    ${listings.map(l => `
-    <div class="listing">
-      <span class="info">
-        <span class="nm">${esc(l.title || 'Private space')}</span>
-        <span class="dist" style="display:block">${esc(distanceLabel(l.d))} &middot; ${esc(priceLabel(l))}</span>
-      </span>
-      <a class="bk" href="${esc(parkNear(ev))}">Book</a>
-    </div>`).join('')}
-  </div>` : `
+  ${listings.length ? listingPanel(ev, listings, parkNear(ev)) : `
   <div class="panel">
     <h3>We&#39;re recruiting hosts near this venue</h3>
     <p>There is nothing bookable within 2km of ${esc(ev.venue_name)} yet. If you have a
@@ -363,20 +361,9 @@ function renderVenue(v, events, listings) {
     ${notes.map(n => `<p>${esc(n)}</p>`).join('')}
   </div>` : ''}
 
-  ${v.lat != null ? staticMap(place) : ''}
+  ${v.lat != null ? venueMap(place, listings) : ''}
 
-  ${listings.length ? `
-  <div class="panel">
-    <h3>Bookable spaces within 2km</h3>
-    ${listings.map(l => `
-    <div class="listing">
-      <span class="info">
-        <span class="nm">${esc(l.title || 'Private space')}</span>
-        <span class="dist" style="display:block">${esc(distanceLabel(l.d))} &middot; ${esc(priceLabel(l))}</span>
-      </span>
-      <a class="bk" href="${esc(parkAtVenue(v))}">Book</a>
-    </div>`).join('')}
-  </div>` : `
+  ${listings.length ? listingPanel(place, listings, parkAtVenue(v)) : `
   <div class="panel">
     <h3>We&#39;re recruiting hosts near ${esc(v.name)}</h3>
     <p>There is nothing bookable within 2km of ${esc(v.name)} yet. If you have a
