@@ -14,11 +14,13 @@
     "preview": "vite preview",
     "audit": "node scripts/audit-spots.mjs",
     "test": "tests/run-all.sh",
-    "globe": "node scripts/generate-globe-data.mjs"
+    "globe": "node scripts/generate-globe-data.mjs",
+    "android:prepare": "node scripts/android-prepare.mjs"
   },
   "dependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
     "@supabase/supabase-js": "^2.107.0",
     "@vercel/analytics": "^2.0.1",
     "@vitejs/plugin-react": "^4.2.1",
@@ -37,6 +39,8 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.2",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17"
   }

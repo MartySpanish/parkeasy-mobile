@@ -1248,6 +1248,15 @@ const BusinessModal = ({ onClose }) => {
 };
 
 // ── Pricing / Premium Modal ───────────────────────────────────────────────────
+// Inside the iOS app, Premium must not be SOLD: App Review guideline 3.1.1
+// treats a subscription to in-app digital content (the hidden-gem pins) as
+// in-app purchase, and a Stripe link or a price shown there is a rejection.
+// Existing subscribers still get their entitlement after signing in, which is
+// allowed; the Android app and the web are unaffected.
+const isIOSApp = () => {
+  try { return !!window.Capacitor && window.Capacitor.getPlatform?.() === 'ios'; } catch { return false; }
+};
+
 const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
   const [showCodeBox, setShowCodeBox] = useState(false);
   const [code,        setCode]        = useState('');
@@ -1365,6 +1374,11 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
               3.2% fee drag against 8.7% on monthly, and a year of access rather
               than a renewal decision every month. Prices here MUST match the
               Stripe links above. */}
+          {isIOSApp() ? (
+            <p className="text-sm text-[#aebfd4] leading-relaxed text-center">
+              Premium isn&apos;t available to buy in this app. If you already have Premium, sign in with the email you used and it&apos;s applied automatically.
+            </p>
+          ) : (<>
           <div className="grid grid-cols-2 gap-3">
             <a href={STRIPE_ANNUAL} target="_blank" rel="noreferrer"
               className="block rounded-2xl border-2 border-[#5BE7DA] p-4 text-center hover:bg-[#2ED3C6]/10 active:scale-[0.98] transition-all relative">
@@ -1394,6 +1408,7 @@ const PricingModal = ({ isPremium, onClose, onRedeem, gemCount = null }) => {
             <p className="text-center text-[11px] text-[#6BEFB9] font-semibold">✓ Apple Pay is ready on this device</p>
           )}
           <p className="text-center text-xs text-[#6b7d96]">Secure payment via Stripe · Cancel any time</p>
+          </>)}
 
           {!showCodeBox ? (
             <button onClick={()=>setShowCodeBox(true)} className="block w-full text-center text-xs text-[#6b7d96] underline hover:text-[#aebfd4]">
@@ -1452,6 +1467,15 @@ const PushToggle = () => {
   // saying, since it is the single commonest reason this is missing.
   if (support.reason === 'no-push' || support.reason === 'no-service-worker'
       || support.reason === 'no-notification') {
+    // The Android app's WebView has no web push. Saying "add to home screen"
+    // there would be nonsense — it is already on the home screen.
+    if (window.Capacitor) {
+      return (
+        <p className="text-[11px] text-[#6b7d96] leading-snug">
+          Push alerts are coming to the Android app. Until then we&apos;ll email you instead.
+        </p>
+      );
+    }
     return (
       <p className="text-[11px] text-[#6b7d96] leading-snug">
         Alerts need ParkEasy on your home screen — tap Share then &ldquo;Add to Home Screen&rdquo;.
@@ -1669,7 +1693,7 @@ const UserMenu = ({ user, spotsAdded, isPremium, onSignOut, onUpgrade, onClose, 
         <ReferralCard/>
         {!isPremium && (
           <button onClick={onUpgrade} className="w-full bg-yellow-400 text-[#FFD27A] py-2.5 rounded-xl font-bold text-xs hover:bg-yellow-300 transition">
-            ★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr
+            {isIOSApp() ? '★ About Premium' : <>★ Upgrade to Premium — from {PREMIUM_ANNUAL_GBP}/yr</>}
           </button>
         )}
         {/* Only for somebody who actually has work permits. Shown to the 
@@ -4367,7 +4391,7 @@ const SearchTab = ({ mode = 'map', saved, onSave, isPremium, onUpgrade, citySpot
                     counts gems AND EV picks across every town — claiming they
                     were all gems, all in one city, would be two lies in five
                     words. Say what each number actually is. */}
-                Unlock <strong className="text-[#C9A7FF]">{gatedGems > 0 ? `${gatedGems} hidden gem${gatedGems!==1?'s':''}` : 'every hidden gem'}</strong> — the free spots locals keep to themselves — {gatedEv > 0 ? <>plus <strong className="text-[#C9A7FF]">{gatedEv} EV charger pick{gatedEv!==1?'s':''}</strong> across Northern Ireland.</> : 'plus every EV charger pick across the map.'} One parking ticket costs more than a month of Premium.
+                Unlock <strong className="text-[#C9A7FF]">{gatedGems > 0 ? `${gatedGems} hidden gem${gatedGems!==1?'s':''}` : 'every hidden gem'}</strong> — the free spots locals keep to themselves — {gatedEv > 0 ? <>plus <strong className="text-[#C9A7FF]">{gatedEv} EV charger pick{gatedEv!==1?'s':''}</strong> across Northern Ireland.</> : 'plus every EV charger pick across the map.'}{isIOSApp() ? '' : ' One parking ticket costs more than a month of Premium.'}
               </p>
               <button onClick={onUpgrade} className="mt-3 inline-flex items-center gap-1.5 font-display font-bold text-[12.5px] text-[#06231f] px-4 py-2.5 rounded-xl" style={{background:'linear-gradient(135deg,#C9A7FF,#8B5CF6)'}}>
                 See what you're missing<ChevronRight size={14}/>
@@ -9605,7 +9629,7 @@ const INFO_PAGES = {
         </ul>
 
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">9 · Your rights</h3>
-        <p>You have the right to access, correct, erase, restrict or object to the processing of your data, to data portability, and to withdraw consent. To exercise any right, contact us at <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a>. You also have the right to complain to the <strong className="text-[#EAF1F8]">ICO</strong> (<a className="text-[#5BE7DA] underline" href="https://ico.org.uk" target="_blank" rel="noreferrer">ico.org.uk</a>), though we&apos;d welcome the chance to resolve any concern first.</p>
+        <p>You have the right to access, correct, erase, restrict or object to the processing of your data, to data portability, and to withdraw consent. To exercise any right, contact us at <a className="text-[#5BE7DA] underline" href="mailto:parkeasyuk@gmail.com">parkeasyuk@gmail.com</a>. To delete your account and the data linked to it, see <a className="text-[#5BE7DA] underline" href="/delete-account" target="_blank" rel="noreferrer">parkeasy.uk/delete-account</a>. You also have the right to complain to the <strong className="text-[#EAF1F8]">ICO</strong> (<a className="text-[#5BE7DA] underline" href="https://ico.org.uk" target="_blank" rel="noreferrer">ico.org.uk</a>), though we&apos;d welcome the chance to resolve any concern first.</p>
 
         <h3 className="font-display font-bold text-[#EAF1F8] text-[15px] pt-3">10 · Cookies</h3>
         <p>We use cookies necessary for the Platform to function and, with your consent, for analytics. You can change your choice any time via the cookie banner.</p>
@@ -10202,7 +10226,9 @@ export default function App() {
   }, [theme]);
 
   const isIOS        = /ipad|iphone|ipod/i.test(navigator.userAgent) && !window.MSStream;
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
+  // The Android app (Capacitor) is by definition installed: it must never be
+  // asked to add itself to a home screen.
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone || !!window.Capacitor;
 
   const currentCity = CITIES.find(c => c.id === city) || CITIES[0];
   // Seeded spots for the city + any community spots the user has added there.
