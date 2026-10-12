@@ -195,7 +195,22 @@ replaced.
 - **Event names are user-written**, via a scraped listings page. They are HTML
   escaped, and the JSON-LD is escaped separately so it cannot close its own
   `<script>` tag.
-- **The map** is a static image from `staticmap.openstreetmap.de`, already in
-  the site's `img-src` CSP. The 500m ring is a CSS circle sized from the
-  projection (`156543.03 × cos(lat) / 2^zoom` metres per pixel), not baked into
-  the image, so it stays honest if the zoom changes.
+- **The map is drawn, not fetched** — `api/_venueMap.js`. It used to be a static
+  image from `staticmap.openstreetmap.de`; the OpenStreetMap wiki marks that
+  hosted service discontinued, so both page types were serving a broken image
+  under a credit line for a map that was not there. What replaced it is an
+  inline SVG showing each bookable space at its true bearing and distance from
+  the venue, numbered to match the panel beneath it. No request, no key, no
+  quota, no external origin — and it cannot disagree with the list, because
+  both are built from the same rows.
+  - Directions are only printed above `DIRECTION_MIN_M` (150m). A compass
+    sector is 45° wide and these pins are unsurveyed, so closer than that a
+    small pin error flips the sector and the page would state the wrong
+    direction confidently.
+  - A real street map belongs on top of this the day the **Maps Static API** is
+    enabled with billing on the Google project. The URL to use is in the note at
+    the foot of `api/_venueMap.js`; `maps.googleapis.com` is already in
+    `img-src`. It needs a verified-once check rather than a key check — a key
+    being present says nothing about whether the API behind it is switched on,
+    and an `<img>` pointed at a disabled API is a 403, which is the bug that was
+    just removed.

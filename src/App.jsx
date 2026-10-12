@@ -53,6 +53,8 @@ import { councilFreeDay, isCouncilCarPark, chargesOutsideHours } from './data/co
 import { toast, onToast } from './toast';
 import { setOfflineMaps, clearOfflineMaps } from './offlineMaps';
 import { fetchGems, fetchGemStats } from './data/hiddenGems';
+import { resolvePremium, cachedPremium, fetchPremium, isTeaserRow, LOCAL_KEYS }
+  from './data/entitlement';
 import { fetchPhotosForSpot, submitSpotPhoto, spotKeyOf } from './data/spotPhotos';
 import ComparisonCard from './components/funnel/ComparisonCard';
 import WashAddOn from './components/wash/WashAddOn';
@@ -1775,10 +1777,9 @@ const SpotCard = ({ spot, saved, onSave, isPremium, onUpgrade, onOpen }) => {
   const free = ['free','hidden_gem'].includes(spot.badge);
   const theme = CARD_THEME[spot.badge] || CARD_THEME.free;
   const [imgErr,setImgErr] = useState(false);
-  // No `GOOGLE_MAPS_KEY ? … : null` gate any more. That gate is what made
-  // spotImageUrl's own documented OpenStreetMap fallback unreachable: with no
-  // key the caller passed null, so a deployment without a Maps key showed no
-  // picture on any card at all. The hook needs no key to return a map.
+  // The hook returns a URL only for a CONFIRMED Street View panorama, so a
+  // spot we have no picture of renders the themed tile below rather than a
+  // broken image from a provider that no longer exists.
   const spotImg = useSpotImage(spot.lat, spot.lng);
   const img = spot.photo || spotImg;
   const showImg = img && !imgErr;
@@ -3256,7 +3257,7 @@ const SORT_OPTIONS_PREMIUM = [
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 
 /**
- * The picture on a spot card: the free map now, Street View once it is CONFIRMED.
+ * The picture on a spot card: nothing, then Street View once it is CONFIRMED.
  *
  * WHAT THIS REPLACED, and why it is a hook rather than a string builder. The
  * old version went straight to Street View's image endpoint, which answers
@@ -3266,9 +3267,13 @@ const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
  * which is exactly where Street View has no coverage. src/data/streetView.js
  * asks Google's FREE metadata endpoint first and only then buys an image.
  *
- * Asking is asynchronous, so this follows mapTiles.js's rule for the basemap:
- * paint the free provider immediately and upgrade when the better one is
- * confirmed. The card is never blank and never grey.
+ * WHY IT NO LONGER PAINTS A FREE MAP FIRST. It used to, following mapTiles.js's
+ * rule for the basemap — start on the free provider, upgrade when the better
+ * one is confirmed. The free provider was staticmap.openstreetmap.de, and that
+ * hosted service has been discontinued (see the header of
+ * src/data/streetView.js). So the first paint was a request to a dead host and
+ * a broken image that fell through to the card's icon. The icon is now what
+ * the card shows directly, until and unless Street View confirms a panorama.
  */
 const useSpotImage = (lat, lng) => {
   const [url, setUrl] = useState(() => spotImageNow(lat, lng, GOOGLE_MAPS_KEY));
@@ -3374,6 +3379,15 @@ const walkFromMiles = (mi) => {
 // see gated spots as area-only teasers — approximate pin + area name, never the
 // exact location or notes.
 const isGated = (spot) => {
+  // TEASER DATA IS A LOCKED GEM, whatever any flag says. This is the line that
+  // makes the reported bug impossible rather than unlikely: the app's premium
+  // flag and the database's has_premium() can briefly differ (the RPC in
+  // flight, a session restoring), and when they do the honest question is not
+  // "what does the flag say" but "do we actually HAVE this gem". A row from
+  // hidden_gems_teaser carries approximate:true, its name is the placeholder
+  // "Hidden gem" and its pin is snapped to a ~500m grid — so the open card
+  // would show a full-price gem with no name and the wrong position.
+  if (isTeaserRow(spot)) return true;
   if (spot.mine) return false;                                         // community submissions
   if (isTasterGem(spot)) return false;                                 // one of the five tasters
   if (spot.badge === 'hidden_gem') return true;                        // every other hidden gem is Premium
@@ -10071,7 +10085,54 @@ export default function App() {
   const [showBizModal,  setShowBizModal]  = useState(false);
   // Premium is either lifetime/subscription (pe_premium) or time-limited
   // (pe_premium_until) — the reward for an approved community hidden gem.
-  const [isPremium,     setIsPremium]     = useState(()=>ls.get('pe_premium', false) || ls.get('pe_premium_until', 0) > Date.now());
+  // THE DEVICE'S LAST KNOWN ANSWER, which is all this can be on the first
+  // paint — and all it ever used to be. src/data/entitlement.js has the full
+  // account of why that was wrong; the short version is that `pe_premium` is a
+  // boolean with no expiry that nothing ever set back to false, so a device
+  // that was once Premium claimed to be Premium forever while the database
+  // quietly served teasers.
+  const [isPremium,     setIsPremium]     = useState(()=>cachedPremium(ls.get));
+  // null until the database has answered. Not false: "we have not asked yet"
+  // and "you are not a subscriber" are different, and conflating them is what
+  // would demote a paying driver with no signal.
+  const [serverPremium, setServerPremium] = useState(null);
+  // Bumped by anything that may have CHANGED the entitlement — signing in,
+  // redeeming a code, returning from checkout — so the answer below is re-read
+  // instead of being trusted from before the change.
+  const [premiumNonce,  setPremiumNonce]  = useState(0);
+
+  // ── ASK THE DATABASE WHO IS PREMIUM ──────────────────────────────────────
+  // public.has_premium() is the function the RLS policy on public.hidden_gems
+  // calls, so this returns the very boolean that decides whether the gems come
+  // back. Asking it is the whole fix: before this the app never asked, and the
+  // two answers drifted apart silently. It is SECURITY DEFINER and granted to
+  // anon and authenticated, so there is nothing to set up.
+  useEffect(() => {
+    let live = true;
+    if (!isSupabaseEnabled) { setServerPremium(null); return undefined; }
+    fetchPremium(supabase).then(v => { if (live) setServerPremium(v); });
+    return () => { live = false; };
+  }, [user?.id, premiumNonce]);
+
+  // Fold the server's answer into the flag the UI renders, and mirror it back
+  // to the cache so the next cold start opens on the right answer. A null
+  // server reading changes nothing — see resolvePremium().
+  useEffect(() => {
+    const next = resolvePremium({
+      server: serverPremium,
+      cached: cachedPremium(ls.get),
+      paidAt: ls.get(LOCAL_KEYS.paid, null),
+    });
+    setIsPremium(next);
+    // Only ever write the cache from a REAL answer. Writing it from a null
+    // reading would persist the fallback as though it were fact, which is how
+    // the stale flag became permanent in the first place.
+    if (serverPremium === true || serverPremium === false) {
+      ls.set(LOCAL_KEYS.flag, serverPremium);
+      if (serverPremium === false) ls.set(LOCAL_KEYS.until, 0);
+    }
+  }, [serverPremium]);
+
   const [rewardUntil,   setRewardUntil]   = useState(null);   // timestamp → shows the congrats sheet
   const [showPricing,   setShowPricing]   = useState(false);
   // The paywall opens from a dozen places — a locked gem card, the map popup,
@@ -10513,6 +10574,9 @@ export default function App() {
         ls.set('pe_premium_until', status.premiumUntil);
         setIsPremium(true);
       }
+      // Signing in changes who has_premium() is being asked about, so the
+      // answer from before the session was restored is stale either way.
+      setPremiumNonce(n => n + 1);
     };
     supabase.auth.getSession().then(({ data }) => applySession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => applySession(session));
@@ -10567,6 +10631,13 @@ export default function App() {
     if (p.get('premium') === 'success') {
       setIsPremium(true);
       ls.set('pe_premium', true);
+      // WHEN the checkout returned, so the server's honest "not yet" during
+      // the seconds before the Stripe webhook writes the row does not switch
+      // Premium off in front of somebody who has just paid. The window closes
+      // on its own — see PREMIUM_GRACE_MS. And re-ask, so the moment the
+      // webhook lands the real answer replaces the grace.
+      ls.set(LOCAL_KEYS.paid, Date.now());
+      setPremiumNonce(n => n + 1);
       // Only here. The VIP list, the gem-approval reward and promo codes all
       // call setIsPremium too, and counting those as premium_paid would put
       // free grants in the conversion rate that decides whether the paywall
@@ -10890,6 +10961,27 @@ export default function App() {
     <div className="pe-shell min-h-screen flex flex-col text-[#EAF1F8]" style={{margin:'0 auto',background:'var(--app-grad)'}}>
       {/* ── Modals ── */}
       {showAdmin && <AdminOverlay onClose={()=>{ setShowAdmin(false); if (location.hash === '#admin') history.replaceState(null, '', location.pathname + location.search); }}/>}
+      {/* ── WHEN THE TWO ANSWERS STILL DISAGREE, SAY SO ──────────────────────
+          The server now decides who is Premium, so reaching here means
+          has_premium() said YES and the hidden_gems read still came back
+          empty — the entitlement is real but the rows did not arrive. That is
+          rare and it is a fault, not a state to render silently: the whole
+          reason this bug survived is that the broken version looked like a
+          working screen. Says what is wrong, what it costs, and offers the one
+          action that fixes the common cause (a stale session). */}
+      {isPremium && gemSource === 'teaser' && (
+        <div className="fixed inset-x-0 top-4 z-[219] flex justify-center px-4 pointer-events-none">
+          <div className="pointer-events-auto max-w-sm w-full rounded-2xl px-4 py-3 shadow-2xl bg-[#0e1a2c] border border-[#FFC24B]/40">
+            <p className="text-sm font-bold text-[#FFD27A]">Your gems aren&rsquo;t loading</p>
+            <p className="text-xs text-[rgba(234,241,248,0.7)] mt-1">
+              Your Premium is active but this device only received the preview data,
+              so gem names and exact pins are missing. Signing in again usually fixes it.
+            </p>
+            <button onClick={()=>setPremiumNonce(n => n + 1)}
+              className="mt-2 text-xs font-bold text-[#5BE7DA]">Try again</button>
+          </div>
+        </div>
+      )}
       {promoToast && (
         <div className="fixed inset-x-0 top-4 z-[220] flex justify-center px-4 pointer-events-none">
           <div onClick={()=>setPromoToast(null)} className={`pointer-events-auto max-w-sm w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-2xl cursor-pointer ${promoToast.ok ? 'bg-[#0e1a2c] border border-[#34E0A0]/40 text-[#6BEFB9]' : 'bg-[#0e1a2c] border border-red-400/40 text-red-200'}`}>
@@ -10998,6 +11090,10 @@ export default function App() {
             setIsPremium(true); ls.set('pe_premium', true);
             const ms = Date.parse(until);
             if (Number.isFinite(ms)) ls.set('pe_premium_until', ms);
+            // And actually ask it, which is what this comment used to only
+            // claim: the row has just been written, so re-read has_premium()
+            // rather than leaving the local mirror as the last word.
+            setPremiumNonce(n => n + 1);
           }}
           onClose={()=>setShowUserMenu(false)}/>
       )}

@@ -193,7 +193,17 @@ it('a venue with no coordinates renders without a map or a search CTA', () => {
   // app a "near=undefined,undefined" it correctly ignores, landing the visitor
   // on an unsearched map — worse than no button.
   const html = renderVenue({ ...HALL, lat: null, lng: null }, [ev()], []);
-  assert.ok(!html.includes('staticmap.openstreetmap.de'), 'a map was rendered without coordinates');
+  // RE-ANCHORED. This asserted the absence of 'staticmap.openstreetmap.de',
+  // which stopped meaning anything the day that provider was removed from the
+  // codebase — the string cannot appear now whatever the coordinates are, so
+  // the check passed by construction. The diagram that replaced it is an
+  // inline <svg>, so that is what must be absent.
+  assert.ok(!html.includes('<svg'), 'a diagram was drawn for a venue with no position');
+  // `class="mapwrap"`, not `mapwrap`: the bare string also appears in
+  // HEAD_CSS, which every page carries, so the loose version was asserting
+  // against the stylesheet rather than the markup.
+  assert.ok(!html.includes('class="mapwrap"'),
+    'an empty map frame was rendered without coordinates');
   assert.ok(!/near=null|near=undefined/.test(html), 'a CTA was rendered without coordinates');
   assert.match(html, /What&#39;s on at Ulster Hall/, 'the fixture list vanished with the map');
 });
