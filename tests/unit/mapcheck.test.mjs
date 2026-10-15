@@ -118,16 +118,42 @@ it('an invalid key is called an invalid key', () => {
   assert.match(d, /VITE_GOOGLE_MAPS_KEY/, 'it does not say where to look');
 });
 
-it('a referrer block is reported WITH the caveat that this caller has no referrer', () => {
-  // The honest part. This endpoint calls from a server, which sends no
-  // referrer, so a referrer restriction may block the browser while letting
-  // this through — or vice versa. Reporting it as settled either way would be
-  // a confident wrong answer.
+it('a referrer block is now a settled answer, because the probe declares one', () => {
+  // THE FIRST VERSION OF THIS ENDPOINT COULD NOT ANSWER ITS OWN QUESTION. It
+  // called with no Referer, Google replied "Requests from referer <empty> are
+  // blocked", and the diagnosis had to hedge: true, but about a question
+  // nobody asked. Of course a server with no referrer trips a referrer
+  // restriction. It said nothing about the browser, which is the only thing
+  // anyone wants to know.
+  //
+  // The probe now sends the referrer a real visitor's browser sends, so a
+  // refusal IS the answer for the live site and the hedge would be a lie.
   const d = diagnose(403, { error: { message: 'Requests from referer <empty> are blocked.',
     details: [{ reason: 'API_KEY_HTTP_REFERRER_BLOCKED' }] } });
   assert.match(d, /referrer restriction/i);
-  assert.match(d, /does not prove/i, 'the server-has-no-referrer caveat is missing');
+  assert.ok(!/does not prove/i.test(d),
+    'the diagnosis still hedges, but the probe now declares parkeasy.uk — the hedge is no longer true');
   assert.match(d, /parkeasy\.uk/, 'it does not say which domain to allow');
+  assert.match(d, /vercel\.app/, 'it does not mention preview domains');
+});
+
+await ita('the probe sends the referrer a browser would, and reports both attempts', async () => {
+  // Without this the endpoint is only capable of telling you that servers
+  // cannot use a referrer-restricted key, which nobody needed to know.
+  const seen = [];
+  const fake = async (_url, opts) => {
+    seen.push(opts?.headers?.Referer || null);
+    return { ok: true, status: 200, text: async () => JSON.stringify({ session: 'T', expiry: '1800000000' }),
+      json: async () => ({ session: 'T', expiry: '1800000000' }) };
+  };
+  const out = await checkMapTiles(KEY, fake);
+  assert.ok(seen.includes('https://parkeasy.uk/'),
+    `no attempt declared the site referrer: ${JSON.stringify(seen)}`);
+  assert.ok(seen.includes(null), 'the bare-server attempt is gone — the comparison is what separates the cases');
+  // And the verdict is taken from the REFERRED attempt, not the bare one.
+  assert.equal(out.ok, true);
+  assert.match(out.diagnosis, /referrer/i, 'the success verdict does not say which attempt succeeded');
+  assert.ok(out.asServer, 'the bare-server result is not reported alongside');
 });
 
 it('a working session says so, and names the stale-token case', () => {

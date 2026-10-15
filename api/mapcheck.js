@@ -77,12 +77,52 @@ export function diagnose(httpStatus, body) {
     return 'The project has no active billing account. Map Tiles is a paid API and will not serve a session without one.';
   }
   if (/API_KEY_HTTP_REFERRER_BLOCKED/i.test(reason) || /referer|referrer/i.test(message)) {
-    return 'The key has an HTTP-referrer restriction. This call came from a server with no referrer, so this result does not prove the browser is blocked — but if the app is also failing, add parkeasy.uk (and *.vercel.app for previews) to the key\'s allowed referrers.';
+    return 'The key\'s HTTP-referrer restriction does not allow parkeasy.uk. This call DID declare that referrer and was still refused, so this is the blocker for the real site too: add parkeasy.uk/* (and *.vercel.app/* for previews) to the key\'s allowed referrers.';
   }
   if (httpStatus === 403) {
     return 'Google refused the key (HTTP 403) without naming a reason. Usually the API is not enabled, or a key restriction excludes this caller.';
   }
   return message ? 'Google refused it. Its own message is in `googleSaid`.' : 'No session and no error message — treat as unavailable.';
+}
+
+/**
+ * The site the browser would report itself as.
+ *
+ * WHY THIS IS SENT. The first version of this endpoint called with no Referer,
+ * which is what a server does, and Google answered
+ * API_KEY_HTTP_REFERRER_BLOCKED - "Requests from referer <empty> are blocked."
+ * That is a true answer to a question nobody asked: of course a server with no
+ * referrer is blocked by a referrer restriction. It said nothing about whether
+ * the BROWSER is blocked, which is the only thing anyone wants to know, and a
+ * diagnostic that cannot answer its own question is not worth deploying.
+ *
+ * So the probe is run twice: once as a bare server call, and once declaring the
+ * referrer a real visitor's browser would send. Between them the three failure
+ * modes finally separate:
+ *
+ *   referred call succeeds            the API and billing are fine; whatever
+ *                                     the app is doing wrong is client-side
+ *                                     (almost always the cached token)
+ *   referred call SERVICE_DISABLED    the Map Tiles API is genuinely off
+ *   referred call still referrer-     parkeasy.uk is not on the key's allowed
+ *     blocked                         referrer list
+ */
+const SITE_REFERRER = 'https://parkeasy.uk/';
+
+/** One createSession attempt, with or without a declared referrer. */
+async function sessionAttempt(key, doFetch, referrer) {
+  const r = await doFetch(`${TILE_SESSION}?key=${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(referrer ? { Referer: referrer } : {}),
+    },
+    body: JSON.stringify({ mapType: 'roadmap', language: 'en-GB', region: 'GB' }),
+  });
+  const text = await r.text();
+  let body = null;
+  try { body = JSON.parse(text); } catch { /* not JSON: keep the text */ }
+  return { r, body, text };
 }
 
 export async function checkMapTiles(key, fetchImpl) {
@@ -92,7 +132,10 @@ export async function checkMapTiles(key, fetchImpl) {
   }
   const doFetch = fetchImpl || fetch;
   try {
-    const r = await doFetch(`${TILE_SESSION}?key=${encodeURIComponent(key)}`, {
+    // The one that matters: as the browser would be seen.
+    const { r, body, text } = await sessionAttempt(key, doFetch, SITE_REFERRER);
+    void text;
+    const r0 = await doFetch(`${TILE_SESSION}?key=${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // Byte-for-byte what buildSessionRequest() sends, minus the retina
@@ -100,9 +143,7 @@ export async function checkMapTiles(key, fetchImpl) {
       // different body would not prove the app's own request works.
       body: JSON.stringify({ mapType: 'roadmap', language: 'en-GB', region: 'GB' }),
     });
-    const text = await r.text();
-    let body = null;
-    try { body = JSON.parse(text); } catch { /* not JSON: keep the text */ }
+    const asServer = { httpStatus: r0.status, ok: r0.ok };
 
     if (r.ok && body?.session) {
       return {
@@ -110,12 +151,14 @@ export async function checkMapTiles(key, fetchImpl) {
         // NOT the token itself — it is a bearer credential for billed tiles.
         sessionReceived: true,
         expiry: body.expiry ? new Date(Number(body.expiry) * 1000).toISOString() : null,
-        diagnosis: 'Map Tiles is working. If the app still shows OpenStreetMap, the browser is holding a stale cached token: clear localStorage key "parkeasy.googleTileSession.v1" and hard-refresh.',
+        asServer,
+        diagnosis: 'Map Tiles IS working for a request carrying parkeasy.uk as its referrer — so the API is enabled, billing is live and the domain is allowed. If the app still shows OpenStreetMap, the fault is client-side: almost always a stale cached token. Clear the localStorage key "parkeasy.googleTileSession.v1" and hard-refresh.',
       };
     }
     return {
       ok: false, configured: true, httpStatus: r.status, sessionReceived: false,
-      googleSaid: scrub(body?.error?.message || text, key),
+      asServer,
+      googleSaid: scrub(body?.error?.message || '', key),
       reason: body?.error?.details?.find(d => d.reason)?.reason || body?.error?.status || null,
       diagnosis: diagnose(r.status, body),
     };
