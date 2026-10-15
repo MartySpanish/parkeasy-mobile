@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Universal Links: a parkeasy.uk URL opens in the app. Verified by iOS
+	     against https://parkeasy.uk/.well-known/apple-app-site-association,
+	     which must list this app's TEAMID.com.parkeasy.belfast. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:parkeasy.uk</string>
+		<string>applinks:www.parkeasy.uk</string>
+	</array>
+</dict>
+</plist>

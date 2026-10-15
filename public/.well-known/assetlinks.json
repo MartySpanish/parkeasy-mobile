@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.parkeasy.belfast",
+      "sha256_cert_fingerprints": [
+        "90:D1:C8:25:01:83:4C:15:E9:3C:82:84:ED:77:9D:1A:65:2A:DA:73:E7:02:88:38:6B:14:FA:5C:8D:AA:90:AE"
+      ]
+    }
+  }
+]

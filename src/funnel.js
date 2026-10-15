@@ -22,11 +22,13 @@
 // a query string, never coordinates. Where someone parks is not ours to log.
 import { track } from '@vercel/analytics';
 
-// Off Vercel (localhost, Capacitor, GitHub Pages) this must do nothing at all
-// rather than throw into a driver's session over a metric.
+// Off Vercel (localhost, GitHub Pages) this must do nothing at all rather
+// than throw into a driver's session over a metric. The Android app loads the
+// live site from parkeasy.uk, so it counts — the hostname is the test, not
+// window.Capacitor.
 const live = () => {
   try {
-    return typeof window !== 'undefined' && !window.Capacitor
+    return typeof window !== 'undefined'
       && /(vercel\.app|parkeasy\.uk)$/.test(window.location.hostname);
   } catch { return false; }
 };
