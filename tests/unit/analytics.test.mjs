@@ -123,11 +123,28 @@ it('premium_paid marks purchases only', () => {
   // setIsPremium(true) is also called for the VIP list, the gem-approval reward
   // and promo codes. Counting those as premium_paid puts free grants in the
   // conversion rate that decides whether the paywall is working.
-  const i = app.indexOf("track('premium_paid')");
-  assert.ok(i > 0, 'premium_paid is no longer fired');
-  const context = app.slice(Math.max(0, i - 400), i);
-  assert.match(context, /premium'\) === 'success'/,
-    'premium_paid moved away from the Stripe success return — it may now count free grants');
+  // ANCHORED TO THE BLOCK, NOT TO A CHARACTER COUNT. This used to take the
+  // 400 characters before the call and require the success check to be inside
+  // them, which is a proximity assertion wearing a correctness one's clothes:
+  // adding a comment or two statements to the same branch broke it while the
+  // thing it guards was untouched. Brace-matching the branch is what was
+  // actually meant, and it cannot be satisfied by a nearby coincidence.
+  const code = app.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.equal(code.split("track('premium_paid')").length - 1, 1,
+    'premium_paid is fired from more than one place, or not at all');
+  const open = "if (p.get('premium') === 'success') {";
+  const at = code.indexOf(open);
+  assert.ok(at > 0, 'the Stripe success return is gone');
+  let depth = 0, end = -1;
+  for (let j = at + open.length - 1; j < code.length; j++) {
+    if (code[j] === '{') depth++;
+    else if (code[j] === '}') { depth--; if (depth === 0) { end = j; break; } }
+  }
+  assert.ok(end > at, 'unbalanced braces in the Stripe success branch');
+  const branch = code.slice(at, end);
+  assert.ok(branch.length > 80, `the brace match returned ${branch.length} chars — it failed`);
+  assert.ok(branch.includes("track('premium_paid')"),
+    'premium_paid moved out of the Stripe success return — it may now count free grants');
   assert.equal(app.split("track('premium_paid')").length - 1, 1,
     'premium_paid is fired from more than one place');
 });
