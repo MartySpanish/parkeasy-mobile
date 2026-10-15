@@ -91,13 +91,33 @@ await ita('no response field can carry the key, on success or failure', async ()
 });
 
 // ── 2. The advice names the right one of the three ───────────────────────────
-it('an unenabled API is not reported as a billing problem', () => {
-  // These two are the pair most often confused, and they are in different
-  // console pages. Naming the wrong one costs an hour.
+it('a key restriction is not reported as a disabled API', () => {
+  // THE MISTAKE THIS CAUGHT, in the live probe. These two read almost the same
+  // in prose and are fixed on different console pages:
+  //
+  //   SERVICE_DISABLED        the API is off for the PROJECT  -> Library
+  //   API_KEY_SERVICE_BLOCKED the API is on, the KEY does not  -> Credentials,
+  //                           allow it                            API restrictions
+  //
+  // The first draft matched both to "NOT ENABLED on the project", and the real
+  // answer came back API_KEY_SERVICE_BLOCKED — so it would have sent somebody
+  // to enable an API that was already enabled.
+  const blocked = diagnose(403, { error: {
+    message: 'Requests to this API tile method maps_api.tas.BootstrapService.Bootstrap are blocked.',
+    details: [{ reason: 'API_KEY_SERVICE_BLOCKED' }] } });
+  assert.match(blocked, /KEY's allowlist/i, `a key restriction was diagnosed as: ${blocked}`);
+  assert.match(blocked, /Credentials/, 'it does not name the console page that fixes it');
+  assert.match(blocked, /API restrictions/, 'it does not name the setting');
+  assert.ok(!/NOT ENABLED on the project/i.test(blocked),
+    'a key restriction was blamed on the project-level API toggle');
+
+  // And the genuinely-disabled case still points at Library, not Credentials.
   const disabled = diagnose(403, { error: { message:
     'Map Tiles API has not been used in project 123 before or it is disabled.',
     details: [{ reason: 'SERVICE_DISABLED' }] } });
   assert.match(disabled, /NOT ENABLED/, `a disabled API was diagnosed as: ${disabled}`);
+  assert.match(disabled, /Library/, 'it does not name the console page that fixes it');
+  assert.ok(!/Credentials/.test(disabled), 'a disabled API was blamed on the key');
   assert.ok(!/billing/i.test(disabled), 'a disabled API was blamed on billing');
 
   const billing = diagnose(403, { error: { message:
@@ -194,10 +214,14 @@ await ita('Street View OK and REQUEST_DENIED are told apart, and say so', async 
   assert.equal(ok.ok, true);
   assert.match(ok.diagnosis, /working/i);
 
-  const denied = await checkStreetView(KEY, json(200, { status: 'REQUEST_DENIED' }));
+  const denied = await checkStreetView(KEY, json(200, { status: 'REQUEST_DENIED',
+    error_message: 'This API key is not authorized to use this service or API. Please check the API restrictions settings of your API key.' }));
   assert.equal(denied.ok, false);
-  assert.match(denied.diagnosis, /separate from Map Tiles/i,
-    'it does not say this is a different toggle from the basemap');
+  assert.match(denied.diagnosis, /separate product from Map Tiles/i,
+    'it does not say this is a different product from the basemap');
+  // And it must carry the SAME key-restriction verdict, not a three-way guess.
+  assert.match(denied.diagnosis, /KEY's allowlist/i,
+    'Street View still guesses between causes instead of reading the reason');
 
   // ZERO_RESULTS at Belfast City Hall is not a coverage answer — it has
   // coverage — so it must not be reported as "no panorama here".

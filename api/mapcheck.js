@@ -69,9 +69,31 @@ export function diagnose(httpStatus, body) {
   if (/API_KEY_INVALID/i.test(reason) || /API key not valid/i.test(message)) {
     return 'The key itself is not valid for this API. Check VITE_GOOGLE_MAPS_KEY in Vercel matches a live key in the Google project.';
   }
-  if (/SERVICE_DISABLED|API_KEY_SERVICE_BLOCKED/i.test(reason)
+  // TWO DIFFERENT CONSOLE PAGES, AND THE FIRST VERSION OF THIS CONFLATED THEM.
+  // They read almost the same in prose and are nothing alike to fix:
+  //
+  //   SERVICE_DISABLED        the API is switched off for the PROJECT.
+  //                           Fix in APIs & Services -> Library.
+  //   API_KEY_SERVICE_BLOCKED the API is on, but THIS KEY's "API restrictions"
+  //                           allowlist does not include it. The project is
+  //                           fine; the key is the thing refusing.
+  //                           Fix in Credentials -> the key -> API restrictions.
+  //
+  // This endpoint's whole justification is naming the right one, and the live
+  // probe came back API_KEY_SERVICE_BLOCKED while the first draft would have
+  // sent somebody to Library to enable an API that was already enabled.
+  if (/API_KEY_SERVICE_BLOCKED/i.test(reason)
+      || /not authorized to use this service|API restrictions/i.test(message)) {
+    return 'The API is not on this KEY\'s allowlist. The project is fine — the key itself is refusing. '
+      + 'In the Google Cloud console: Credentials -> open the key behind VITE_GOOGLE_MAPS_KEY -> '
+      + 'API restrictions -> add this API to the list (or set "Don\'t restrict key" to test). '
+      + 'Takes a few minutes to propagate.';
+  }
+  if (/SERVICE_DISABLED/i.test(reason)
       || /has not been used in project|is disabled/i.test(message)) {
-    return 'The Map Tiles API is NOT ENABLED on the project that owns this key. Enable it in the Google Cloud console; it can take a few minutes to propagate.';
+    return 'The API is NOT ENABLED on the project that owns this key. '
+      + 'In the Google Cloud console: APIs & Services -> Library -> enable it. '
+      + 'It can take a few minutes to propagate.';
   }
   if (/BILLING|billing/i.test(reason) || /billing/i.test(message)) {
     return 'The project has no active billing account. Map Tiles is a paid API and will not serve a session without one.';
@@ -181,9 +203,14 @@ export async function checkStreetView(key, fetchImpl) {
         diagnosis: 'Street View Static is working. Spot cards will show real photos wherever a panorama exists.' };
     }
     if (status === 'REQUEST_DENIED') {
+      // Reuse the reason-code logic rather than guessing between three causes:
+      // the metadata endpoint reports a key restriction in words, and that is
+      // a different fix from the API being off.
+      const why = diagnose(r.status, { error: { message: body?.error_message || '' } });
       return { ok: false, configured: true, status,
         googleSaid: scrub(body?.error_message, key),
-        diagnosis: 'The Street View Static API is not enabled (or billing is off, or a key restriction blocks it). Spot cards will show their icon instead of a photo until this is fixed. This is separate from Map Tiles and has its own toggle.' };
+        diagnosis: `${why} Until then spot cards show their icon instead of a photo. `
+          + 'Street View Static is a separate product from Map Tiles and needs its own entry.' };
     }
     return { ok: false, configured: true, status,
       googleSaid: scrub(body?.error_message, key),
