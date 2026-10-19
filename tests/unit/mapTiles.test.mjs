@@ -545,6 +545,28 @@ it('every map renders the subscribing component, not a bare TileLayer', () => {
   assert.match(base, /onTilesChanged\(\(\) => bump/, 'BaseTileLayer does not subscribe');
   // Props read fresh each render, NOT cached in state: tileLayerProps() also
   // depends on the theme, which changes with no notification at all.
-  assert.match(base, /return <TileLayer \{\.\.\.tileLayerProps\(\)\}\/>/,
+  assert.match(base, /<TileLayer \{\.\.\.tileLayerProps\(\)\}\/>/,
     'the props are cached in state, so a theme change leaves the old tiles');
+  assert.doesNotMatch(base, /useState\(\s*tileLayerProps/,
+    'the props are cached in state, so a theme change leaves the old tiles');
+});
+
+it('every map re-measures itself when its box changes size', () => {
+  // THE BUG. Leaflet measures its container once, at mount, and after that
+  // only re-measures on a window resize. The Nearby map is 250px tall while the
+  // location prompt shows and 380px once it is dismissed; sheet and tab maps
+  // mount mid-animation at a narrower width. Leaflet kept drawing for the size
+  // it first saw: a band of tiles down the middle, dark background either
+  // side, pins placed for a map that was not the one on screen. The cure is
+  // map.invalidateSize() whenever the element changes size, and since every map
+  // renders BaseTileLayer, that is where the ResizeObserver lives — once.
+  const base = read('../../src/components/map/BaseTileLayer.jsx');
+  assert.match(base, /new ResizeObserver\(/, 'no ResizeObserver: a map whose box grows after mount stays half-drawn');
+  assert.match(base, /\.observe\(\s*el\s*\)/, 'the observer is not watching the map container');
+  assert.match(base, /map\.invalidateSize\(/, 'the observer never tells Leaflet to re-measure');
+  assert.match(base, /ro\.disconnect\(\)/, 'the observer is never disconnected on unmount');
+  // The watcher is rendered alongside the tile layer, so no map can forget it.
+  assert.match(base, /<FitToContainer\s*\/>/, 'BaseTileLayer does not render the container watcher');
+  // And it must not run on a server or an old WebView that lacks the API.
+  assert.match(base, /typeof ResizeObserver === 'undefined'/, 'no guard for environments without ResizeObserver');
 });
